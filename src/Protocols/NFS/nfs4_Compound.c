@@ -242,6 +242,21 @@ int nfs4_Compound(nfs_arg_t * parg /* IN     */ ,
 #define COMPOUND4_ARRAY parg->arg_compound4.argarray
 #define COMPOUND4_MINOR parg->arg_compound4.minorversion
 
+  /* Bug found at BAT: make sure that the export entry support NFSv4 */
+  if( ( pexport->options & EXPORT_OPTION_NFSV4) == 0 )
+   {
+     LogMajor( COMPONENT_NFS_V4, "/!\\ A client is trying to use NFSv4 on export(Id=%u) which does not support NFSv4 !!!", 
+               pexport->id ) ;
+
+     /* Use opaccess to access the "status" field
+      * All og the nfs_resop4_u.op<something> structures start with thus status field anyway */  
+     pres->res_compound4.resarray.resarray_val[0].nfs_resop4_u.opaccess.status = NFS4ERR_PERM ;
+     pres->res_compound4.status = NFS4ERR_PERM ;
+
+     return NFS_REQ_OK;
+   }
+
+
 #ifdef _USE_NFS4_1
   if(COMPOUND4_MINOR > 1)
 #else
