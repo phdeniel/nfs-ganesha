@@ -424,4 +424,16 @@ unsigned long lock_cookie_value_hash_func(hash_parameter_t * p_hparam,
 unsigned long lock_cookie_rbt_hash_func(hash_parameter_t * p_hparam,
                                         hash_buffer_t * buffclef);
 
+/******************************************************************************
+ *
+ * Async functions
+ *
+ ******************************************************************************/
+
+/* Schedule Async Work */
+state_status_t state_async_schedule(state_async_queue_t *arg);
+
+state_status_t state_async_init();
+void state_async_thread_start();
+
 #endif                          /*  _SAL_FUNCTIONS_H */
