@@ -68,24 +68,6 @@ log_level_t tabLogLevel[NB_LOG_LEVEL] =
   {NIV_FULL_DEBUG, "NIV_FULL_DEBUG", "FULL_DEBUG", LOG_DEBUG}
 };
 
-/* Function names for logging and SNMP stats etc. */
-
-const char *fsal_function_names[] = {
-  "FSAL_lookup", "FSAL_access", "FSAL_create", "FSAL_mkdir", "FSAL_truncate",
-  "FSAL_getattrs", "FSAL_setattrs", "FSAL_link", "FSAL_opendir", "FSAL_readdir",
-  "FSAL_closedir", "FSAL_open", "FSAL_read", "FSAL_write", "FSAL_close",
-  "FSAL_readlink", "FSAL_symlink", "FSAL_rename", "FSAL_unlink", "FSAL_mknode",
-  "FSAL_unused_20", "FSAL_dynamic_fsinfo", "FSAL_rcp", "FSAL_Init",
-  "FSAL_get_stats", "FSAL_unused_25", "FSAL_unused_26", "FSAL_unused_27",
-  "FSAL_BuildExportContext", "FSAL_InitClientContext", "FSAL_GetClientContext",
-  "FSAL_lookupPath", "FSAL_lookupJunction", "FSAL_test_access",
-  "FSAL_rmdir", "FSAL_CleanObjectResources", "FSAL_open_by_name", "FSAL_open_by_fileid",
-  "FSAL_ListXAttrs", "FSAL_GetXAttrValue", "FSAL_SetXAttrValue", "FSAL_GetXAttrAttrs",
-  "FSAL_close_by_fileid", "FSAL_setattr_access", "FSAL_merge_attrs", "FSAL_rename_access",
-  "FSAL_unlink_access", "FSAL_link_access", "FSAL_create_access", "FSAL_unused_49", "FSAL_CleanUpExportContext",
-  "FSAL_getextattrs", "FSAL_sync", "FSAL_lock_op", "FSAL_unused_58"
-};
-
 /* les code d'error */
 errctx_t __attribute__ ((__unused__)) tab_systeme_err[] =
 {
