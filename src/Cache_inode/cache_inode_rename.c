@@ -116,7 +116,7 @@ cache_inode_status_t cache_inode_rename_cached_dirent(cache_entry_t * pentry_par
  * @param pattr_dst [OUT] contains the destination directory attributes if not NULL
  * @param ht [INOUT] hash table used for the cache.
  * @param pclient [INOUT] ressource allocated by the client for the nfs management.
- * @param pcontext [IN] FSAL credentials 
+ * @param creds [IN] client user credentials 
  * @param pstatus [OUT] returned status.
  * 
  * @return CACHE_INODE_SUCCESS  operation is a success \n
@@ -132,7 +132,7 @@ cache_inode_status_t cache_inode_rename(cache_entry_t * pentry_dirsrc,
                                         fsal_attrib_list_t * pattr_dst,
                                         hash_table_t * ht,
                                         cache_inode_client_t * pclient,
-                                        fsal_op_context_t * pcontext,
+                                        struct user_cred *creds,
                                         cache_inode_status_t * pstatus)
 {
   cache_inode_status_t status;
@@ -143,8 +143,8 @@ cache_inode_status_t cache_inode_rename(cache_entry_t * pentry_dirsrc,
   fsal_attrib_list_t attrlookup;
   fsal_attrib_list_t *pattrsrc;
   fsal_attrib_list_t *pattrdest;
-  fsal_handle_t *phandle_dirsrc;
-  fsal_handle_t *phandle_dirdest;
+  struct fsal_obj_handle *phandle_dirsrc;
+  struct fsal_obj_handle *phandle_dirdest;
 
   /* Set the return default to CACHE_INODE_SUCCESS */
   *pstatus = CACHE_INODE_SUCCESS;
@@ -188,14 +188,37 @@ cache_inode_status_t cache_inode_rename(cache_entry_t * pentry_dirsrc,
         }
     }
 
-  /* Check for object existence in source directory */
-  if((pentry_lookup_src = cache_inode_lookup_no_mutex(pentry_dirsrc,
-                                                      poldname,
-                                                      CACHE_INODE_JOKER_POLICY,
-                                                      &attrlookup,
-                                                      ht,
-                                                      pclient,
-                                                      pcontext, pstatus)) == NULL)
+  phandle_dirsrc = pentry_dirsrc->obj_handle;
+  phandle_dirdest = pentry_dirdest->obj_handle;
+
+  /* we must be able to both scan and write to both directories before we can proceed
+   * sticky bit also applies to both files after looking them up.
+   */
+  fsal_status = phandle_dirsrc->ops->test_access(phandle_dirsrc,
+						 creds, FSAL_W_OK | FSAL_X_OK);
+  if( !FSAL_IS_ERROR(fsal_status))
+    fsal_status = phandle_dirdest->ops->test_access(phandle_dirdest,
+						    creds, FSAL_W_OK | FSAL_X_OK);
+	  
+  if(FSAL_IS_ERROR(fsal_status))
+    {
+      V_w(&pentry_dirsrc->lock);
+      if(pentry_dirsrc != pentry_dirdest)
+        {
+          V_w(&pentry_dirdest->lock);
+        }
+      *pstatus = cache_inode_error_convert(fsal_status);
+      return *pstatus;
+    }
+
+  pentry_lookup_src = cache_inode_lookup_no_mutex(pentry_dirsrc,
+						  poldname,
+						  CACHE_INODE_JOKER_POLICY,
+						  &attrlookup,
+						  ht,
+						  pclient,
+						  creds, pstatus);
+  if(pentry_lookup_src == NULL) /* source object does not exist */
     {
       /* Source object does not exist */
       pclient->stat.func_stats.nb_err_unrecover[CACHE_INODE_RENAME] += 1;
@@ -221,16 +244,41 @@ cache_inode_status_t cache_inode_rename(cache_entry_t * pentry_dirsrc,
       return *pstatus;
     }
 
-  /* Check if an object with the new name exists in the destination directory */
-  if((pentry_lookup_dest = cache_inode_lookup_no_mutex(pentry_dirdest,
-                                                       pnewname,
-                                                       CACHE_INODE_JOKER_POLICY,
-                                                       &attrlookup,
-                                                       ht,
-                                                       pclient,
-                                                       pcontext, pstatus)) != NULL)
+  if( !sticky_dir_allows(phandle_dirsrc,
+			 pentry_lookup_src->obj_handle, creds))
     {
-
+      V_w(&pentry_dirsrc->lock);
+      if(pentry_dirsrc != pentry_dirdest)
+        {
+          V_w(&pentry_dirdest->lock);
+        }
+      *pstatus = CACHE_INODE_FSAL_EPERM;
+        return *pstatus;
+    }
+  
+  /* Check if an object with the new name exists in the destination directory */
+  pentry_lookup_dest = cache_inode_lookup_no_mutex(pentry_dirdest,
+						   pnewname,
+						   CACHE_INODE_JOKER_POLICY,
+						   &attrlookup,
+						   ht,
+						   pclient,
+						   creds, pstatus);
+  if( !sticky_dir_allows(phandle_dirdest,
+			 (pentry_lookup_dest != NULL) ?
+			 pentry_lookup_src->obj_handle : NULL,
+			 creds))
+    {
+      V_w(&pentry_dirsrc->lock);
+      if(pentry_dirsrc != pentry_dirdest)
+        {
+          V_w(&pentry_dirdest->lock);
+        }
+      *pstatus = CACHE_INODE_FSAL_EPERM;
+        return *pstatus;
+    }
+  if(pentry_lookup_dest  != NULL)
+    {
       LogDebug(COMPONENT_CACHE_INODE,
                "Rename (%p,%s)->(%p,%s) : destination already exists",
                pentry_dirsrc, poldname->name, pentry_dirdest, pnewname->name);
@@ -312,11 +360,11 @@ cache_inode_status_t cache_inode_rename(cache_entry_t * pentry_dirsrc,
           return *pstatus;
         }
 
-      /* get ride of this entry by trying removing it */
+      /* get rid of this entry by trying removing it */
 
       status = cache_inode_remove_no_mutex(pentry_dirdest,
                                            pnewname,
-                                           &attrlookup, ht, pclient, pcontext, pstatus);
+                                           &attrlookup, ht, pclient, creds, pstatus);
       if(status != CACHE_INODE_SUCCESS)
         {
           pclient->stat.func_stats.nb_err_unrecover[CACHE_INODE_RENAME] += 1;
@@ -337,7 +385,7 @@ cache_inode_status_t cache_inode_rename(cache_entry_t * pentry_dirsrc,
       if(*pstatus == CACHE_INODE_FSAL_ESTALE)
         {
           LogDebug(COMPONENT_CACHE_INODE,
-                   "Rename : stale destnation");
+                   "Rename : stale destination");
 
           V_w(&pentry_dirsrc->lock);
           if(pentry_dirsrc != pentry_dirdest)
@@ -353,8 +401,8 @@ cache_inode_status_t cache_inode_rename(cache_entry_t * pentry_dirsrc,
 
   if(pentry_dirsrc->internal_md.type == DIRECTORY)
     {
-      phandle_dirsrc = &pentry_dirsrc->handle;
-      pattrsrc = &pentry_dirsrc->attributes;
+      phandle_dirsrc = pentry_dirsrc->obj_handle;
+      pattrsrc = &pentry_dirsrc->obj_handle->attributes;
     }
   else
     {
@@ -374,8 +422,8 @@ cache_inode_status_t cache_inode_rename(cache_entry_t * pentry_dirsrc,
 
   if(pentry_dirdest->internal_md.type == DIRECTORY)
     {
-      phandle_dirdest = &pentry_dirdest->handle;
-      pattrdest = &pentry_dirdest->attributes;
+      phandle_dirdest = pentry_dirdest->obj_handle;
+      pattrdest = &pentry_dirdest->obj_handle->attributes;
     }
   else
     {
@@ -400,9 +448,14 @@ cache_inode_status_t cache_inode_rename(cache_entry_t * pentry_dirsrc,
    * Indeed, if the FSAL_rename fails unexpectly,
    * the cache would be inconsistent !
    */
-  fsal_status = FSAL_rename(phandle_dirsrc,
-                            poldname,
-                            phandle_dirdest, pnewname, pcontext, pattrsrc, pattrdest);
+  fsal_status = phandle_dirsrc->ops->rename(phandle_dirsrc,
+					    poldname,
+					    phandle_dirdest,
+					    pnewname);
+  if( !FSAL_IS_ERROR(fsal_status))
+	  fsal_status = phandle_dirsrc->ops->getattrs(phandle_dirsrc, pattrsrc);
+  if( !FSAL_IS_ERROR(fsal_status))
+	  fsal_status = phandle_dirdest->ops->getattrs(phandle_dirdest, pattrdest);
   if(FSAL_IS_ERROR(fsal_status))
     {
       *pstatus = cache_inode_error_convert(fsal_status);
@@ -423,8 +476,9 @@ cache_inode_status_t cache_inode_rename(cache_entry_t * pentry_dirsrc,
                    "cache_inode_rename: Stale FSAL File Handle detected for at least one in  pentry = %p and pentry = %p, fsaL_status=(%u,%u)",
                    pentry_dirsrc, pentry_dirdest, fsal_status.major, fsal_status.minor);
 
+/* FIXME logic is a bit bogus now */
           /* Use FSAL_getattrs to find which entry is staled */
-          getattr_status = FSAL_getattrs(phandle_dirsrc, pcontext, &attrlookup);
+          getattr_status = phandle_dirsrc->ops->getattrs(phandle_dirsrc, &attrlookup);
           if(getattr_status.major == ERR_FSAL_ACCESS)
             {
               LogEvent(COMPONENT_CACHE_INODE,
@@ -438,8 +492,9 @@ cache_inode_status_t cache_inode_rename(cache_entry_t * pentry_dirsrc,
                         pentry_dirsrc, kill_status);
             }
 
-          getattr_status = FSAL_getattrs(phandle_dirdest, pcontext, &attrlookup);
-          if( ( getattr_status.major == ERR_FSAL_ACCESS ) && ( pentry_dirdest != pentry_dirsrc ) )
+          getattr_status = phandle_dirdest->ops->getattrs(phandle_dirdest, &attrlookup);
+          if( ( getattr_status.major == ERR_FSAL_ACCESS ) &&
+	      ( pentry_dirdest != pentry_dirsrc ) )
             {
               LogEvent(COMPONENT_CACHE_INODE,
                        "cache_inode_rename: Stale FSAL File Handle detected for pentry = %p",
@@ -509,7 +564,7 @@ cache_inode_status_t cache_inode_rename(cache_entry_t * pentry_dirsrc,
                                              pentry_lookup_src,
                                              ht, 
 					     &new_dir_entry,
-					     pclient, pcontext, pstatus);
+					     pclient, pstatus);
       if(status != CACHE_INODE_SUCCESS)
         {
           pclient->stat.func_stats.nb_err_unrecover[CACHE_INODE_RENAME] += 1;

@@ -80,12 +80,15 @@ cache_inode_status_t cache_inode_truncate_sw(cache_entry_t * pentry,
                                              fsal_attrib_list_t * pattr,
                                              hash_table_t * ht,
                                              cache_inode_client_t * pclient,
-                                             fsal_op_context_t * pcontext,
+                                             struct user_cred *creds,
                                              cache_inode_status_t * pstatus,
                                              int use_mutex)
 {
   fsal_status_t fsal_status;
+  cache_inode_status_t status;
   cache_content_status_t cache_content_status;
+  fsal_accessflags_t access_mask = 0;
+  struct fsal_obj_handle *obj_hdl = pentry->obj_handle;
 
   /* Set the return default to CACHE_INODE_SUCCESS */
   *pstatus = CACHE_INODE_SUCCESS;
@@ -110,6 +113,20 @@ cache_inode_status_t cache_inode_truncate_sw(cache_entry_t * pentry,
       return *pstatus;
     }
 
+  /* Check if caller is allowed to perform the operation */
+  access_mask = FSAL_MODE_MASK_SET(FSAL_W_OK) |
+                FSAL_ACE4_MASK_SET(FSAL_ACE_PERM_WRITE_DATA);
+  if((status = cache_inode_access_sw(pentry,
+                                     access_mask,
+                                     ht,
+                                     pclient,
+                                     creds, &status, FALSE)) != CACHE_INODE_SUCCESS)
+    {
+      if(use_mutex)
+        V_w(&pentry->lock);
+      *pstatus = status;
+      return *pstatus;
+    }
   /* Calls file content cache to operate on the cache */
   if(pentry->object.file.pentry_content != NULL)
     {
@@ -129,23 +146,24 @@ cache_inode_status_t cache_inode_truncate_sw(cache_entry_t * pentry,
         }
 
       /* Cache truncate succeeded, we must now update the size in the attributes */
-      if((pentry->attributes.asked_attributes & FSAL_ATTR_SIZE) ||
-         (pentry->attributes.asked_attributes & FSAL_ATTR_SPACEUSED))
+      if((obj_hdl->attributes.asked_attributes & FSAL_ATTR_SIZE) ||
+         (obj_hdl->attributes.asked_attributes & FSAL_ATTR_SPACEUSED))
         {
-          pentry->attributes.filesize = length;
-          pentry->attributes.spaceused = length;
+          obj_hdl->attributes.filesize = length;
+          obj_hdl->attributes.spaceused = length;
         }
 
       /* Set the time stamp values too */
-      cache_inode_set_time_current( &pentry->attributes.mtime ) ;
-      pentry->attributes.ctime = pentry->attributes.mtime;
+      cache_inode_set_time_current( &obj_hdl->attributes.mtime ) ;
+      obj_hdl->attributes.ctime = obj_hdl->attributes.mtime;
     }
   else
     {
       /* Call FSAL to actually truncate */
-      pentry->attributes.asked_attributes = pclient->attrmask;
-      fsal_status = FSAL_truncate(&pentry->handle, pcontext, length, NULL,  /** @todo &pentry->object.file.open_fd.fd, *//* Used only with FSAL_PROXY */
-                                  &pentry->attributes);
+      obj_hdl->attributes.asked_attributes = pclient->attrmask;
+      fsal_status = obj_hdl->ops->truncate(obj_hdl, length);
+      if( !FSAL_IS_ERROR(fsal_status))
+	fsal_status = obj_hdl->ops->getattrs(obj_hdl, pattr);
 
       if(FSAL_IS_ERROR(fsal_status))
         {
@@ -185,8 +203,10 @@ cache_inode_status_t cache_inode_truncate_sw(cache_entry_t * pentry,
   if(use_mutex)
     V_w(&pentry->lock);
 
+/** @TODO  cleanup with purging of attribute copying 
+ */
   /* Returns the attributes */
-  *pattr = pentry->attributes;
+  *pattr = obj_hdl->attributes;
 
   /* stat */
   if(*pstatus != CACHE_INODE_SUCCESS)
@@ -208,7 +228,7 @@ cache_inode_status_t cache_inode_truncate_sw(cache_entry_t * pentry,
  * @param pattr     [OUT]   attrtibutes for the file after the operation. 
  * @param ht        [INOUT] hash table used for the cache. Unused in this call (kept for protototype's homogeneity). 
  * @param pclient   [INOUT] ressource allocated by the client for the nfs management.
- * @param pcontext     [IN]    FSAL credentials 
+ * @param creds     [IN]    clinet user credentials 
  * @param pstatus   [OUT]   returned status.
  * 
  * @return CACHE_INODE_SUCCESS if operation is a success \n
@@ -220,11 +240,11 @@ cache_inode_status_t cache_inode_truncate_no_mutex(cache_entry_t * pentry,
                                                    fsal_attrib_list_t * pattr,
                                                    hash_table_t * ht,
                                                    cache_inode_client_t * pclient,
-                                                   fsal_op_context_t * pcontext,
+                                                   struct user_cred *creds,
                                                    cache_inode_status_t * pstatus)
 {
   return cache_inode_truncate_sw(pentry,
-                                 length, pattr, ht, pclient, pcontext, pstatus, FALSE);
+                                 length, pattr, ht, pclient, creds, pstatus, FALSE);
 }                               /* cache_inode_truncate_no_mutex */
 
 /**
@@ -238,7 +258,7 @@ cache_inode_status_t cache_inode_truncate_no_mutex(cache_entry_t * pentry,
  * @param pattr     [OUT]   attrtibutes for the file after the operation. 
  * @param ht        [INOUT] hash table used for the cache. Unused in this call (kept for protototype's homogeneity). 
  * @param pclient   [INOUT] ressource allocated by the client for the nfs management.
- * @param pcontext     [IN]    FSAL credentials 
+ * @param creds     [IN]    client user credentials 
  * @param pstatus   [OUT]   returned status.
  * 
  * @return CACHE_INODE_SUCCESS if operation is a success \n
@@ -250,9 +270,9 @@ cache_inode_status_t cache_inode_truncate(cache_entry_t * pentry,
                                           fsal_attrib_list_t * pattr,
                                           hash_table_t * ht,
                                           cache_inode_client_t * pclient,
-                                          fsal_op_context_t * pcontext,
+                                          struct user_cred *creds,
                                           cache_inode_status_t * pstatus)
 {
   return cache_inode_truncate_sw(pentry,
-                                 length, pattr, ht, pclient, pcontext, pstatus, TRUE);
+                                 length, pattr, ht, pclient, creds, pstatus, TRUE);
 }                               /* cache_inode_truncate */

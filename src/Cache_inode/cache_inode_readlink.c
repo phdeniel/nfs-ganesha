@@ -55,13 +55,16 @@
 #include <pthread.h>
 #include <assert.h>
 
-cache_inode_status_t cache_inode_readlink(cache_entry_t * pentry, fsal_path_t * plink_content, hash_table_t * ht,       /* Unused, kept for protototype's homogeneity */
+cache_inode_status_t cache_inode_readlink(cache_entry_t * pentry,
+					  fsal_path_t * plink_content,
+					  hash_table_t * ht,       /* Unused, kept for
+								    * protototype's homogeneity */
                                           cache_inode_client_t * pclient,
-                                          fsal_op_context_t * pcontext,
+                                          struct user_cred *creds,
                                           cache_inode_status_t * pstatus)
 {
   fsal_status_t fsal_status;
-  fsal_attrib_list_t attr ;
+  fsal_accessflags_t access_mask = 0;
 
   /* Set the return default to CACHE_INODE_SUCCESS */
   *pstatus = CACHE_INODE_SUCCESS;
@@ -72,50 +75,48 @@ cache_inode_status_t cache_inode_readlink(cache_entry_t * pentry, fsal_path_t * 
 
   /* Lock the entry */
   P_w(&pentry->lock);
-  if(cache_inode_renew_entry(pentry, NULL, ht, pclient, pcontext, pstatus) !=
+  if(cache_inode_renew_entry(pentry, NULL, ht, pclient, pstatus) !=
      CACHE_INODE_SUCCESS)
     {
       (pclient->stat.func_stats.nb_err_retryable[CACHE_INODE_READLINK])++;
       V_w(&pentry->lock);
       return *pstatus;
     }
-  /* RW_Lock obtained as writer turns to reader */
-  rw_lock_downgrade(&pentry->lock);
-
-  switch (pentry->internal_md.type)
+  if( !pentry->obj_handle->ops->handle_is(pentry->obj_handle,
+					  FSAL_TYPE_LNK))
     {
-    case REGULAR_FILE:
-    case DIRECTORY:
-    case CHARACTER_FILE:
-    case BLOCK_FILE:
-    case SOCKET_FILE:
-    case FIFO_FILE:
-    case UNASSIGNED:
-    case FS_JUNCTION:
-    case RECYCLED:
+      V_w(&pentry->lock);
       *pstatus = CACHE_INODE_BAD_TYPE;
-      V_r(&pentry->lock);
-
       /* stats */
       pclient->stat.func_stats.nb_err_unrecover[CACHE_INODE_READLINK] += 1;
 
       return *pstatus;
-      break;
+    }
 
-    case SYMBOLIC_LINK:
-      assert(pentry->object.symlink);
-      if( CACHE_INODE_KEEP_CONTENT( pentry->policy ) )
-        {
-          fsal_status = FSAL_pathcpy(plink_content, &(pentry->object.symlink->content)); /* need copy ctor? */
-        }
-      else
-        {
-           /* Content is not cached, call FSAL_readlink here */
-           fsal_status = FSAL_readlink( &pentry->handle, pcontext, plink_content, &attr ) ; 
-        }
+  /* RW_Lock obtained as writer turns to reader */
+  rw_lock_downgrade(&pentry->lock);
 
-      if(FSAL_IS_ERROR(fsal_status))
-        {
+  /* Check is user (as specified by the credentials) is authorized to read
+   * the symlink.  Is this an 'attribute?' */
+  access_mask = FSAL_MODE_MASK_SET(FSAL_R_OK) |
+                FSAL_ACE4_MASK_SET(FSAL_ACE_PERM_READ_ATTR);
+  if(cache_inode_access_no_mutex(pentry,
+                                 access_mask,
+                                 ht, pclient,
+				 creds,
+				 pstatus) != CACHE_INODE_SUCCESS)
+    {
+      V_r(&pentry->lock);
+
+      (pclient->stat.func_stats.nb_err_retryable[CACHE_INODE_READLINK])++;
+      return *pstatus;
+    }
+  /* Content is not cached, call FSAL_readlink here */
+  fsal_status = pentry->obj_handle->ops->readlink(pentry->obj_handle,
+						  plink_content->path,
+						  FSAL_MAX_PATH_LEN) ; 
+  if(FSAL_IS_ERROR(fsal_status))
+    {
           *pstatus = cache_inode_error_convert(fsal_status);
           V_r(&pentry->lock);
 
@@ -139,10 +140,8 @@ cache_inode_status_t cache_inode_readlink(cache_entry_t * pentry, fsal_path_t * 
           pclient->stat.func_stats.nb_err_unrecover[CACHE_INODE_READLINK] += 1;
 
           return *pstatus;
-        }
-
-      break;
     }
+
 
   /* Release the entry */
   *pstatus = cache_inode_valid(pentry, CACHE_INODE_OP_GET, pclient);

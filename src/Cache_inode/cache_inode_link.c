@@ -68,7 +68,7 @@
  * @param pattr [OUT] attributes for the linked attributes after the operation.
  * @param ht [INOUT] hash table used for the cache.
  * @param pclient [INOUT] ressource allocated by the client for the nfs management.
- * @param pcontext [IN] FSAL credentials
+ * @param creds [IN] client user credentials
  * @param pstatus [OUT] returned status.
  *
  * @return CACHE_INODE_SUCCESS if operation is a success \n
@@ -84,12 +84,12 @@ cache_inode_status_t cache_inode_link(cache_entry_t * pentry_src,
                                       fsal_attrib_list_t * pattr,
                                       hash_table_t * ht,
                                       cache_inode_client_t * pclient,
-                                      fsal_op_context_t * pcontext,
+                                      struct user_cred *creds,
                                       cache_inode_status_t * pstatus)
 {
   fsal_status_t fsal_status;
-  fsal_handle_t handle_src;
-  fsal_handle_t handle_dest;
+  struct fsal_obj_handle *handle_src;
+  struct fsal_obj_handle *handle_dest;
   fsal_attrib_list_t link_attributes;
   cache_inode_dir_entry_t *new_dir_entry;
   cache_inode_status_t status;
@@ -127,7 +127,7 @@ cache_inode_status_t cache_inode_link(cache_entry_t * pentry_src,
                 FSAL_ACE4_MASK_SET(FSAL_ACE_PERM_ADD_FILE);
   if((status = cache_inode_access(pentry_dir_dest,
                                   access_mask,
-                                  ht, pclient, pcontext, &status)) != CACHE_INODE_SUCCESS)
+                                  ht, pclient, creds, &status)) != CACHE_INODE_SUCCESS)
     {
       *pstatus = status;
 
@@ -145,7 +145,7 @@ cache_inode_status_t cache_inode_link(cache_entry_t * pentry_src,
                                           &lookup_attributes,
                                           ht,
                                           pclient, 
-                                          pcontext, 
+                                          creds, 
                                           pstatus ) ) != NULL )
     {
       /* There exists such an entry... */
@@ -190,7 +190,7 @@ cache_inode_status_t cache_inode_link(cache_entry_t * pentry_src,
       pclient->stat.func_stats.nb_err_unrecover[CACHE_INODE_LINK] += 1;
       return *pstatus;
     }
-  handle_src = pentry_src->handle;
+  handle_src = pentry_src->obj_handle;
   
   if( !((pentry_dir_dest->internal_md.type == FS_JUNCTION) ||
 	(pentry_dir_dest->internal_md.type == DIRECTORY)))
@@ -202,21 +202,22 @@ cache_inode_status_t cache_inode_link(cache_entry_t * pentry_src,
       pclient->stat.func_stats.nb_err_unrecover[CACHE_INODE_LINK] += 1;
       return *pstatus;
     }
-  handle_dest = pentry_dir_dest->handle;
+  handle_dest = pentry_dir_dest->obj_handle;
 
   /* If object is a data cached regular file, keeps it mtime and size, STEP 1 */
   if((pentry_src->internal_md.type == REGULAR_FILE)
      && (pentry_src->object.file.pentry_content != NULL))
     {
-      save_mtime = pentry_src->attributes.mtime;
-      save_size = pentry_src->attributes.filesize;
-      save_spaceused = pentry_src->attributes.spaceused;
+      save_mtime = handle_src->attributes.mtime;
+      save_size = handle_src->attributes.filesize;
+      save_spaceused = handle_src->attributes.spaceused;
     }
 
   /* Do the link at FSAL level */
   link_attributes.asked_attributes = pclient->attrmask;
-  fsal_status =
-      FSAL_link(&handle_src, &handle_dest, plink_name, pcontext, &link_attributes);
+  fsal_status = handle_src->ops->link(handle_src, handle_dest, plink_name);
+  if( !FSAL_IS_ERROR(fsal_status))
+	  fsal_status = handle_src->ops->getattrs(handle_src, &link_attributes);
   if(FSAL_IS_ERROR(fsal_status))
     {
       *pstatus = cache_inode_error_convert(fsal_status);
@@ -233,7 +234,8 @@ cache_inode_status_t cache_inode_link(cache_entry_t * pentry_src,
                    pentry_src, pentry_dir_dest,fsal_status.major, fsal_status.minor );
 
           /* Use FSAL_getattrs to find which entry is staled */
-          getattr_status = FSAL_getattrs(&handle_src, pcontext, &link_attributes);
+/* FIXME: this may be a bogus set of tests.  Leave until proven otherwise */
+          getattr_status = handle_src->ops->getattrs(handle_src, &link_attributes);
           if(getattr_status.major == ERR_FSAL_ACCESS)
             {
               LogEvent(COMPONENT_CACHE_INODE,
@@ -247,7 +249,7 @@ cache_inode_status_t cache_inode_link(cache_entry_t * pentry_src,
                         pentry_src, kill_status);
             }
 
-          getattr_status = FSAL_getattrs(&handle_dest, pcontext, &link_attributes);
+          getattr_status = handle_dest->ops->getattrs(handle_dest, &link_attributes);
           if(getattr_status.major == ERR_FSAL_ACCESS)
             {
               LogEvent(COMPONENT_CACHE_INODE,
@@ -286,7 +288,6 @@ cache_inode_status_t cache_inode_link(cache_entry_t * pentry_src,
                                    ht,
 				   &new_dir_entry,
                                    pclient,
-                                   pcontext,
                                    &status) != CACHE_INODE_SUCCESS)
     {
       V_w(&pentry_dir_dest->lock);
