@@ -73,7 +73,7 @@
  *        call.
  * @param pclient       [INOUT] ressource allocated by the client for the nfs
  * management.
- * @param pcontext         [IN]    FSAL credentials 
+ * @param creds         [IN]    client user credentials 
  * @param pstatus       [OUT]   returned status.
  * @param use_mutex     [IN]    if TRUE, mutex management is done, not if equal
  * to FALSE.
@@ -89,7 +89,7 @@ cache_entry_t *cache_inode_lookup_sw(cache_entry_t        * pentry_parent,
                                      fsal_attrib_list_t   * pattr,
                                      hash_table_t         * ht,
                                      cache_inode_client_t * pclient,
-                                     fsal_op_context_t    * pcontext,
+                                     struct user_cred     * creds,
                                      cache_inode_status_t * pstatus, 
                                      int use_mutex)
 {
@@ -98,17 +98,11 @@ cache_entry_t *cache_inode_lookup_sw(cache_entry_t        * pentry_parent,
   cache_inode_dir_entry_t *new_dir_entry = NULL;
   cache_entry_t *pentry = NULL;
   fsal_status_t fsal_status;
-  fsal_handle_t object_handle;
-  fsal_handle_t dir_handle;
+  struct fsal_obj_handle *object_handle;
+  struct fsal_obj_handle *dir_handle;
   fsal_attrib_list_t object_attributes;
-  cache_inode_create_arg_t create_arg;
-  cache_inode_file_type_t type;
   cache_inode_status_t cache_status;
-  cache_inode_fsal_data_t new_entry_fsdata;
   fsal_accessflags_t access_mask = 0;
-
-  memset(&create_arg, 0, sizeof(create_arg));
-  memset( (char *)&new_entry_fsdata, 0, sizeof( new_entry_fsdata ) ) ; 
 
   /* Set the return default to CACHE_INODE_SUCCESS */
   *pstatus = CACHE_INODE_SUCCESS;
@@ -125,7 +119,7 @@ cache_entry_t *cache_inode_lookup_sw(cache_entry_t        * pentry_parent,
       P_w(&pentry_parent->lock);
 
       cache_status = cache_inode_renew_entry(pentry_parent, pattr, ht,
-                                             pclient, pcontext, pstatus);
+                                             pclient, pstatus);
       if(cache_status != CACHE_INODE_SUCCESS)
       {
           V_w(&pentry_parent->lock);
@@ -167,7 +161,7 @@ cache_entry_t *cache_inode_lookup_sw(cache_entry_t        * pentry_parent,
        * always limited to one element for a dir.  Clients SHOULD never 
        * 'lookup( .. )' in something that is no dir. */
       pentry =
-          cache_inode_lookupp_no_mutex(pentry_parent, ht, pclient, pcontext,
+          cache_inode_lookupp_no_mutex(pentry_parent, ht, pclient, creds,
                                        pstatus);
     }
   else
@@ -182,7 +176,7 @@ cache_entry_t *cache_inode_lookup_sw(cache_entry_t        * pentry_parent,
                                      access_mask,
                                      ht,
                                      pclient,
-                                     pcontext,
+                                     creds,
                                      pstatus) != CACHE_INODE_SUCCESS)
         {
           if(use_mutex == TRUE)
@@ -204,11 +198,11 @@ cache_entry_t *cache_inode_lookup_sw(cache_entry_t        * pentry_parent,
         {
           LogDebug(COMPONENT_CACHE_INODE, "Cache Miss detected");
 
-          dir_handle = pentry_parent->handle;
+          dir_handle = pentry_parent->obj_handle;
           object_attributes.asked_attributes = pclient->attrmask;
-          fsal_status =
-              FSAL_lookup(&dir_handle, pname, pcontext, &object_handle,
-                          &object_attributes);
+          fsal_status = dir_handle->ops->lookup(dir_handle,
+						pname->name,
+						&object_handle);
 
           if(FSAL_IS_ERROR(fsal_status))
             {
@@ -241,71 +235,14 @@ cache_entry_t *cache_inode_lookup_sw(cache_entry_t        * pentry_parent,
               return NULL;
             }
 
-          type = cache_inode_fsal_type_convert(object_attributes.type);
-
-          /* If entry is a symlink, this value for be cached */
-          if(type == SYMBOLIC_LINK)
-            {
-              if( CACHE_INODE_KEEP_CONTENT( policy ) )
-               {
-                fsal_status =
-                    FSAL_readlink(&object_handle, pcontext, &create_arg.link_content,
-                                  &object_attributes);
-               }
-             else
-              { 
-                 fsal_status.major = ERR_FSAL_NO_ERROR ;
-                 fsal_status.minor = 0 ;
-              }
-              if(FSAL_IS_ERROR(fsal_status))
-                {
-                  *pstatus = cache_inode_error_convert(fsal_status);
-                  if(use_mutex == TRUE)
-                    V_r(&pentry_parent->lock);
-
-                  /* Stale File Handle to be detected and managed */
-                  if(fsal_status.major == ERR_FSAL_STALE)
-                    {
-                      cache_inode_status_t kill_status;
-
-                      LogEvent(COMPONENT_CACHE_INODE,
-                               "cache_inode_lookup: Stale FSAL File Handle detected for pentry = %p, fsal_status=(%u,%u)",
-                               pentry_parent, fsal_status.major, fsal_status.minor);
-
-                      if(cache_inode_kill_entry(pentry_parent, NO_LOCK, ht, pclient, &kill_status)
-                         != CACHE_INODE_SUCCESS)
-                        LogCrit(COMPONENT_CACHE_INODE,
-                                "cache_inode_pentry_parent: Could not kill entry %p, status = %u",
-                                pentry_parent, kill_status);
-
-                      *pstatus = CACHE_INODE_FSAL_ESTALE;
-                    }
-
-                  /* stats */
-                  (pclient->stat.func_stats.nb_err_unrecover[CACHE_INODE_LOOKUP])++;
-
-                  return NULL;
-                }
-            }
-
           /* Allocation of a new entry in the cache */
-          new_entry_fsdata.fh_desc.start = (caddr_t)(&object_handle);
-          new_entry_fsdata.fh_desc.len = 0;
-	  (void) FSAL_ExpandHandle(pcontext->export_context,
-				   FSAL_DIGEST_SIZEOF,
-				   &new_entry_fsdata.fh_desc);
 
-          if((pentry = cache_inode_new_entry( &new_entry_fsdata, 
-                                              &object_attributes,
-                                              type, 
-                                              policy,
-                                              &create_arg, 
-                                              NULL, 
-                                              ht, 
-                                              pclient, 
-                                              pcontext, 
-                                              FALSE,      /* This is a population and not a creation */
-                                              pstatus ) ) == NULL )
+          if((pentry = cache_inode_new_entry(object_handle, 
+					     policy,
+					     ht, 
+					     pclient, 
+					     FALSE,      /* This is a population and not a creation */
+					     pstatus ) ) == NULL )
             {
               if(use_mutex == TRUE)
                 V_r(&pentry_parent->lock);
@@ -324,7 +261,6 @@ cache_entry_t *cache_inode_lookup_sw(cache_entry_t        * pentry_parent,
                                                        ht,
 						       &new_dir_entry,
 						       pclient,
-						       pcontext,
 						       pstatus);
 
           if(cache_status != CACHE_INODE_SUCCESS
@@ -343,7 +279,8 @@ cache_entry_t *cache_inode_lookup_sw(cache_entry_t        * pentry_parent,
     }
 
   /* Return the attributes */
-  *pattr = pentry->attributes;
+  if(pattr != NULL)
+	  *pattr = pentry->obj_handle->attributes;
 
   *pstatus = cache_inode_valid(pentry_parent, CACHE_INODE_OP_GET, pclient);
 
@@ -371,7 +308,7 @@ cache_entry_t *cache_inode_lookup_sw(cache_entry_t        * pentry_parent,
  * @param pattr         [OUT]   attributes for the entry that we have found.
  * @param ht            [IN]    hash table used for the cache, unused in this call.
  * @param pclient       [INOUT] ressource allocated by the client for the nfs management.
- * @param pcontext         [IN]    FSAL credentials 
+ * @param creds         [IN]    client user credentials 
  * @param pstatus       [OUT]   returned status.
  * 
  * @return CACHE_INODE_SUCCESS if operation is a success \n
@@ -384,7 +321,7 @@ cache_entry_t *cache_inode_lookup_no_mutex(cache_entry_t        * pentry_parent,
                                            fsal_attrib_list_t   * pattr,
                                            hash_table_t         * ht,
                                            cache_inode_client_t * pclient,
-                                           fsal_op_context_t    * pcontext,
+                                           struct user_cred     * creds,
                                            cache_inode_status_t * pstatus)
 {
   return cache_inode_lookup_sw( pentry_parent,
@@ -393,7 +330,7 @@ cache_entry_t *cache_inode_lookup_no_mutex(cache_entry_t        * pentry_parent,
                                 pattr, 
                                 ht, 
                                 pclient, 
-                                pcontext,  
+                                creds,  
                                 pstatus, 
                                 FALSE);
 }                               /* cache_inode_lookup_no_mutex */
@@ -409,7 +346,7 @@ cache_entry_t *cache_inode_lookup_no_mutex(cache_entry_t        * pentry_parent,
  * @param pattr         [OUT]   attributes for the entry that we have found.
  * @param ht            [IN]    hash table used for the cache, unused in this call.
  * @param pclient       [INOUT] ressource allocated by the client for the nfs management.
- * @param pcontext         [IN]    FSAL credentials 
+ * @param creds         [IN]    client user credentials 
  * @param pstatus       [OUT]   returned status.
  * 
  * @return CACHE_INODE_SUCCESS if operation is a success \n
@@ -422,7 +359,7 @@ cache_entry_t *cache_inode_lookup(cache_entry_t * pentry_parent,
                                   fsal_attrib_list_t * pattr,
                                   hash_table_t * ht,
                                   cache_inode_client_t * pclient,
-                                  fsal_op_context_t * pcontext,
+                                  struct user_cred * creds,
                                   cache_inode_status_t * pstatus)
 {
   return cache_inode_lookup_sw( pentry_parent,
@@ -431,7 +368,7 @@ cache_entry_t *cache_inode_lookup(cache_entry_t * pentry_parent,
                                 pattr, 
                                 ht, 
                                 pclient, 
-                                pcontext, 
+				creds, 
                                 pstatus, 
                                 TRUE);
 }                               /* cache_inode_lookup */
@@ -448,7 +385,6 @@ cache_entry_t *cache_inode_lookup(cache_entry_t * pentry_parent,
  * @param pattr         [OUT]   attributes for the entry that we have found.
  * @param ht            [IN]    hash table used for the cache, unused in this call.
  * @param pclient       [INOUT] ressource allocated by the client for the nfs management.
- * @param pcontext         [IN]    FSAL credentials
  * @param pstatus       [OUT]   returned status.
  *
  * @return CACHE_INODE_SUCCESS if operation is a success \n
@@ -461,13 +397,13 @@ cache_entry_t *cache_inode_valid_lookup(cache_entry_t * pentry_parent,
                                         fsal_attrib_list_t * pattr,
                                         hash_table_t * ht,
                                         cache_inode_client_t * pclient,
-                                        fsal_op_context_t * pcontext,
+                                        struct user_cred *creds,
                                         cache_inode_status_t * pstatus)
 {
   cache_entry_t *pentry;
   cache_inode_status_t cache_status;
   pentry = cache_inode_lookup_sw(pentry_parent, pname, policy, pattr, ht,
-                                 pclient, pcontext, pstatus, TRUE);
+                                 pclient, creds, pstatus, TRUE);
 
   /* cache_inode_lookup_sw() could have given a STALE inode entry.
    * Check if the pentry is stale or valid or what.*/
@@ -481,7 +417,7 @@ cache_entry_t *cache_inode_valid_lookup(cache_entry_t * pentry_parent,
        * cache_inode_kill_entry() can properly unlock.*/
       //P_w(&pentry->lock);
       cache_status = cache_inode_renew_entry(pentry, pattr, ht,
-                                             pclient, pcontext, pstatus);
+                                             pclient, pstatus);
 
       //if (cache_status != CACHE_INODE_KILLED)
       //V_w(&pentry->lock);

@@ -66,7 +66,6 @@
  * @param pattr [OUT] pointer to the attributes for the result. 
  * @param ht [IN] hash table used for the cache, unused in this call.
  * @param pclient [INOUT] ressource allocated by the client for the nfs management.
- * @param pcontext [IN] FSAL credentials 
  * @param pstatus [OUT] returned status.
  * 
  * @return the pointer to the entry is successfull, NULL otherwise.
@@ -77,10 +76,9 @@ cache_entry_t *cache_inode_get( cache_inode_fsal_data_t * pfsdata,
                                 fsal_attrib_list_t * pattr,
                                 hash_table_t * ht,
                                 cache_inode_client_t * pclient,
-                                fsal_op_context_t * pcontext,
                                 cache_inode_status_t * pstatus )
 {
-  return cache_inode_get_located( pfsdata, NULL, policy, pattr, ht, pclient, pcontext, pstatus ) ;
+  return cache_inode_get_located( pfsdata, NULL, policy, pattr, ht, pclient, pstatus ) ;
 } /* cache_inode_get */
 
 /**
@@ -97,7 +95,6 @@ cache_entry_t *cache_inode_get( cache_inode_fsal_data_t * pfsdata,
  * @param pattr [OUT] pointer to the attributes for the result. 
  * @param ht [IN] hash table used for the cache, unused in this call.
  * @param pclient [INOUT] ressource allocated by the client for the nfs management.
- * @param pcontext [IN] FSAL credentials 
  * @param pstatus [OUT] returned status.
  * 
  * @return the pointer to the entry is successfull, NULL otherwise.
@@ -107,22 +104,18 @@ cache_entry_t *cache_inode_get( cache_inode_fsal_data_t * pfsdata,
 cache_entry_t *cache_inode_get_located(cache_inode_fsal_data_t * pfsdata,
                                        cache_entry_t * plocation, 
                                        cache_inode_policy_t policy,
-                                       fsal_attrib_list_t * pattr,
+                                       fsal_attrib_list_t * pattr, /* deprecate this */
                                        hash_table_t * ht,
                                        cache_inode_client_t * pclient,
-                                       fsal_op_context_t * pcontext,
                                        cache_inode_status_t * pstatus)
 {
   hash_buffer_t key, value;
   cache_entry_t *pentry = NULL;
   fsal_status_t fsal_status;
-  cache_inode_create_arg_t create_arg;
   cache_inode_file_type_t type;
   int hrc = 0;
-  fsal_attrib_list_t fsal_attributes;
-  fsal_handle_t *pfile_handle;
-
-  memset(&create_arg, 0, sizeof(create_arg));
+  struct fsal_export *exp_hdl = NULL;  /** @TODO find one */
+  struct fsal_obj_handle *new_hdl;
 
   /* Set the return default to CACHE_INODE_SUCCESS */
   *pstatus = CACHE_INODE_SUCCESS;
@@ -147,7 +140,7 @@ cache_entry_t *cache_inode_get_located(cache_inode_fsal_data_t * pfsdata,
       pentry = (cache_entry_t *) value.pdata;
 
       /* return attributes additionally */
-      *pattr = pentry->attributes;
+      *pattr = pentry->obj_handle->attributes;
 
       if ( !pclient ) {
 	/* invalidate. Just return it to mark it stale and go on. */
@@ -162,112 +155,26 @@ cache_entry_t *cache_inode_get_located(cache_inode_fsal_data_t * pfsdata,
 	return( NULL );
       }
       /* Cache miss, allocate a new entry */
-
-      pfile_handle = (fsal_handle_t *) pfsdata->fh_desc.start;
-
-      /* First, call FSAL to know what the object is */
-      fsal_attributes.asked_attributes = pclient->attrmask;
-      fsal_status = FSAL_getattrs(pfile_handle, pcontext, &fsal_attributes);
-      if(FSAL_IS_ERROR(fsal_status))
+      exp_hdl = pfsdata->export;
+      fsal_status = exp_hdl->ops->create_handle(exp_hdl, &pfsdata->fh_desc, &new_hdl);
+      if( FSAL_IS_ERROR( fsal_status ) )
         {
-          *pstatus = cache_inode_error_convert(fsal_status);
-
-          LogDebug(COMPONENT_CACHE_INODE,
-                   "cache_inode_get: cache_inode_status=%u fsal_status=%u,%u ",
-                   *pstatus, fsal_status.major, fsal_status.minor);
-
-          if(fsal_status.major == ERR_FSAL_STALE)
-            {
-              char handle_str[256];
-
-              snprintHandle(handle_str, 256, pfile_handle);
-              LogEvent(COMPONENT_CACHE_INODE,
-                       "cache_inode_get: Stale FSAL File Handle %s, fsal_status=(%u,%u)",
-                       handle_str, fsal_status.major, fsal_status.minor);
-
-              *pstatus = CACHE_INODE_FSAL_ESTALE;
-            }
-
-          /* stats */
-          pclient->stat.func_stats.nb_err_unrecover[CACHE_INODE_GET] += 1;
-
-          return NULL;
-        }
-
-      /* The type has to be set in the attributes */
-      if(!FSAL_TEST_MASK(fsal_attributes.supported_attributes, FSAL_ATTR_TYPE))
-        {
-          *pstatus = CACHE_INODE_FSAL_ERROR;
-
-          /* stats */
-          pclient->stat.func_stats.nb_err_unrecover[CACHE_INODE_GET] += 1;
-
-          return NULL;
-        }
-
-      /* Get the cache_inode file type */
-      type = cache_inode_fsal_type_convert(fsal_attributes.type);
-
-      if(type == SYMBOLIC_LINK)
-        {
-          if( CACHE_INODE_KEEP_CONTENT( policy ) )
-           {
-             FSAL_CLEAR_MASK(fsal_attributes.asked_attributes);
-             FSAL_SET_MASK(fsal_attributes.asked_attributes, pclient->attrmask);
-             fsal_status =
-                FSAL_readlink(pfile_handle, pcontext, &create_arg.link_content,
-                              &fsal_attributes);
-            }
-          else
-            { 
-               fsal_status.major = ERR_FSAL_NO_ERROR ;
-               fsal_status.minor = 0 ;
-            }
-
-          if(FSAL_IS_ERROR(fsal_status))
-            {
-              *pstatus = cache_inode_error_convert(fsal_status);
-
-              /* stats */
-              pclient->stat.func_stats.nb_err_unrecover[CACHE_INODE_GET] += 1;
-
-              if(fsal_status.major == ERR_FSAL_STALE)
-                {
-                  cache_inode_status_t kill_status;
-
-                  LogEvent(COMPONENT_CACHE_INODE,
-                           "cache_inode_get: Stale FSAL File Handle detected for pentry = %p, fsal_status=(%u,%u)",
-                           pentry, fsal_status.major, fsal_status.minor);
-
-                  if(cache_inode_kill_entry(pentry, NO_LOCK, ht, pclient, &kill_status) !=
-                     CACHE_INODE_SUCCESS)
-                    LogCrit(COMPONENT_CACHE_INODE,
-                            "cache_inode_get: Could not kill entry %p, status = %u, fsal_status=(%u,%u)",
-                            pentry, kill_status, fsal_status.major, fsal_status.minor);
-
-                  *pstatus = CACHE_INODE_FSAL_ESTALE;
-
-                }
-
-              return NULL;
-            }
-        }
+	  *pstatus = cache_inode_error_convert(fsal_status);
+	  LogDebug(COMPONENT_CACHE_INODE,
+		   "could not get create_handle object");
+	  return NULL;
+	}
 
       /* Add the entry to the cache */
       if ( type == 1)
 	LogCrit(COMPONENT_CACHE_INODE,"inode get");
 
-      if((pentry = cache_inode_new_entry( pfsdata,
-                                          &fsal_attributes, 
-                                          type,
-                                          policy, 
-                                          &create_arg, 
-                                          NULL,    /* never used to add a new DIR_CONTINUE within this function */
-                                          ht, 
-                                          pclient, 
-                                          pcontext, 
-                                          FALSE,  /* This is a population, not a creation */
-                                          pstatus ) ) == NULL )
+      if((pentry = cache_inode_new_entry(new_hdl,
+					 policy, 
+					 ht, 
+					 pclient, 
+					 FALSE,  /* This is a population, not a creation */
+					 pstatus ) ) == NULL )
         {
           /* stats */
           pclient->stat.func_stats.nb_err_unrecover[CACHE_INODE_GET] += 1;
@@ -276,7 +183,9 @@ cache_entry_t *cache_inode_get_located(cache_inode_fsal_data_t * pfsdata,
         }
 
       /* Set the returned attributes */
-      *pattr = fsal_attributes;
+/** @TODO bad code, bad code. for now, NULL kills this. later, zip from args */
+      if(pattr != NULL)
+	      *pattr = pentry->obj_handle->attributes;
 
       /* Now, exit the switch/case and returns */
       break;

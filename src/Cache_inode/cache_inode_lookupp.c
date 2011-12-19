@@ -65,7 +65,7 @@
  * @param pentry [IN] entry whose parent is to be obtained.
  * @param ht [IN] hash table used for the cache, unused in this call.
  * @param pclient [INOUT] ressource allocated by the client for the nfs management.
- * @param pcontext [IN] FSAL credentials 
+ * @param creds [IN] client user credentials 
  * @param pstatus [OUT] returned status.
  * @param use_mutex [IN] if TRUE mutex are use, not otherwise.
  * 
@@ -76,12 +76,11 @@
 cache_entry_t *cache_inode_lookupp_sw( cache_entry_t * pentry,
                                        hash_table_t * ht,
                                        cache_inode_client_t * pclient,
-                                       fsal_op_context_t * pcontext,
+                                       struct user_cred *creds,
                                        cache_inode_status_t * pstatus, int use_mutex)
 {
   cache_entry_t *pentry_parent = NULL;
   fsal_status_t fsal_status;
-  fsal_attrib_list_t object_attributes;
   cache_inode_fsal_data_t fsdata;
 
   /* Set the return default to CACHE_INODE_SUCCESS */
@@ -105,9 +104,20 @@ cache_entry_t *cache_inode_lookupp_sw( cache_entry_t * pentry,
 
       return NULL;
     }
-
+  /* we have to be able to read or scan the dir to do this lookup */
+  fsal_status = pentry->obj_handle->ops->test_access(pentry->obj_handle,
+						 creds,
+						 FSAL_R_OK|FSAL_X_OK);
+  if(FSAL_IS_ERROR(fsal_status))
+    {
+      if(use_mutex)
+        V_r(&pentry->lock);
+      *pstatus = CACHE_INODE_FSAL_EACCESS;
+      return NULL;
+    }
+    
   /* Renew the entry (to avoid having it being garbagged */
-  if(cache_inode_renew_entry(pentry, NULL, ht, pclient, pcontext, pstatus) !=
+  if(cache_inode_renew_entry(pentry, NULL, ht, pclient, pstatus) !=
      CACHE_INODE_SUCCESS)
     {
       (pclient->stat.func_stats.nb_err_retryable[CACHE_INODE_GETATTR])++;
@@ -122,14 +132,11 @@ cache_entry_t *cache_inode_lookupp_sw( cache_entry_t * pentry,
     }
   else
     {
-      fsal_handle_t parent_handle;
+      struct fsal_obj_handle *parent_handle;
 
       /* NO, the parent is not cached, query FSAL to get it and cache the result */
-      object_attributes.asked_attributes = pclient->attrmask;
-      fsal_status =
-          FSAL_lookup(&pentry->handle, (fsal_name_t *) & FSAL_DOT_DOT,
-                      pcontext, &parent_handle, &object_attributes);
-
+      fsal_status = pentry->obj_handle->ops->lookup(pentry->obj_handle, "..",
+						    &parent_handle);
       if(FSAL_IS_ERROR(fsal_status))
         {
           *pstatus = cache_inode_error_convert(fsal_status);
@@ -161,19 +168,15 @@ cache_entry_t *cache_inode_lookupp_sw( cache_entry_t * pentry,
         }
 
       /* Call cache_inode_get to populate the cache with the parent entry */
-      fsdata.fh_desc.start = (caddr_t)&parent_handle;
-      fsdata.fh_desc.len = 0;
-      (void) FSAL_ExpandHandle(pcontext->export_context,
-			       FSAL_DIGEST_SIZEOF,
-			       &fsdata.fh_desc);
+      parent_handle->ops->handle_to_key(parent_handle, &fsdata.fh_desc);
+      fsdata.export = parent_handle->export;
 
       if((pentry_parent = cache_inode_get_located( &fsdata,
                                                    pentry,
                                                    pentry->policy, /* same policy as son */
-                                                   &object_attributes,
+                                                   NULL,
                                                    ht, 
                                                    pclient, 
-                                                   pcontext, 
                                                    pstatus)) == NULL)
         {
           if(use_mutex)
@@ -208,7 +211,7 @@ cache_entry_t *cache_inode_lookupp_sw( cache_entry_t * pentry,
  * @param pentry [IN] entry whose parent is to be obtained.
  * @param ht [IN] hash table used for the cache, unused in this call.
  * @param pclient [INOUT] ressource allocated by the client for the nfs management.
- * @param pcontext [IN] FSAL credentials 
+ * @param creds [IN] client user credentials 
  * @param pstatus [OUT] returned status.
  * 
  * @return CACHE_INODE_SUCCESS if operation is a success \n
@@ -218,10 +221,10 @@ cache_entry_t *cache_inode_lookupp_sw( cache_entry_t * pentry,
 cache_entry_t *cache_inode_lookupp(cache_entry_t * pentry,
                                    hash_table_t * ht,
                                    cache_inode_client_t * pclient,
-                                   fsal_op_context_t * pcontext,
+                                   struct user_cred *creds,
                                    cache_inode_status_t * pstatus)
 {
-  return cache_inode_lookupp_sw(pentry, ht, pclient, pcontext, pstatus, TRUE);
+  return cache_inode_lookupp_sw(pentry, ht, pclient, creds, pstatus, TRUE);
 }                               /* cache_inode_lookupp_sw */
 
 /**
@@ -233,7 +236,7 @@ cache_entry_t *cache_inode_lookupp(cache_entry_t * pentry,
  * @param pentry [IN] entry whose parent is to be obtained.
  * @param ht [IN] hash table used for the cache, unused in this call.
  * @param pclient [INOUT] ressource allocated by the client for the nfs management.
- * @param pcontext [IN] FSAL credentials 
+ * @param creds [IN] client user credentials 
  * @param pstatus [OUT] returned status.
  * 
  * @return CACHE_INODE_SUCCESS if operation is a success \n
@@ -243,8 +246,8 @@ cache_entry_t *cache_inode_lookupp(cache_entry_t * pentry,
 cache_entry_t *cache_inode_lookupp_no_mutex(cache_entry_t * pentry,
                                             hash_table_t * ht,
                                             cache_inode_client_t * pclient,
-                                            fsal_op_context_t * pcontext,
+                                            struct user_cred *creds,
                                             cache_inode_status_t * pstatus)
 {
-  return cache_inode_lookupp_sw(pentry, ht, pclient, pcontext, pstatus, FALSE);
+  return cache_inode_lookupp_sw(pentry, ht, pclient, creds, pstatus, FALSE);
 }                               /* cache_inode_lookupp_no_mutex */
