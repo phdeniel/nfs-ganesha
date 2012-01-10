@@ -128,7 +128,7 @@ typedef struct fsal_staticfsinfo_t fsal_staticfsinfo_t;
 #define INDEX_FSAL_unlink_access        46
 #define INDEX_FSAL_link_access          47
 #define INDEX_FSAL_create_access        48
-#define INDEX_FSAL_unused_49	        49
+#define INDEX_FSAL_unused_49            49
 #define INDEX_FSAL_CleanUpExportContext 50
 #define INDEX_FSAL_getextattrs          51
 #define INDEX_FSAL_sync                 52
@@ -1013,7 +1013,6 @@ typedef struct fsal_lock_param_t
   fsal_lock_t         lock_type;
   fsal_size_t         lock_start;
   fsal_size_t         lock_length;
-  pid_t               lock_owner;
 } fsal_lock_param_t;
 
 #endif                          /* _FSAL_TYPES_H */

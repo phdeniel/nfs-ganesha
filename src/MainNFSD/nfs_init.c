@@ -336,11 +336,13 @@ void nfs_set_param_default()
   nfs_param.worker_param.lru_param.nb_call_gc_invalid = 100;
   nfs_param.worker_param.lru_param.clean_entry = clean_pending_request;
   nfs_param.worker_param.lru_param.entry_to_str = print_pending_request;
+  nfs_param.worker_param.lru_param.name = "Worker LRU";
 
   /* Worker parameters : LRU dupreq */
   nfs_param.worker_param.lru_dupreq.nb_entry_prealloc = NB_PREALLOC_LRU_DUPREQ;
   nfs_param.worker_param.lru_dupreq.clean_entry = clean_entry_dupreq;
   nfs_param.worker_param.lru_dupreq.entry_to_str = print_entry_dupreq;
+  nfs_param.worker_param.lru_dupreq.name = "Worker DupReq LRU";
 
   /* Worker parameters : GC */
   nfs_param.worker_param.nb_pending_prealloc = NB_MAX_PENDING_REQUEST;
@@ -637,6 +639,7 @@ void nfs_set_param_default()
       lru_inode_entry_to_str;
   nfs_param.cache_layers_param.cache_inode_client_param.lru_param.clean_entry =
       lru_inode_clean_entry;
+  nfs_param.cache_layers_param.cache_inode_client_param.lru_param.name = "Cache Inode Client LRU";
   nfs_param.cache_layers_param.cache_inode_client_param.nb_prealloc_entry = 1024;
   nfs_param.cache_layers_param.cache_inode_client_param.nb_pre_parent = 2048;
   nfs_param.cache_layers_param.cache_inode_client_param.nb_pre_state_v4 = 512;
@@ -1586,11 +1589,9 @@ static void nfs_Start_threads(bool_t flush_datacache_mode)
            "%d worker threads were started successfully",
 	   nfs_param.core_param.nb_worker);
 
-#ifdef _USE_NLM
-  /* Start NLM threads */
+  /* Start State Async threads */
   if(!flush_datacache_mode)
-    nlm_startup();
-#endif
+    state_async_thread_start();
 
   /* Starting the rpc dispatcher thread */
   if((rc =
@@ -1771,6 +1772,9 @@ static void nfs_Init(const nfs_start_info_t * p_start_info)
                cache_inode_err_str(cache_status));
     }
 
+  /* Initialize thread control block */
+  tcb_head_init();
+
 #ifdef _USE_BLOCKING_LOCKS
   if(state_lock_init(&state_status,
                      nfs_param.cache_layers_param.cache_param.cookie_param)
@@ -1784,8 +1788,6 @@ static void nfs_Init(const nfs_start_info_t * p_start_info)
                state_err_str(state_status));
     }
   LogInfo(COMPONENT_INIT, "Cache Inode library successfully initialized");
-  /* Initialize thread control block */
-  tcb_head_init();
 
   /* Set the cache inode GC policy */
   cache_inode_set_gc_policy(nfs_param.cache_layers_param.gcpol);

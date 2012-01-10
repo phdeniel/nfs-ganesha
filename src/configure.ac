@@ -401,14 +401,11 @@ AC_ARG_WITH( [nfs4-minorversion], AS_HELP_STRING([--with-nfs4-minorversion=0|1  
 AM_CONDITIONAL(USE_NFS4_1, test "$NFS4_MINOR" = "1")
 AM_CONDITIONAL(USE_NFS4_0, test "$NFS4_MINOR" = "0")
 
-# RPCAL switch argument (default is ONCRPC)
-AC_ARG_WITH( [rpcal], AS_HELP_STRING([--with-rpcal=ONCRPC|GSSRPC|TIRPC (default=ONCRPC)], [specify the type of RPCAL to be used] ),
-              RPCAL="$withval", RPCAL="ONCRPC")
-AM_CONDITIONAL(USE_GSSRPC, test "$RPCAL" = "GSSRPC" )
-AM_CONDITIONAL(HAVE_GSSAPI, test "$RPCAL" = "GSSRPC" )
+# RPCAL switch argument (default is TIRPC)
+AC_ARG_WITH( [rpcal], AS_HELP_STRING([--with-rpcal=TIRPC (default=TIRPC)], [specify the type of RPCAL to be used] ),
+              RPCAL="$withval", RPCAL="TIRPC")
 AM_CONDITIONAL(USE_TIRPC,  test "$RPCAL" = "TIRPC" )
 AM_CONDITIONAL(HAVE_GSSAPI, test "$RPCAL" = "TIRPC" )
-AM_CONDITIONAL(USE_ONCRPC, test "$RPCAL" = "ONCRPC" )
 
 # Enable 9P Support
 GA_ENABLE_AM_CONDITION([9p],[enable 9P support], [USE_9P])
@@ -619,6 +616,8 @@ case $FSAL in
                                 OPENHANDLE_LINK_BY_FD,
 		                OPENHANDLE_READLINK_BY_FD,
                                 OPENHANDLE_STAT_BY_HANDLE,
+                                OPENHANDLE_GET_LOCK,
+                                OPENHANDLE_SET_LOCK,
                                 XATTR_STAT,
                                 XATTR_MODE,
                                 XATTR_UID,
@@ -767,16 +766,6 @@ case $MFSL in
 esac
 
 case $RPCAL in
-	"ONCRPC")
-		;;
-	"GSSRPC")
-                AC_DEFINE(_USE_GSSRPC,1,[enable security management with GSSRPC])
-	        # ==> Add here libraries needed for GSSRPC
-                AC_CHECK_LIB([gssapi_krb5], [gss_import_name], [AC_DEFINE( _HAVE_GSSAPI,1,[enable GSSAPI support] ) ],
-			     [AC_MSG_ERROR( [GSSAPI could not be found...] ) ] )
-                AC_CHECK_LIB([gssrpc], [gssrpc_authunix_create_default], [AC_DEFINE( _HAVE_GSSRPC,1,[enable GSSRPC support] ) ],
-			      [AC_MSG_ERROR( [GSSRPC_KRB5 could not be found...] ) ] )
-		;;
 	"TIRPC")
                 PKG_CHECK_MODULES(TIRPC, libtirpc,
                   [
@@ -950,8 +939,6 @@ AC_CONFIG_FILES([include/Makefile
 		 MFSL/MFSL_AIO/Makefile
 		 MFSL/MFSL_PROXY_RPCSECGSS/Makefile
                  RPCAL/Makefile
-                 RPCAL/ONCRPC/Makefile
-                 RPCAL/GSSRPC/Makefile
                  RPCAL/TIRPC/Makefile
                  MainNFSD/Makefile
                  test/Makefile
