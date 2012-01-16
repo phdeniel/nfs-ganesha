@@ -690,8 +690,6 @@ static void nfs_rpc_execute(nfs_request_data_t * preqnfs,
   struct user_cred user_credentials;
   int   update_per_share_stats;
 
-  fsal_op_context_t * pfsal_op_ctx = NULL ;
-
 #ifdef _DEBUG_MEMLEAKS
   static int nb_iter_memleaks = 0;
 #endif
@@ -1344,25 +1342,9 @@ static void nfs_rpc_execute(nfs_request_data_t * preqnfs,
       if(pworker_data->pfuncdesc->dispatch_behaviour & NEEDS_CRED)
         {
 	  /* Swap the anonymous uid/gid if the user should be anonymous */
-          if(nfs_check_anon(&related_client, pexport, &user_credentials) == FALSE
-	     || nfs_build_fsal_context(ptr_req,
-                                       pexport,
-				       &pworker_data->thread_fsal_context,
-                                       &user_credentials) == FALSE)
+          if(nfs_check_anon(&related_client, pexport, &user_credentials) == FALSE)
             {
-              LogInfo(COMPONENT_DISPATCH,
-                      "authentication failed, rejecting client");
-              svcerr_auth(ptr_svc, AUTH_TOOWEAK);
-              pworker_data->current_xid = 0;    /* No more xid managed */
-
-              if (nfs_dupreq_delete(rpcxid, ptr_req, preqnfs->xprt,
-                                    &pworker_data->dupreq_pool) != DUPREQ_SUCCESS)
-                {
-                  LogCrit(COMPONENT_DISPATCH,
-                         "Attempt to delete duplicate request failed on line %d",
-                         __LINE__);
-                }
-              return;
+	      pworker_data->user_credentials = user_credentials;
             }
         }
 
@@ -1386,11 +1368,9 @@ static void nfs_rpc_execute(nfs_request_data_t * preqnfs,
         }
 #endif
 
-      pfsal_op_ctx =  &pworker_data->thread_fsal_context ;
-
       rc = pworker_data->pfuncdesc->service_function(parg_nfs, 
 						     pexport, 
-						     pfsal_op_ctx,
+						     &pworker_data->user_credentials,
                                                      &(pworker_data->cache_inode_client), 
                                                      pworker_data->ht, 
                                                      ptr_req, 
@@ -1853,13 +1833,6 @@ void *worker_thread(void *IndexArg)
                "NFS WORKER #%lu: Initialization of thread's credential",
                worker_index);
 
-  if(FSAL_IS_ERROR(FSAL_InitClientContext(&pmydata->thread_fsal_context)))
-    {
-      /* Failed init */
-      LogFatal(COMPONENT_DISPATCH,
-               "Error initializing thread's credential");
-    }
-
   /* Init the Cache inode client for this worker */
   if(cache_inode_client_init(&pmydata->cache_inode_client,
                              &(nfs_param.cache_layers_param.cache_inode_client_param),
@@ -1899,7 +1872,10 @@ void *worker_thread(void *IndexArg)
          (int)nfs_param.core_param.stats_update_delay / 2)
         {
 
-          FSAL_get_stats(&pmydata->stats.fsal_stats, FALSE);
+/** @TODO disable stats for now.  with new api etc. these are different.
+ * btw, why not take this at core level and save duplication in every fsal??
+ */
+/*           FSAL_get_stats(&pmydata->stats.fsal_stats, FALSE); */
 
 #ifndef _NO_BUDDY_SYSTEM
           BuddyGetStats(&pmydata->stats.buddy_stats);
