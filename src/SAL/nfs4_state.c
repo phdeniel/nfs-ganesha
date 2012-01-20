@@ -256,6 +256,9 @@ state_status_t state_add(cache_entry_t         * pentry,
   P(powner_input->so_mutex);
   glist_add_tail(&powner_input->so_owner.so_nfs4_owner.so_state_list,
                  &pnew_state->owner_states);
+
+  /* Add state to list for owner */
+  glist_add_tail(&powner_input->so_owner.so_nfs4_owner.so_states, &pnew_state->state_perowner);
   V(powner_input->so_mutex);
 
   /* Copy the result */
@@ -314,6 +317,11 @@ state_status_t state_del(state_t              * pstate,
   P_w(&pentry->lock);
 
   /* Remove from list of states owned by owner */
+
+  /* remove the state from the owner's list */
+  P(pstate->state_powner->so_mutex);
+  glist_del(&pstate->state_perowner);
+  V(pstate->state_powner->so_mutex);
 
   /* Release the state owner reference */
   if(pstate->state_powner != NULL)

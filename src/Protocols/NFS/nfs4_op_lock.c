@@ -243,7 +243,16 @@ int nfs4_op_lock(struct nfs_argop4 *op, compound_data_t * data, struct nfs_resop
           return res_LOCK4.status;
         }
 
+        fprintf(stderr, "op_lock: lock_seqid=%d\n", arg_LOCK4.locker.locker4_u.open_owner.lock_seqid);
+      char str2[OTHERSIZE * 2 + 1 + 6];
+      sprint_mem(str2, (char *)pstate_open->stateid_other, OTHERSIZE);
+      sprintf(str2 + OTHERSIZE * 2, ":%u", (unsigned int) pstate_open->state_seqid);
+      fprintf(stderr,
+               "op_lock stateid %s \n",
+               str2 );
+
       /* Lock seqid (seqid wanted for new lock) should be 0 (see newpynfs test LOCK8c)  */
+#ifdef _CONFORM_TO_TEST_LOCK8c
       if(arg_LOCK4.locker.locker4_u.open_owner.lock_seqid != 0)
         {
           res_LOCK4.status = NFS4ERR_BAD_SEQID;
@@ -251,6 +260,7 @@ int nfs4_op_lock(struct nfs_argop4 *op, compound_data_t * data, struct nfs_resop
                    "LOCK failed new lock stateid is not 0");
           return res_LOCK4.status;
         }
+#endif
 
       /* Is this lock_owner known ? */
       convert_nfs4_lock_owner(&arg_LOCK4.locker.locker4_u.open_owner.lock_owner,
@@ -310,6 +320,7 @@ int nfs4_op_lock(struct nfs_argop4 *op, compound_data_t * data, struct nfs_resop
               &lock_desc);
 
 #ifdef _CONFORM_TO_TEST_LOCK8c
+      /* WAIT FOR COMMUNITY CONFIRMATION */
       /* Check validity of the seqid */
       if(arg_LOCK4.locker.locker4_u.lock_owner.lock_seqid != 0)
         {
@@ -472,9 +483,29 @@ int nfs4_op_lock(struct nfs_argop4 *op, compound_data_t * data, struct nfs_resop
 
       init_glist(&plock_state->state_data.lock.state_locklist);
 
+      /* get the exportid */
+      plock_state->exportid = nfs4_FhandleToExportId(&(data->currentFH));
+
       /* Add lock state to the list of lock states belonging to the open state */
       glist_add_tail(&pstate_open->state_data.share.share_lockstates,
                      &plock_state->state_data.lock.state_sharelist);
+
+      /* Add lock owner to the list of the clientid */
+      P(nfs_client_id->clientid_mutex);
+      glist_add_tail(&nfs_client_id->clientid_lockowners, &plock_owner->so_owner.so_nfs4_owner.so_perclient);
+
+      struct glist_head *glist, *glistn;
+      fprintf(stderr, "++++++++++++++++++++++++\n");
+      glist_for_each_safe(glist, glistn, &nfs_client_id->clientid_lockowners)
+        { 
+          state_owner_t * popen_owner = glist_entry(glist,
+                                          state_owner_t,
+                                          so_owner.so_nfs4_owner.so_perclient);
+          fprintf(stderr, "lock: %s:%d\n", popen_owner->so_owner_val, popen_owner->so_owner_len);
+        }
+      fprintf(stderr, "-------------------------\n");
+
+      V(nfs_client_id->clientid_mutex);
     }                           /* if( arg_LOCK4.locker.new_lock_owner ) */
 
   /*

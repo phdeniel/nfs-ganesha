@@ -212,8 +212,7 @@ int nfs41_op_exchange_id(struct nfs_argop4 *op,
               nfs_clientid.clientid = clientid;
               nfs_clientid.last_renew = 0;
 
-              if(nfs_client_id_set(clientid, nfs_clientid,
-                                   &pworker->clientid_pool) !=
+              if(nfs_client_id_set(clientid, &nfs_clientid, &pworker->clientid_pool) !=
                  CLIENT_ID_SUCCESS)
                 {
                   res_EXCHANGE_ID4.eir_status = NFS4ERR_SERVERFAULT;

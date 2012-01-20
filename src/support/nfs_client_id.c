@@ -303,6 +303,11 @@ int nfs_client_id_add(clientid4 clientid,
   buffkey.len = sizeof(clientid);
 
   *pnfs_client_id = client_record;
+  // need to init the list_head
+  init_glist(&pnfs_client_id->clientid_openowners);
+  init_glist(&pnfs_client_id->clientid_lockowners);
+  pnfs_client_id->clientid_pool = clientid_pool;
+
   buffdata.pdata = (caddr_t) pnfs_client_id;
   buffdata.len = sizeof(nfs_client_id_t);
 
@@ -363,7 +368,7 @@ int nfs_client_id_add(clientid4 clientid,
  */
 
 int nfs_client_id_set(clientid4 clientid,
-                      nfs_client_id_t client_record, struct prealloc_pool *clientid_pool)
+                      nfs_client_id_t *client_record, struct prealloc_pool *clientid_pool)
 {
   hash_buffer_t buffkey;
   hash_buffer_t buffdata;
@@ -390,7 +395,7 @@ int nfs_client_id_set(clientid4 clientid,
   buffkey.pdata = (caddr_t) pclientid;
   buffkey.len = sizeof(clientid);
 
-  *pnfs_client_id = client_record;
+  *pnfs_client_id = *client_record;
   buffdata.pdata = (caddr_t) pnfs_client_id;
   buffdata.len = sizeof(nfs_client_id_t);
 
@@ -400,7 +405,7 @@ int nfs_client_id_set(clientid4 clientid,
     return CLIENT_ID_INSERT_MALLOC_ERROR;
 
   /* Reverse hashtable */
-  strncpy((char *)(buffkey_reverse.pdata), client_record.client_name, MAXNAMLEN);
+  strncpy((char *)(buffkey_reverse.pdata), client_record->client_name, MAXNAMLEN);
   buffkey_reverse.len = MAXNAMLEN;
 
   buffdata_reverse.pdata = (caddr_t) pnfs_client_id;
@@ -413,6 +418,159 @@ int nfs_client_id_set(clientid4 clientid,
 
   return CLIENT_ID_SUCCESS;
 }                               /* nfs_client_id_set */
+
+/**
+ * release_lockowner: traverse the state list of the lock owner
+ *   
+ */
+void release_lockowner(state_owner_t *plock_owner)
+{
+  state_status_t         state_status;
+  struct glist_head    * glist, * glistn;
+
+  glist_for_each_safe(glist, glistn, &plock_owner->so_owner.so_nfs4_owner.so_states)
+    {
+      state_t * pstate_found = glist_entry(glist,
+					  state_t,
+					  state_perowner);  
+      if(state_del(pstate_found,
+               plock_owner->so_pclient,
+               &state_status) != STATE_SUCCESS)
+      { 
+        LogDebug(COMPONENT_STATE,
+               "release_lockowner failed to release stateid error %s",
+                state_err_str(state_status));
+      }
+    }
+    
+}
+/**
+ * release_openowner: traverse the state list of the open owner
+ *   
+ */
+void release_openowner(state_owner_t *popen_owner)
+{
+  state_status_t         state_status;
+  struct glist_head    * glist, * glistn;
+
+  glist_for_each_safe(glist, glistn, &popen_owner->so_owner.so_nfs4_owner.so_states)
+    {
+      state_t * pstate_found = glist_entry(glist,
+					  state_t,
+					  state_perowner);  
+				     
+				     
+      cache_entry_t    * pentry = pstate_found->state_pentry;
+      cache_inode_status_t   cache_status;
+      if(state_del(pstate_found,
+               popen_owner->so_pclient,
+               &state_status) != STATE_SUCCESS)
+      { 
+         LogDebug(COMPONENT_STATE,
+               "CLOSE failed to release stateid error %s",
+               state_err_str(state_status));
+      }
+      /* Close the file in FSAL through the cache inode */
+      P_w(&pentry->lock);
+      cache_inode_close(pentry,
+                       popen_owner->so_pclient,
+                       &cache_status);
+      V_w(&pentry->lock);
+    }
+}
+
+/**
+ *
+ * nfs_client_id_expire: client expires, need to take care of owners
+ *
+ *
+ * @param clientid           [IN]    the client id used as key
+ *
+ */
+void nfs_client_id_expire(nfs_client_id_t *client_record)
+{
+  struct glist_head    * glist, * glistn;
+  struct glist_head    * glist2, * glistn2;
+  state_status_t         pstatus;
+
+  /* traverse the client's lock owners, and release all locks */
+  P(client_record->clientid_mutex);
+  glist_for_each_safe(glist, glistn, &client_record->clientid_lockowners)
+    {
+      state_owner_t * plock_owner = glist_entry(glist,
+                                          state_owner_t,
+					  so_owner.so_nfs4_owner.so_perclient);
+      
+      glist_for_each_safe(glist2, glistn2, &plock_owner->so_owner.so_nfs4_owner.so_states)
+        {
+          exportlist_t           * pexport = NULL;
+          fsal_op_context_t        fsal_context;
+          fsal_status_t            fsal_status;
+
+          state_t* plock_state = glist_entry(glist2,
+                                          state_t,
+					  state_perowner);
+
+          /* get the export from the export id */
+          /* construct the fsal context based on the export and root credential */
+	  
+          if ((pexport = nfs_Get_export_by_id(nfs_param.pexportlist, plock_state->exportid)) == NULL)
+            {
+              /* log error here , and continue? */
+              LogDebug(COMPONENT_STATE,
+                      "nfs_Get_export_by_id failed exportid=%d", plock_state->exportid);
+              continue;
+            }
+          fsal_status = FSAL_GetClientContext(&fsal_context,
+                                      &pexport->FS_export_context,
+                                      0,
+                                      0,
+                                      NULL,
+                                      0);
+          if(FSAL_IS_ERROR(fsal_status))
+            {
+              /* log error here , and continue? */
+              LogDebug(COMPONENT_STATE,
+                      "FSAL_GetClientConext failed");
+              continue;
+            }
+
+          state_owner_unlock_all(&fsal_context,
+                                      plock_owner,
+                                      plock_state,
+                                      plock_owner->so_pclient,
+                                      &pstatus);
+        }
+    }
+  
+  /* traverse the client's lock owners, and release all locks states and owners */
+  glist_for_each_safe(glist, glistn, &client_record->clientid_lockowners)
+    {
+      state_owner_t * plock_owner = glist_entry(glist,
+                                          state_owner_t,
+					  so_owner.so_nfs4_owner.so_perclient);
+      release_lockowner(plock_owner);
+    }
+
+  /* TODO: need to close open files */
+
+  /* File is closed, release the corresponding lock states */
+  glist_for_each_safe(glist, glistn, &client_record->clientid_openowners)
+    {
+      state_owner_t * popen_owner = glist_entry(glist,
+                                          state_owner_t,
+					  so_owner.so_nfs4_owner.so_perclient);
+      release_openowner(popen_owner);
+    }
+  V(client_record->clientid_mutex);
+
+  /* need to free client record */
+  if ((nfs_client_id_remove(client_record->clientid, client_record->clientid_pool)) == CLIENT_ID_SUCCESS)
+    {
+      LogDebug(COMPONENT_STATE,
+               "clientid removed\n");
+    }
+}
 
 /**
  *
