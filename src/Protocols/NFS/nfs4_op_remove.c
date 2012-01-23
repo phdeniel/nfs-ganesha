@@ -63,6 +63,7 @@
 #include "nfs_proto_functions.h"
 #include "nfs_tools.h"
 #include "nfs_file_handle.h"
+#include "sal_functions.h"
 
 /**
  * nfs4_op_rename: The NFS4_OP_REMOVE operation.
@@ -119,6 +120,12 @@ int nfs4_op_remove(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
   if(nfs4_Is_Fh_Pseudo(&(data->currentFH)))
     {
       res_REMOVE4.status = NFS4ERR_ROFS;
+      return res_REMOVE4.status;
+    }
+
+  if (nfs4_in_grace())
+    {
+      res_REMOVE4.status = NFS4ERR_GRACE;
       return res_REMOVE4.status;
     }
 

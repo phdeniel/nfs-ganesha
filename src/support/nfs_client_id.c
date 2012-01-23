@@ -10,16 +10,16 @@
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 3 of the License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
- * 
+ *
  * ---------------------------------------
  *
  * nfs_client_id.c : The management of the client id cache.
@@ -48,6 +48,8 @@
 #include <string.h>
 #include <pthread.h>
 #include "nfs4.h"
+#include "sal_data.h"
+#include "sal_functions.h"
 
 #ifdef _APPLE
 #define strnlen( s, l ) strlen( s )
@@ -62,9 +64,11 @@ hash_table_t *ht_client_id_reverse;
 /**
  *
  *  client_id_rbt_hash_func: computes the hash value for the entry in Client Id cache.
- * 
- * Computes the hash value for the entry in Client Id cache. In fact, it just use addresse as value (identity function) modulo the size of the hash.
- * This function is called internal in the HasTable_* function
+ *
+ * Computes the hash value for the entry in Client Id cache. In fact,
+ * it just use addresse as value (identity function) modulo the size
+ * of the hash.  This function is called internal in the HasTable_*
+ * function
  *
  * @param hparam     [IN] hash table parameter.
  * @param buffcleff  [IN] pointer to the hash key buffer
@@ -91,10 +95,12 @@ unsigned long client_id_value_hash_func(hash_parameter_t * p_hparam,
 
 /**
  *
- *  client_id_reverse_hash_func: computes the hash value for the entry in Client Id cache.
+ * client_id_reverse_hash_func: computes the hash value for the entry in Client Id cache.
  *
- * Computes the hash value for the entry in Client Id cache. In fact, it just use addresse as value (identity function) modulo the size of the hash.
- * This function is called internal in the HasTable_* function
+ * Computes the hash value for the entry in Client Id cache. In fact,
+ * it just use addresse as value (identity function) modulo the size
+ * of the hash.  This function is called internal in the HasTable_*
+ * function
  *
  * @param hparam     [IN] hash table parameter.
  * @param buffcleff  [IN] pointer to the hash key buffer
@@ -119,8 +125,8 @@ unsigned long client_id_value_hash_func_reverse(hash_parameter_t * p_hparam,
 }                               /*  client_id_reverse_value_hash_func */
 
 unsigned int client_id_value_both_reverse( hash_parameter_t * p_hparam,
-				           hash_buffer_t    * buffclef, 
-				           uint32_t * phashval, uint32_t * prbtval )
+                                           hash_buffer_t    * buffclef,
+                                           uint32_t * phashval, uint32_t * prbtval )
 {
    uint32_t h1 = 0 ;
    uint32_t h2 = 0 ;
@@ -140,7 +146,7 @@ unsigned int client_id_value_both_reverse( hash_parameter_t * p_hparam,
 /**
  *
  *  client_id_rbt_hash_func: computes the rbt value for the entry in Client Id cache.
- * 
+ *
  * Computes the rbt value for the entry in Client Id cache. In fact, it just use the address value
  * itself (which is an unsigned integer) as the rbt value.
  * This function is called internal in the HasTable_* function
@@ -262,7 +268,8 @@ int display_client_id_val(hash_buffer_t * pbuff, char *str)
  */
 
 int nfs_client_id_add(clientid4 clientid,
-                      nfs_client_id_t client_record, struct prealloc_pool *clientid_pool)
+                      nfs_client_id_t client_record,
+                      cache_inode_client_t *pclient)
 {
   hash_buffer_t buffkey;
   hash_buffer_t buffdata;
@@ -270,6 +277,12 @@ int nfs_client_id_add(clientid4 clientid,
   hash_buffer_t buffdata_reverse;
   nfs_client_id_t *pnfs_client_id = NULL;
   clientid4 *pclientid = NULL;
+  state_nfs4_owner_name_t owner_name;
+  state_owner_t *client_owner = NULL;
+  struct prealloc_pool *clientid_pool =
+    &((nfs_worker_data_t*) pclient->pworker)->clientid_pool;
+
+  convert_nfs4_clientid_owner(clientid, &owner_name);
 
   /* Entry to be cached */
   GetFromPool(pnfs_client_id, clientid_pool, nfs_client_id_t);
@@ -290,6 +303,11 @@ int nfs_client_id_add(clientid4 clientid,
   buffkey.len = sizeof(clientid);
 
   *pnfs_client_id = client_record;
+  // need to init the list_head
+  init_glist(&pnfs_client_id->clientid_openowners);
+  init_glist(&pnfs_client_id->clientid_lockowners);
+  pnfs_client_id->clientid_pool = clientid_pool;
+
   buffdata.pdata = (caddr_t) pnfs_client_id;
   buffdata.len = sizeof(nfs_client_id_t);
 
@@ -320,6 +338,16 @@ int nfs_client_id_add(clientid4 clientid,
       HashTable_Log(COMPONENT_CLIENT_ID_COMPUTE,ht_client_id_reverse);
     }
 
+  if ((client_owner =
+       create_nfs4_owner(pclient, &owner_name,
+                         STATE_CLIENTID_OWNER_NFSV4, NULL, 0))
+      == NULL)
+    {
+      return CLIENT_ID_STATE_ERROR;
+    }
+
+  pnfs_client_id->clientid_owner = client_owner;
+
   return CLIENT_ID_SUCCESS;
 }                               /* nfs_client_id_add */
 
@@ -340,7 +368,7 @@ int nfs_client_id_add(clientid4 clientid,
  */
 
 int nfs_client_id_set(clientid4 clientid,
-                      nfs_client_id_t client_record, struct prealloc_pool *clientid_pool)
+                      nfs_client_id_t *client_record, struct prealloc_pool *clientid_pool)
 {
   hash_buffer_t buffkey;
   hash_buffer_t buffdata;
@@ -367,7 +395,7 @@ int nfs_client_id_set(clientid4 clientid,
   buffkey.pdata = (caddr_t) pclientid;
   buffkey.len = sizeof(clientid);
 
-  *pnfs_client_id = client_record;
+  *pnfs_client_id = *client_record;
   buffdata.pdata = (caddr_t) pnfs_client_id;
   buffdata.len = sizeof(nfs_client_id_t);
 
@@ -377,7 +405,7 @@ int nfs_client_id_set(clientid4 clientid,
     return CLIENT_ID_INSERT_MALLOC_ERROR;
 
   /* Reverse hashtable */
-  strncpy((char *)(buffkey_reverse.pdata), client_record.client_name, MAXNAMLEN);
+  strncpy((char *)(buffkey_reverse.pdata), client_record->client_name, MAXNAMLEN);
   buffkey_reverse.len = MAXNAMLEN;
 
   buffdata_reverse.pdata = (caddr_t) pnfs_client_id;
@@ -390,6 +418,159 @@ int nfs_client_id_set(clientid4 clientid,
 
   return CLIENT_ID_SUCCESS;
 }                               /* nfs_client_id_set */
+
+/**
+ * release_lockowner: traverse the state list of the lock owner
+ *   
+ */
+void release_lockowner(state_owner_t *plock_owner)
+{
+  state_status_t         state_status;
+  struct glist_head    * glist, * glistn;
+
+  glist_for_each_safe(glist, glistn, &plock_owner->so_owner.so_nfs4_owner.so_states)
+    {
+      state_t * pstate_found = glist_entry(glist,
+					  state_t,
+					  state_perowner);  
+      if(state_del(pstate_found,
+               plock_owner->so_pclient,
+               &state_status) != STATE_SUCCESS)
+      { 
+        LogDebug(COMPONENT_STATE,
+               "release_lockowner failed to release stateid error %s",
+                state_err_str(state_status));
+      }
+    }
+    
+}
+/**
+ * release_openowner: traverse the state list of the open owner
+ *   
+ */
+void release_openowner(state_owner_t *popen_owner)
+{
+  state_status_t         state_status;
+  struct glist_head    * glist, * glistn;
+
+  glist_for_each_safe(glist, glistn, &popen_owner->so_owner.so_nfs4_owner.so_states)
+    {
+      state_t * pstate_found = glist_entry(glist,
+					  state_t,
+					  state_perowner);  
+				     
+				     
+      cache_entry_t    * pentry = pstate_found->state_pentry;
+      cache_inode_status_t   cache_status;
+      if(state_del(pstate_found,
+               popen_owner->so_pclient,
+               &state_status) != STATE_SUCCESS)
+      { 
+         LogDebug(COMPONENT_STATE,
+               "CLOSE failed to release stateid error %s",
+               state_err_str(state_status));
+      }
+      /* Close the file in FSAL through the cache inode */
+      P_w(&pentry->lock);
+      cache_inode_close(pentry,
+                       popen_owner->so_pclient,
+                       &cache_status);
+      V_w(&pentry->lock);
+    }
+}
+
+/**
+ *
+ * nfs_client_id_expire: client expires, need to take care of owners
+ *
+ *
+ * @param clientid           [IN]    the client id used as key
+ *
+ */
+void nfs_client_id_expire(nfs_client_id_t *client_record)
+{
+  struct glist_head    * glist, * glistn;
+  struct glist_head    * glist2, * glistn2;
+  state_status_t         pstatus;
+
+  /* traverse the client's lock owners, and release all locks */
+  P(client_record->clientid_mutex);
+  glist_for_each_safe(glist, glistn, &client_record->clientid_lockowners)
+    {
+      state_owner_t * plock_owner = glist_entry(glist,
+                                          state_owner_t,
+					  so_owner.so_nfs4_owner.so_perclient);
+      
+      glist_for_each_safe(glist2, glistn2, &plock_owner->so_owner.so_nfs4_owner.so_states)
+        {
+          exportlist_t           * pexport = NULL;
+          fsal_op_context_t        fsal_context;
+          fsal_status_t            fsal_status;
+
+          state_t* plock_state = glist_entry(glist2,
+                                          state_t,
+					  state_perowner);
+
+          /* get the export from the export id */
+          /* construct the fsal context based on the export and root credential */
+	  
+          if ((pexport = nfs_Get_export_by_id(nfs_param.pexportlist, plock_state->exportid)) == NULL)
+            {
+              /* log error here , and continue? */
+              LogDebug(COMPONENT_STATE,
+                      "nfs_Get_export_by_id failed exportid=%d", plock_state->exportid);
+              continue;
+            }
+          fsal_status = FSAL_GetClientContext(&fsal_context,
+                                      &pexport->FS_export_context,
+                                      0,
+                                      0,
+                                      NULL,
+                                      0);
+          if(FSAL_IS_ERROR(fsal_status))
+            {
+              /* log error here , and continue? */
+              LogDebug(COMPONENT_STATE,
+                      "FSAL_GetClientConext failed");
+              continue;
+            }
+
+          state_owner_unlock_all(&fsal_context,
+                                      plock_owner,
+                                      plock_state,
+                                      plock_owner->so_pclient,
+                                      &pstatus);
+        }
+    }
+  
+  /* traverse the client's lock owners, and release all locks states and owners */
+  glist_for_each_safe(glist, glistn, &client_record->clientid_lockowners)
+    {
+      state_owner_t * plock_owner = glist_entry(glist,
+                                          state_owner_t,
+					  so_owner.so_nfs4_owner.so_perclient);
+      release_lockowner(plock_owner);
+    }
+
+  /* TODO: need to close open files */
+
+  /* File is closed, release the corresponding lock states */
+  glist_for_each_safe(glist, glistn, &client_record->clientid_openowners)
+    {
+      state_owner_t * popen_owner = glist_entry(glist,
+                                          state_owner_t,
+					  so_owner.so_nfs4_owner.so_perclient);
+      release_openowner(popen_owner);
+    }
+  V(client_record->clientid_mutex);
+
+  /* need to free client record */
+  if ((nfs_client_id_remove(client_record->clientid, client_record->clientid_pool)) == CLIENT_ID_SUCCESS)
+    {
+      LogDebug(COMPONENT_STATE,
+               "clientid removed\n");
+    }
+}
 
 /**
  *

@@ -219,7 +219,7 @@ int nfs4_op_setattr(struct nfs_argop4 *op,
         }
 #endif
 
-#warning fix for real (still hunting for root cause)
+//warning fix for real (still hunting for root cause)
 #define S_NSECS 1000000000UL	/* nsecs in 1s */
       /* a carry into seconds appears clearly ruled out */
       if (sattr.atime.nseconds > S_NSECS)

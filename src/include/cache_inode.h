@@ -311,14 +311,9 @@ struct cache_entry_t
     struct cache_inode_file__
     {
       fsal_handle_t handle;                                          /**< The FSAL Handle                                      */
-#ifdef _USE_PNFS_SPNFS_LIKE
-      fsal_pnfs_file_t pnfs_file ;                                   /**< Specific FS information for pNFS management          */
-#endif
       cache_inode_opened_file_t open_fd;                             /**< Cached fsal_file_t for optimized access              */
-#ifdef _USE_PROXY
       fsal_name_t *pname;                                            /**< Pointer to filename, for PROXY only                  */
       cache_entry_t *pentry_parent_open;                             /**< Parent associated with pname, for PROXY only         */
-#endif                          /* _USE_PROXY */
       fsal_attrib_list_t attributes;                                 /**< The FSAL Attributes                                  */
       void *pentry_content;                                          /**< Entry in file content cache (NULL if not cached)     */
       struct glist_head state_list;                                  /**< Pointers for state list                              */
@@ -337,7 +332,7 @@ struct cache_entry_t
       cache_inode_flag_t has_been_readdir;      /**< True if a full readdir was performed on the directory   */
       char *referral;                           /**< NULL is not a referral, is not this a 'referral string' */
       struct avltree dentries;                  /**< Children */
-      struct avltree cookies;                   /**< sparse offset avl */
+      struct avltree cookies;                   /**< Readdir cookie avl (transient) */
     } dir;                                /**< DIR related field                               */
 
     struct cache_inode_special_object__
@@ -352,14 +347,19 @@ struct cache_entry_t
   rw_lock_t lock;                             /**< a reader-writter lock used to protect the data     */
   cache_inode_internal_md_t internal_md;      /**< My metadata (from this cache's point of view)      */
   LRU_entry_t *gc_lru_entry;                  /**< related LRU entry in the LRU list used for GC      */
-  LRU_list_t *gc_lru;                         /**< related LRU list for GC                            */
-
- /* List of parent cache entries of directory entries related by
-  * hard links */       
+  LRU_list_t *gc_lru;                         /**< related LRU list for GC                            */    
+  
+  /* XXX In the next step past asyncrhronous cache invalidates (i.e., invalidate
+   * upcalls), we may wish to support removal of specific links to an entry, updating
+   * related dentry caches in place.  It appears that an efficient way to support
+   * this would be to replace the current parent chain with a chain of link records,
+   * each containing a {parent_inode, name} pair. */
+   
+  /* List of parent cache entries of directory entries related by
+   * hard links */
   struct cache_inode_parent_entry__
   {
     cache_entry_t *parent;                           /**< Parent entry */
-    uint64_t cookie;                                 /**< Key in sparse avl */
     struct cache_inode_parent_entry__ *next_parent;  /**< Next parent */
   } *parent_list;
 #ifdef _USE_MFSL
@@ -499,6 +499,7 @@ typedef enum cache_inode_status_t
   CACHE_INODE_NAME_TOO_LONG         = 36,
   CACHE_INODE_BAD_COOKIE            = 40,
   CACHE_INODE_FILE_BIG              = 41,
+  CACHE_INODE_KILLED                = 42,
 } cache_inode_status_t;
 
 const char *cache_inode_err_str(cache_inode_status_t err);
@@ -649,6 +650,15 @@ cache_entry_t *cache_inode_lookup( cache_entry_t * pentry_parent,
                                    cache_inode_client_t * pclient,
                                    fsal_op_context_t * pcontext,
                                    cache_inode_status_t * pstatus);
+
+cache_entry_t *cache_inode_valid_lookup(cache_entry_t * pentry_parent,
+                                        fsal_name_t * pname,
+                                        cache_inode_policy_t policy,
+                                        fsal_attrib_list_t * pattr,
+                                        hash_table_t * ht,
+                                        cache_inode_client_t * pclient,
+                                        fsal_op_context_t * pcontext,
+                                        cache_inode_status_t * pstatus);
 
 cache_entry_t *cache_inode_lookupp_sw(cache_entry_t * pentry,
                                       hash_table_t * ht,
@@ -924,10 +934,6 @@ void cache_inode_release_dirents(cache_entry_t *pentry,
 				 cache_inode_client_t *pclient,
 				 cache_inode_avl_which_t which);
 
-void cache_inode_invalidate_related_dirent(cache_entry_t * pentry,
-					   uint64_t cookie,
-					   cache_inode_client_t * pclient);
-
 cache_inode_status_t cache_inode_gc(hash_table_t * ht,
                                     cache_inode_client_t * pclient,
                                     cache_inode_status_t * pstatus);
@@ -936,7 +942,7 @@ cache_inode_status_t cache_inode_gc_fd(cache_inode_client_t * pclient,
                                        cache_inode_status_t * pstatus);
 
 cache_inode_status_t cache_inode_kill_entry( cache_entry_t * pentry,
-                                             cache_inode_lock_how_t lock_how, 
+                                             cache_inode_lock_how_t lock_how,
                                              hash_table_t * ht,
                                              cache_inode_client_t * pclient,
                                              cache_inode_status_t * pstatus);
@@ -948,7 +954,6 @@ cache_inode_status_t cache_inode_invalidate( fsal_handle_t        * pfsal_handle
                                              cache_inode_status_t * pstatus) ;
 
 void cache_inode_invalidate_related_dirent( cache_entry_t * pentry,
-                                            uint64_t cookie,
                                             cache_inode_client_t * pclient );
 
 void cache_inode_invalidate_related_dirents(  cache_entry_t        * pentry,

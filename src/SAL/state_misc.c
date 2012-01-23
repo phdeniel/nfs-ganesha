@@ -102,6 +102,7 @@ const char *state_err_str(state_status_t err)
       case STATE_GRACE_PERIOD:          return "STATE_GRACE_PERIOD";
       case STATE_CACHE_INODE_ERR:       return "STATE_CACHE_INODE_ERR";
       case STATE_SIGNAL_ERROR:          return "STATE_SIGNAL_ERROR";
+      case STATE_KILLED:                return "STATE_KILLED";
     }
   return "unknown";
 }
@@ -149,6 +150,7 @@ state_status_t cache_inode_status_to_state_status(cache_inode_status_t status)
       case CACHE_INODE_NAME_TOO_LONG:         return STATE_NAME_TOO_LONG;
       case CACHE_INODE_BAD_COOKIE:            return STATE_BAD_COOKIE;
       case CACHE_INODE_FILE_BIG:              return STATE_FILE_BIG;
+      case CACHE_INODE_KILLED:                return STATE_KILLED;
     }
   return STATE_CACHE_INODE_ERR;
 }
@@ -361,6 +363,7 @@ nfsstat4 nfs4_Errno_state(state_status_t error)
       nfserror = NFS4ERR_NAMETOOLONG;
       break;
 
+    case STATE_KILLED:
     case STATE_DEAD_ENTRY:
     case STATE_FSAL_ESTALE:
       nfserror = NFS4ERR_STALE;
@@ -505,6 +508,7 @@ nfsstat3 nfs3_Errno_state(state_status_t error)
       nfserror = NFS3ERR_ROFS;
       break;
 
+    case STATE_KILLED:
     case STATE_DEAD_ENTRY:
     case STATE_FSAL_ESTALE:
       nfserror = NFS3ERR_STALE;
@@ -647,6 +651,7 @@ nfsstat2 nfs2_Errno_state(state_status_t error)
       nfserror = NFSERR_ROFS;
       break;
 
+    case STATE_KILLED:
     case STATE_DEAD_ENTRY:
     case STATE_FSAL_ESTALE:
       nfserror = NFSERR_STALE;
@@ -698,12 +703,13 @@ const char * state_owner_type_to_str(state_owner_type_t type)
 {
   switch(type)
     {
-      case STATE_LOCK_OWNER_UNKNOWN: return "STATE_LOCK_OWNER_UNKNOWN";
+      case STATE_LOCK_OWNER_UNKNOWN:     return "STATE_LOCK_OWNER_UNKNOWN";
 #ifdef _USE_NLM
-      case STATE_LOCK_OWNER_NLM:     return "STATE_LOCK_OWNER_NLM";
+      case STATE_LOCK_OWNER_NLM:         return "STATE_LOCK_OWNER_NLM";
 #endif
-      case STATE_OPEN_OWNER_NFSV4:   return "STATE_OPEN_OWNER_NFSV4";
-      case STATE_LOCK_OWNER_NFSV4:   return "STATE_LOCK_OWNER_NFSV4";
+      case STATE_OPEN_OWNER_NFSV4:       return "STATE_OPEN_OWNER_NFSV4";
+      case STATE_LOCK_OWNER_NFSV4:       return "STATE_LOCK_OWNER_NFSV4";
+      case STATE_CLIENTID_OWNER_NFSV4:   return "STATE_CLIENTID_OWNER_NFSV4";
     }
   return invalid_state_owner_type;
 }
@@ -724,15 +730,15 @@ int different_owners(state_owner_t *powner1, state_owner_t *powner2)
     {
 #ifdef _USE_NLM
       case STATE_LOCK_OWNER_NLM:
-         if(powner2->so_type != STATE_LOCK_OWNER_NLM)
+        if(powner2->so_type != STATE_LOCK_OWNER_NLM)
            return 1;
         return compare_nlm_owner(powner1, powner2);
 #endif
       case STATE_OPEN_OWNER_NFSV4:
       case STATE_LOCK_OWNER_NFSV4:
-         if(powner2->so_type != STATE_OPEN_OWNER_NFSV4 &&
-            powner2->so_type != STATE_LOCK_OWNER_NFSV4)
-           return 1;
+      case STATE_CLIENTID_OWNER_NFSV4:
+        if(powner1->so_type != powner2->so_type)
+          return 1;
         return compare_nfs4_owner(powner1, powner2);
 
       case STATE_LOCK_OWNER_UNKNOWN:
@@ -754,6 +760,7 @@ int DisplayOwner(state_owner_t *powner, char *buf)
 
         case STATE_OPEN_OWNER_NFSV4:
         case STATE_LOCK_OWNER_NFSV4:
+        case STATE_CLIENTID_OWNER_NFSV4:
           return display_nfs4_owner(powner, buf);
 
         case STATE_LOCK_OWNER_UNKNOWN:
@@ -874,6 +881,7 @@ void dec_state_owner_ref_locked(state_owner_t        * powner,
 
           case STATE_OPEN_OWNER_NFSV4:
           case STATE_LOCK_OWNER_NFSV4:
+          case STATE_CLIENTID_OWNER_NFSV4:
             remove_nfs4_owner(pclient, powner, str);
             break;
 

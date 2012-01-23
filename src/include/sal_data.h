@@ -10,16 +10,16 @@
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 3 of the License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
- * 
+ *
  * ---------------------------------------
  */
 
@@ -28,7 +28,7 @@
  * \author  $Author: deniel $
  * \date    $Date: 2006/01/24 11:43:15 $
  * \version $Revision: 1.95 $
- * \brief   Management of the state abstraction layer. 
+ * \brief   Management of the state abstraction layer.
  *
  * sal_data.h : Management of the state abstraction layer
  *
@@ -64,6 +64,9 @@
 #ifdef _USE_NFS4_1
 #include "nfs41_session.h"
 #endif                          /* _USE_NFS4_1 */
+#ifdef _USE_FSALMDS
+#include "fsal_pnfs.h"
+#endif /* _USE_FSALMDS */
 
 /* Indicate if state code must support blocking locks
  * NLM supports blocking locks
@@ -97,7 +100,10 @@ typedef struct state_nlm_client_t   state_nlm_client_t;
 #ifdef _USE_BLOCKING_LOCKS
 typedef struct state_cookie_entry_t state_cookie_entry_t;
 typedef struct state_block_data_t   state_block_data_t;
-#endif
+#endif /* _USE_BLOCKING_LOCKS */
+#ifdef _USE_FSALMDS
+typedef struct state_layout_segment_t state_layout_segment_t;
+#endif /* _USE_FSALMDS */
 
 typedef struct nfs_state_id_param__
 {
@@ -140,11 +146,13 @@ typedef struct state_deleg__
 
 typedef struct state_layout__
 {
-#ifdef _USE_PNFS
-  int nothing; /** @todo Add fsal_layout structure here */
+#ifdef _USE_FSALMDS
+  layouttype4            state_layout_type;
+  bool_t                 state_return_on_close;
+  struct glist_head      state_segments;
 #else
   int nothing;
-#endif
+#endif /* _USE_FSALMDS */
 } state_layout_t;
 
 typedef union state_data_t
@@ -164,12 +172,15 @@ extern char all_one[OTHERSIZE];
 struct state_t
 {
   struct glist_head state_list;                /**< List of states on a file                   */
+  struct glist_head state_perowner;	       /**< List of states on a owner		       */
+  unsigned int      exportid;
   state_type_t      state_type;
   state_data_t      state_data;
   u_int32_t         state_seqid;               /**< The NFSv4 Sequence id                      */
   char              stateid_other[OTHERSIZE];  /**< "Other" part of state id, used as hash key */
   state_owner_t   * state_powner;              /**< State Owner related to this state          */
   cache_entry_t   * state_pentry;              /**< Related pentry                             */
+  struct glist_head owner_states;              /**< List of states for an owner                */
 };
 
 typedef struct state_nfs4_owner_name_t
@@ -187,7 +198,8 @@ typedef enum state_owner_type_t
   STATE_LOCK_OWNER_NLM,
 #endif
   STATE_OPEN_OWNER_NFSV4,
-  STATE_LOCK_OWNER_NFSV4
+  STATE_LOCK_OWNER_NFSV4,
+  STATE_CLIENTID_OWNER_NFSV4
 } state_owner_type_t;
 
 #ifdef _USE_NLM
@@ -251,6 +263,10 @@ struct state_nfs4_owner_t
   cache_entry_t     * so_last_pentry;   /** < Last file operated on by this state owner */
   nfs_resop4          so_resp;          /** < Saved response                            */
   state_owner_t     * so_related_owner;
+  struct glist_head   so_owner_list;    /** < Share and lock owners with the same clientid */
+  struct glist_head   so_state_list;    /** < States owned by this owner */
+  struct glist_head   so_perclient;     /** open owner entry to be linked to client */
+  struct glist_head   so_states;	/** 1 owner could have many states */
 };
 
 /* Undistinguished lock owner type */
@@ -262,6 +278,7 @@ struct state_owner_t
   int                     so_refcount;
   int                     so_owner_len;
   char                    so_owner_val[NFS4_OPAQUE_LIMIT]; /* big enough for all owners */
+  cache_inode_client_t  * so_pclient;
   union
   {
     state_nfs4_owner_t    so_nfs4_owner;
@@ -274,7 +291,7 @@ struct state_owner_t
 extern state_owner_t unknown_owner;
 
 /*
- * Possible errors 
+ * Possible errors
  */
 typedef enum state_status_t
 {
@@ -323,6 +340,7 @@ typedef enum state_status_t
   STATE_GRACE_PERIOD          = 42,
   STATE_CACHE_INODE_ERR       = 43,
   STATE_SIGNAL_ERROR          = 44,
+  STATE_KILLED                = 45,
 } state_status_t;
 
 typedef enum state_blocking_t
@@ -411,6 +429,17 @@ struct state_lock_entry_t
   fsal_lock_param_t      sle_lock;
   pthread_mutex_t        sle_mutex;
 };
+
+#ifdef _USE_FSALMDS
+struct state_layout_segment_t
+{
+  struct glist_head      sls_state_segments;
+  state_t              * sls_state;
+  struct pnfs_segment    sls_segment;
+  void                 * sls_fsal_data;
+  pthread_mutex_t        sls_mutex;
+};
+#endif /* _USE_FSALMDS */
 
 #ifdef _USE_NLM
 #define sle_client_locks sle_locks

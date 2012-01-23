@@ -132,6 +132,7 @@ const char *cache_inode_err_str(cache_inode_status_t err)
       case CACHE_INODE_NAME_TOO_LONG:         return "CACHE_INODE_NAME_TOO_LONG";
       case CACHE_INODE_BAD_COOKIE:            return "CACHE_INODE_BAD_COOKIE";
       case CACHE_INODE_FILE_BIG:              return "CACHE_INODE_FILE_BIG";
+      case CACHE_INODE_KILLED:                return "CACHE_INODE_KILLED";
     }
   return "unknown";
 }
@@ -541,10 +542,6 @@ cache_entry_t *cache_inode_new_entry(cache_inode_fsal_data_t   * pfsdata,
 #ifdef _USE_PROXY
       pentry->object.file.pname = NULL;
       pentry->object.file.pentry_parent_open = NULL;
-#endif
-
-#ifdef _USE_PNFS_SPNFS_LIKE /** @todo do the thing in a cleaner way here */
-      pentry->object.file.pnfs_file.ds_file.allocated = FALSE;
 #endif
 
       break;
@@ -1599,7 +1596,6 @@ cache_inode_status_t cache_inode_dump_content(char *path, cache_entry_t * pentry
 cache_inode_status_t cache_inode_reload_content(char *path, cache_entry_t * pentry)
 {
   FILE *stream = NULL;
-  int rc;
 
   char buff[CACHE_INODE_DUMP_LEN+1];
 
@@ -1615,15 +1611,15 @@ cache_inode_status_t cache_inode_reload_content(char *path, cache_entry_t * pent
   /* Read the information */
   #define XSTR(s) STR(s)
   #define STR(s) #s
-  rc = fscanf(stream, "internal:read_time=%" XSTR(CACHE_INODE_DUMP_LEN) "s\n", buff);
+  fscanf(stream, "internal:read_time=%" XSTR(CACHE_INODE_DUMP_LEN) "s\n", buff);
   pentry->internal_md.read_time = atoi(buff);
 
-  rc = fscanf(stream, "internal:mod_time=%" XSTR(CACHE_INODE_DUMP_LEN) "s\n", buff);
+  fscanf(stream, "internal:mod_time=%" XSTR(CACHE_INODE_DUMP_LEN) "s\n", buff);
   pentry->internal_md.mod_time = atoi(buff);
 
-  rc = fscanf(stream, "internal:export_id=%" XSTR(CACHE_INODE_DUMP_LEN) "s\n", buff);
+  fscanf(stream, "internal:export_id=%" XSTR(CACHE_INODE_DUMP_LEN) "s\n", buff);
 
-  rc = fscanf(stream, "file: FSAL handle=%" XSTR(CACHE_INODE_DUMP_LEN) "s", buff);
+  fscanf(stream, "file: FSAL handle=%" XSTR(CACHE_INODE_DUMP_LEN) "s", buff);
   #undef STR
   #undef XSTR
 
@@ -1650,58 +1646,25 @@ cache_inode_status_t cache_inode_reload_content(char *path, cache_entry_t * pent
  * cache_inode_invalidate_dirent: unassociate a directory entry, 
  * invalidating the containing cache entry.
  *
- * Note that the dirent object linked in each parent entry is
- * necessarily unique, though it shares its name with its linked
- * friends.  This follows from the design of the avl link record.
- * From this it follows that any dirent unlinked here should be
- * reclaimed (or recycled).
- *
  * Removes directory entry association.  Cache entry is locked.
  *
  * @param pentry [INOUT] entry to be managed
- * @param cookie [IN] key of related dirent in pentry sparse avl
  * @param pclient [IN] related pclient
  *
  * @return void
  *
  */
-void cache_inode_invalidate_related_dirent(
+ void cache_inode_invalidate_related_dirent(
     cache_entry_t * pentry,
-    uint64_t cookie,
     cache_inode_client_t * pclient)
 {
-    struct avltree_node *dirent_node;
-    cache_inode_dir_entry_t dirent_key[1], *dirent;
 
-    dirent_key->cookie = cookie;
-    dirent_node = avltree_lookup(&dirent_key->node_c,
-				 &pentry->object.dir.cookies);
-
-    if (! dirent_node) {
-	LogDebug(COMPONENT_CACHE_INODE,
-		 "%s: pentry %p has no sparse node with key%"PRIu64,
-		 __func__,
-		 pentry,
-		 cookie);
-	return;
-    }
-
-    /* get shared dirent */
-    dirent = avltree_container_of(dirent_node, cache_inode_dir_entry_t,
-				  node_c);
-
-    /* clear cookie offset avl */
-    avltree_remove(&dirent->node_c, &pentry->object.dir.cookies);
-
-    /* clear name avl */
-    avltree_remove(&dirent->node_n, &pentry->object.dir.dentries);
-
-    /* reclaim */
-    ReleaseToPool(dirent, &pclient->pool_dir_entry);
+    /* Fine-grained updates are possible, but the parent_iter must be replaced
+     * with a set of link records, and these must be reliable. */
+    cache_inode_release_dirents(pentry, pclient, CACHE_INODE_AVL_BOTH);
 
     /* invalidate pentry */
     pentry->object.dir.has_been_readdir = CACHE_INODE_NO;
-    pentry->object.dir.nbactive--; 
 
     return;
 }
@@ -1711,8 +1674,7 @@ void cache_inode_invalidate_related_dirent(
  * cache_inode_invalidate_related_dirents: invalidate directory entries
  * related through hard links.
  *
- * Removes directory entry associations.  Dirent is not reclaimed (but
- * may be by the caller).  Cache entry is locked.
+ * Removes directory entry associations.  Cache entry is locked.
  *
  * @param pentry [INOUT] entry to be managed
  * @param pclient [IN] related pclient
@@ -1729,7 +1691,9 @@ void cache_inode_invalidate_related_dirents(  cache_entry_t        * pentry,
   for(parent_iter = pentry->parent_list; parent_iter != NULL;
       parent_iter = parent_iter->next_parent)
     {
-      if(parent_iter->parent == NULL)
+      cache_entry_t *parent = parent_iter->parent;
+      
+      if(parent == NULL)
         {
           LogDebug(COMPONENT_CACHE_INODE,
                    "cache_inode_gc_invalidate_related_dirent: pentry %p "
@@ -1740,12 +1704,12 @@ void cache_inode_invalidate_related_dirents(  cache_entry_t        * pentry,
 
       /* If I reached this point, then parent_iter->parent is not null
        * and is a valid cache_inode pentry */
-      P_w(&parent_iter->parent->lock);
+      P_w(&parent->lock);
 
       /* Check for type of the parent */
-      if(parent_iter->parent->internal_md.type != DIRECTORY)
+      if(parent->internal_md.type != DIRECTORY)
         {
-          V_w(&parent_iter->parent->lock);
+          V_w(&parent->lock);
           /* Major parent incoherency: parent is not a directory */
           LogDebug(COMPONENT_CACHE_INODE,
                    "cache_inode_gc_invalidate_related_dirent: major "
@@ -1753,11 +1717,13 @@ void cache_inode_invalidate_related_dirents(  cache_entry_t        * pentry,
           return;
         }
 
-      /* Invalidate related */
-      cache_inode_invalidate_related_dirent(
-	  parent_iter->parent, parent_iter->cookie, pclient);
+      /* Fine-grained updates are possible, but the parent_iter must be replaced
+       * with a set of link records, and these must be reliable. */
 
-      V_w(&parent_iter->parent->lock);
+      /* Invalidate related. */
+      cache_inode_invalidate_related_dirent(parent, pclient);
+
+      V_w(&parent->lock);
     }
 }                               /* cache_inode_invalidate_related_dirent */
 

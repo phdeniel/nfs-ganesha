@@ -491,6 +491,13 @@ int nfs4_Check_Stateid(stateid4        * pstate,
           else
             return NFS4_OK;
         }
+/* XXX - jw - this will be added when client expiry work is complete.
+ * need to change client_id_get to client_id_Get_Pointer
+ * if (nfs4_is_leased_expired(&nfs_clientid))
+ *   return NFS4ERR_EXPIRED;
+ * else
+ *   nfs4_update_lease(nfs_clientid);
+ */
     }
 
   /* Sanity check : Is this the right file ? */
@@ -501,8 +508,10 @@ int nfs4_Check_Stateid(stateid4        * pstate,
       return NFS4ERR_BAD_STATEID;
     }
 
-  /* Test for seqid = 0 if allowed */
-  if((flags & STATEID_SPECIAL_SEQID_0) == 0 || pstate->seqid != 0)
+  /* Whether stateid.seqid may be zero depends on the state type
+     exclusively, See RFC 5661 pp. 161,287-288. */
+  if((pstate2->state_type == STATE_TYPE_LAYOUT) ||
+     (pstate->seqid != 0))
     {
       /* Check seqid in stateid */
       diff = pstate->seqid - pstate2->state_seqid;
