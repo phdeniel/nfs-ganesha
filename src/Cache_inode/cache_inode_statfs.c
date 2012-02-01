@@ -65,33 +65,30 @@
 
 
 cache_inode_status_t cache_inode_statfs(cache_entry_t * pentry,
-                                        fsal_dynamicfsinfo_t * pdynamicinfo,
-                                        fsal_op_context_t * pcontext,
-                                        cache_inode_status_t * pstatus)
+                                        fsal_dynamicfsinfo_t * pdynamicinfo)
 {
-  fsal_handle_t *pfsal_handle;
+  struct fsal_obj_handle *pfsal_handle;
   fsal_status_t fsal_status;
+  struct fsal_export *export;
+  cache_inode_status_t pstatus;
 
   /* Sanity check */
-  if(!pentry || !pcontext || !pdynamicinfo || !pstatus)
+  if(!pentry || !pdynamicinfo)
     {
-      *pstatus = CACHE_INODE_INVALID_ARGUMENT;
-      return *pstatus;
+      pstatus = CACHE_INODE_INVALID_ARGUMENT;
+      return pstatus;
     }
 
-  /* Default return value */
-  *pstatus = CACHE_INODE_SUCCESS;
-
   /* Get the handle for this entry */
-  if((pfsal_handle = cache_inode_get_fsal_handle(pentry, pstatus)) == NULL)
-    return *pstatus;
+  if((pfsal_handle = cache_inode_get_fsal_handle(pentry, &pstatus)) == NULL)
+    return pstatus;
 
+  export = pfsal_handle->export;
   /* Get FSAL to get dynamic info */
-  if(FSAL_IS_ERROR
-     ((fsal_status = FSAL_dynamic_fsinfo(pfsal_handle, pcontext, pdynamicinfo))))
+  fsal_status = export->ops->get_fs_dynamic_info(export, pdynamicinfo);
+  if(FSAL_IS_ERROR(fsal_status))
     {
-      *pstatus = cache_inode_error_convert(fsal_status);
-      return *pstatus;
+      return cache_inode_error_convert(fsal_status);
     }
   LogFullDebug(COMPONENT_CACHE_INODE,
       "-- cache_inode_statfs --> pdynamicinfo->total_bytes = %llu pdynamicinfo->free_bytes = %llu pdynamicinfo->avail_bytes = %llu",
