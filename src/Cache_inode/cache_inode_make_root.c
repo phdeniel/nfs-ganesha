@@ -68,11 +68,10 @@
  * @param pstatus [OUT] returned status.
  */
 
-cache_entry_t *cache_inode_make_root(cache_inode_fsal_data_t * pfsdata,
+cache_entry_t *cache_inode_make_root(struct fsal_obj_handle *root_hdl,
                                      cache_inode_policy_t policy,
                                      hash_table_t * ht,
                                      cache_inode_client_t * pclient,
-                                     fsal_op_context_t * pcontext,
                                      cache_inode_status_t * pstatus)
 {
   cache_entry_t *pentry = NULL;
@@ -86,17 +85,12 @@ cache_entry_t *cache_inode_make_root(cache_inode_fsal_data_t * pfsdata,
   *pstatus = CACHE_INODE_SUCCESS;
 
   /* BUGAZOMEU: gestion de junctions, : peut etre pas correct de faire pointer root sur lui meme */
-  if((pentry = cache_inode_new_entry( pfsdata, 
-                                      NULL, 
-                                      DIRECTORY, 
-                                      policy,
-                                      NULL, 
-                                      NULL, 
-                                      ht,
-                                      pclient, 
-                                      pcontext, 
-                                      FALSE,    /* This is a population, not a creation */
-                                      pstatus)) != NULL)
+  if((pentry = cache_inode_new_entry(root_hdl, 
+				     policy,
+				     ht,
+				     pclient, 
+				     FALSE,    /* This is a population, not a creation */
+				     pstatus)) != NULL)
     {
       GetFromPool(next_parent_entry, &pclient->pool_parent,
 		  cache_inode_parent_entry_t);
