@@ -101,16 +101,13 @@ cache_inode_status_t cache_inode_kill_entry( cache_entry_t          * pentry,
                                              cache_inode_client_t   * pclient,
                                              cache_inode_status_t   * pstatus )
 {
-  fsal_handle_t *pfsal_handle = NULL;
-  cache_inode_fsal_data_t fsaldata;
+  struct fsal_obj_handle *pfsal_handle = NULL;
+  struct fsal_handle_desc fh_desc;
   cache_inode_parent_entry_t *parent_iter = NULL;
   cache_inode_parent_entry_t *parent_iter_next = NULL;
   hash_buffer_t key, old_key;
   hash_buffer_t old_value;
   int rc;
-  fsal_status_t fsal_status;
-
-  memset( (char *)&fsaldata, 0, sizeof( fsaldata ) ) ;
 
   LogInfo(COMPONENT_CACHE_INODE,
           "Using cache_inode_kill_entry for entry %p", pentry);
@@ -182,15 +179,10 @@ cache_inode_status_t cache_inode_kill_entry( cache_entry_t          * pentry,
         }
     }
 
-  fsaldata.fh_desc.start = (caddr_t)pfsal_handle;
-  fsaldata.fh_desc.len = 0;
-  (void) FSAL_ExpandHandle(NULL,  /* pcontext but not used... */
-			   FSAL_DIGEST_SIZEOF,
-			   &fsaldata.fh_desc);
-
+  pfsal_handle->ops->handle_to_key(pfsal_handle, &fh_desc);
   /* Use the handle to build the key */
-  key.pdata = fsaldata.fh_desc.start;
-  key.len = fsaldata.fh_desc.len;
+  key.pdata = fh_desc.start;
+  key.len = fh_desc.len;
 
   /* use the key to delete the entry */
   if((rc = HashTable_Del(ht, &key, &old_key, &old_value)) != HASHTABLE_SUCCESS)
@@ -204,18 +196,11 @@ cache_inode_status_t cache_inode_kill_entry( cache_entry_t          * pentry,
       return *pstatus;
     }
 
-  /* Clean up the associated ressources in the FSAL */
-  if(FSAL_IS_ERROR(fsal_status = FSAL_CleanObjectResources(pfsal_handle)))
-    {
-      LogCrit(COMPONENT_CACHE_INODE,
-              "cache_inode_kill_entry: Couldn't free FSAL ressources fsal_status.major=%u",
-              fsal_status.major);
-    }
 
   /* Sanity check: old_value.pdata is expected to be equal to pentry,
-   * and is released later in this function */
-  if((cache_entry_t *) old_value.pdata != pentry ||
-	 ((cache_entry_t *)old_value.pdata)->fh_desc.start != (caddr_t)&pentry->handle)
+   * and is released later in this function
+   * NOTE: from new handle commit(s).  Probably droppable in new api */
+  if((cache_entry_t *) old_value.pdata != pentry)
     {
       LogCrit(COMPONENT_CACHE_INODE,
               "cache_inode_kill_entry: unexpected pdata %p from hash table (pentry=%p)",
@@ -254,6 +239,9 @@ cache_inode_status_t cache_inode_kill_entry( cache_entry_t          * pentry,
     }
 
   // free_lock( pentry, lock_how ) ; /* Really needed ? The pentry is unaccessible now and will be destroyed */
+
+  /* return the obj handle. figure out get/put.  I'd rather a better deref here */
+  pfsal_handle->ops->release(pfsal_handle);
 
   /* Destroy the mutex associated with the pentry */
   cache_inode_mutex_destroy(pentry);

@@ -75,7 +75,6 @@ static cache_inode_status_t isNumlinksZero(cache_entry_t *pentry,
  * @param pentry_parent [IN] entry for the parent directory to be managed.
  * @param pattr [OUT] renewed attributes for the entry that we have found.
  * @param pclient [INOUT] ressource allocated by the client for the nfs management.
- * @param pcontext [IN] FSAL credentials
  * @param pstatus [OUT] returned status.
  *
  * @return CACHE_INODE_SUCCESS if operation is a success \n
@@ -86,10 +85,9 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
                                              fsal_attrib_list_t * pattr,
                                              hash_table_t * ht,
                                              cache_inode_client_t * pclient,
-                                             fsal_op_context_t * pcontext,
                                              cache_inode_status_t * pstatus)
 {
-  fsal_handle_t *pfsal_handle = NULL;
+  struct fsal_obj_handle *fsal_obj_hdl = NULL;
   fsal_status_t fsal_status;
   fsal_attrib_list_t object_attributes;
   fsal_path_t link_content;
@@ -107,7 +105,8 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
       unsigned int elapsed = (unsigned int)current_time - (unsigned int)entry_time;
       int print = 1;
 
-      cache_inode_expire_to_str(pclient->expire_type_attr, pclient->grace_period_attr, grace);
+      cache_inode_expire_to_str(pclient->expire_type_attr,
+				pclient->grace_period_attr, grace);
 
       switch(pentry->internal_md.type)
         {
@@ -125,9 +124,11 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
             break;
           case SYMBOLIC_LINK:
             print = 0;
-            cache_inode_expire_to_str(pclient->expire_type_link, pclient->grace_period_link, grace2);
-            LogFullDebug(COMPONENT_CACHE_INODE,
-                     "Renew Entry test of %p for SYMBOLIC_LINK elapsed time=%u, grace_period_attr=%s, grace_period_link=%s",
+            cache_inode_expire_to_str(pclient->expire_type_link,
+				      pclient->grace_period_link, grace2);
+            LogDebug(COMPONENT_CACHE_INODE,
+                     "Renew Entry test of %p for SYMBOLIC_LINK elapsed time=%u, "
+		     "grace_period_attr=%s, grace_period_link=%s",
                      pentry, elapsed, grace, grace2);
             break;
           case SOCKET_FILE:
@@ -138,9 +139,11 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
             break;
           case DIRECTORY:
             print = 0;
-            cache_inode_expire_to_str(pclient->expire_type_dirent, pclient->grace_period_dirent, grace2);
-            LogFullDebug(COMPONENT_CACHE_INODE,
-                     "Renew Entry test of %p for DIRECTORY elapsed time=%u, grace_period_attr=%s, grace_period_dirent=%s, has_been_readdir=%u",
+            cache_inode_expire_to_str(pclient->expire_type_dirent,
+				      pclient->grace_period_dirent, grace2);
+            LogDebug(COMPONENT_CACHE_INODE,
+                     "Renew Entry test of %p for DIRECTORY elapsed time=%u, "
+		     "grace_period_attr=%s, grace_period_dirent=%s, has_been_readdir=%u",
                      pentry, elapsed, grace, grace2,
                      pentry->object.dir.has_been_readdir);
             break;
@@ -196,12 +199,12 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
       /* This checking is to be done ... */
       LogDebug(COMPONENT_CACHE_INODE,
                "cache_inode_renew_entry testing directory mtime");
-      pfsal_handle = &pentry->handle;
+      fsal_obj_hdl = pentry->obj_handle;
 
       /* Call FSAL to get the attributes */
       object_attributes.asked_attributes = pclient->attrmask;
 
-      fsal_status = FSAL_getattrs(pfsal_handle, pcontext, &object_attributes);
+      fsal_status = fsal_obj_hdl->ops->getattrs(fsal_obj_hdl, &object_attributes);
 
       if(FSAL_IS_ERROR(fsal_status))
         {
@@ -247,11 +250,15 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
       LogFullDebug(COMPONENT_CACHE_INODE,
                "cache_inode_renew_entry: Entry=%p, type=%d, Cached Time=%d, FSAL Time=%d",
                pentry, pentry->internal_md.type,
-               pentry->attributes.mtime.seconds,
+               fsal_obj_hdl->attributes.mtime.seconds,
                object_attributes.mtime.seconds);
 
       /* Compare the FSAL mtime and the cached mtime */
-      if(pentry->attributes.mtime.seconds <
+/** @TODO this probably doesn't make any sense anymore.
+ * clean this up with struct copy attributes cleanup. if these are out of date,
+ * do a getattrs on the directory object.
+ */
+      if(fsal_obj_hdl->attributes.mtime.seconds <
          object_attributes.mtime.seconds)
         {
           /* Cached directory content is obsolete, it must be renewed */
@@ -326,14 +333,14 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
         }
 
       /* Do the getattr if it had not being done before */
-      if(pfsal_handle == NULL)
+      if(fsal_obj_hdl == NULL)
         {
-          pfsal_handle = &pentry->handle;
+          fsal_obj_hdl = pentry->obj_handle;
 
           /* Call FSAL to get the attributes */
           object_attributes.asked_attributes = pclient->attrmask;
 
-          fsal_status = FSAL_getattrs(pfsal_handle, pcontext, &object_attributes);
+          fsal_status = fsal_obj_hdl->ops->getattrs(fsal_obj_hdl, &object_attributes);
 
           if(FSAL_IS_ERROR(fsal_status))
             {
@@ -440,12 +447,12 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
           }
         }
 
-      pfsal_handle = &pentry->handle;
+      fsal_obj_hdl = pentry->obj_handle;
 
       /* Call FSAL to get the attributes */
       object_attributes.asked_attributes = pclient->attrmask;
 
-      fsal_status = FSAL_getattrs(pfsal_handle, pcontext, &object_attributes);
+      fsal_status = fsal_obj_hdl->ops->getattrs(fsal_obj_hdl, &object_attributes);
 
       if(FSAL_IS_ERROR(fsal_status))
         {
@@ -531,16 +538,12 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
       LogDebug(COMPONENT_CACHE_INODE,
                "Attributes for entry %p must be renewed", pentry);
 
-      pfsal_handle = &pentry->handle;
+      fsal_obj_hdl = pentry->obj_handle;
 
       /* Call FSAL to get the attributes */
       object_attributes.asked_attributes = pclient->attrmask;
-      fsal_status = FSAL_getattrs_descriptor(cache_inode_fd(pentry), pfsal_handle, pcontext, &object_attributes);
-      if(FSAL_IS_ERROR(fsal_status) && fsal_status.major == ERR_FSAL_NOT_OPENED)
-        {
-          //TODO: LOOKATME !!!!!
-          fsal_status = FSAL_getattrs(pfsal_handle, pcontext, &object_attributes);
-        }
+
+      fsal_status = fsal_obj_hdl->ops->getattrs(fsal_obj_hdl, &object_attributes);
       if(FSAL_IS_ERROR(fsal_status))
         {
           *pstatus = cache_inode_error_convert(fsal_status);
@@ -611,8 +614,14 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
        (current_time - entry_time) >= pclient->grace_period_link)
       || (pentry->internal_md.valid_state == STALE)))
     {
-      assert(pentry->object.symlink);
-      pfsal_handle = &pentry->handle;
+      /* Would be better if state was a flag that we could and/or the bits but
+       * in any case we need to get rid of stale so we only go through here
+       * once.
+       */
+      if ( pentry->internal_md.valid_state == STALE )
+	pentry->internal_md.valid_state = VALID;
+
+      fsal_obj_hdl = pentry->obj_handle;
 
       /* Log */
       LogDebug(COMPONENT_CACHE_INODE,
@@ -623,8 +632,12 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
 
       if( CACHE_INODE_KEEP_CONTENT( pentry->policy ) )
        {
-      fsal_status =
-          FSAL_readlink(pfsal_handle, pcontext, &link_content, &object_attributes);
+          fsal_status = fsal_obj_hdl->ops->readlink(fsal_obj_hdl,
+						    link_content.path, FSAL_MAX_PATH_LEN);
+          if( !FSAL_IS_ERROR(fsal_status))
+            {
+	      fsal_status = fsal_obj_hdl->ops->getattrs(fsal_obj_hdl, &object_attributes);
+	    }
         }
       else
         { 
@@ -655,17 +668,6 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
               *pstatus = CACHE_INODE_FSAL_ESTALE;
             }
 
-        }
-      else
-        {
-	  assert(pentry->object.symlink);
-          fsal_status = FSAL_pathcpy(&pentry->object.symlink->content, &link_content); /* copy ctor? */
-          if(FSAL_IS_ERROR(fsal_status))
-            {
-              *pstatus = cache_inode_error_convert(fsal_status);
-              /* stats */
-              pclient->stat.func_stats.nb_err_unrecover[CACHE_INODE_RENEW_ENTRY] += 1;
-            }
         }
 
       /* Would be better if state was a flag that we could and/or the bits but

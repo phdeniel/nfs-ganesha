@@ -76,7 +76,7 @@
  * @return Other errors shows a FSAL error.
  *
  */
-cache_inode_status_t cache_inode_invalidate( fsal_handle_t        * pfsal_handle,
+cache_inode_status_t cache_inode_invalidate( struct fsal_obj_handle * pfsal_handle,
                                              fsal_attrib_list_t   * pattr,
                                              hash_table_t         * ht,
                                              cache_inode_client_t * pclient,
@@ -92,11 +92,7 @@ cache_inode_status_t cache_inode_invalidate( fsal_handle_t        * pfsal_handle
     return CACHE_INODE_INVALID_ARGUMENT ;
 
   /* Locate the entry in the cache */
-  fsal_data.fh_desc.start = (caddr_t)pfsal_handle ;
-  fsal_data.fh_desc.len = 0;  /* No DIR_CONTINUE is managed here */
-  (void) FSAL_ExpandHandle(NULL,  /* pcontext but not used... */
-			   FSAL_DIGEST_SIZEOF,
-			   &fsal_data.fh_desc);
+  (void) pfsal_handle->ops->handle_to_key(pfsal_handle, &fsal_data.fh_desc);
 
   /* Turn the input to a hash key */
   key.pdata = fsal_data.fh_desc.start;
@@ -129,7 +125,7 @@ cache_inode_status_t cache_inode_invalidate( fsal_handle_t        * pfsal_handle
 
 
   /* return attributes additionally (may be useful to be caller, at least for debugging purpose */
-  *pattr = pentry->attributes;
+  *pattr = pentry->obj_handle->attributes;
 
   /* pentry is lock, I call cache_inode_kill_entry with 'locked' flag set */
   P_w( &pentry->lock ) ; 

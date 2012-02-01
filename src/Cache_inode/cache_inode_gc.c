@@ -87,7 +87,7 @@ static void cache_inode_gc_acl(cache_entry_t * pentry);
 static int cache_inode_gc_clean_entry(cache_entry_t * pentry,
                                       cache_inode_param_gc_t * pgcparam)
 {
-  fsal_handle_t *pfsal_handle = NULL;
+  struct fsal_obj_handle *pfsal_handle = NULL;
   cache_inode_parent_entry_t *parent_iter = NULL;
   cache_inode_parent_entry_t *parent_iter_next = NULL;
   cache_inode_fsal_data_t fsaldata;
@@ -117,11 +117,7 @@ static int cache_inode_gc_clean_entry(cache_entry_t * pentry,
       return LRU_LIST_DO_NOT_SET_INVALID;
     }
 
-  fsaldata.fh_desc.start = (caddr_t)pfsal_handle;
-  fsaldata.fh_desc.len = 0;
-  (void) FSAL_ExpandHandle(NULL,  /* pcontext but not used... */
-			   FSAL_DIGEST_SIZEOF,
-			   &fsaldata.fh_desc);
+  (void)pfsal_handle->ops->handle_to_key(pfsal_handle, &fsaldata.fh_desc);
 
   /* Use the handle to build the key */
   key.pdata = fsaldata.fh_desc.start;
@@ -147,20 +143,19 @@ static int cache_inode_gc_clean_entry(cache_entry_t * pentry,
       return LRU_LIST_SET_INVALID;
     }
 
-  /* Clean up the associated ressources in the FSAL */
-  if(FSAL_IS_ERROR(fsal_status = FSAL_CleanObjectResources(pfsal_handle)))
-    {
-      LogCrit(COMPONENT_CACHE_INODE_GC,
-              "cache_inode_gc_clean_entry: Could'nt free FSAL ressources fsal_status.major=%u",
-              fsal_status.major);
-    }
+  /* Clean up the associated resources in the FSAL */
+  /** @TODO somewhat indescriminant at this point.  Better polish w/
+   * cache inode LRU rework. no action/error handling for now
+   */
+  (void) pfsal_handle->ops->lru_cleanup(pfsal_handle,
+					 LRU_CLOSE_FILES|LRU_FREE_MEMORY);
   LogMidDebug(COMPONENT_CACHE_INODE_GC,
                "++++> pentry %p deleted from HashTable", pentry);
 
   /* Sanity check: old_value.pdata is expected to be equal to pentry,
-   * and is released later in this function */
-  if((cache_entry_t *) old_value.pdata != pentry ||
-     ((cache_entry_t *)old_value.pdata)->fh_desc.start != (caddr_t)&pentry->handle)
+   * and is released later in this function.
+   * WARNING: from new handle commit.  May not apply here any longer */
+  if((cache_entry_t *) old_value.pdata != pentry)
     {
       LogCrit(COMPONENT_CACHE_INODE_GC,
               "cache_inode_gc_clean_entry: unexpected pdata %p from hash table (pentry=%p)",
@@ -190,12 +185,11 @@ static int cache_inode_gc_clean_entry(cache_entry_t * pentry,
    * by the caller */
   cache_inode_release_dirents(pentry, pgcparam->pclient, CACHE_INODE_AVL_BOTH);
 
-  /* Release symlink, if applicable */
-  if (pentry->internal_md.type == SYMBOLIC_LINK)
-    cache_inode_release_symlink(pentry, &pgcparam->pclient->pool_entry_symlink);
-
   /* Free and Destroy the mutex associated with the pentry */
   V_w(&pentry->lock);
+
+  /* return the obj handle. figure out get/put.  I'd rather a better deref here */
+  pfsal_handle->ops->release(pfsal_handle);
 
   cache_inode_mutex_destroy(pentry);
 
@@ -616,12 +610,12 @@ int cache_inode_gc_fd_func(LRU_entry_t * plru_entry, void *addparam)
 
   /* check if a file descriptor is opened on the file for a long time */
 
-  if((pentry->internal_md.type == REGULAR_FILE)
-     && (pentry->object.file.open_fd.fileno != 0)
-     && (time(NULL) - pentry->object.file.open_fd.last_op > pgcparam->pclient->retention))
+  if(pentry->internal_md.type == REGULAR_FILE)
     {
       P_w(&pentry->lock);
-      cache_inode_close(pentry, pgcparam->pclient, &status);
+      /* no error handling for now */
+      (void)pentry->obj_handle->ops->lru_cleanup(pentry->obj_handle,
+						 LRU_CLOSE_FILES);
       V_w(&pentry->lock);
 
       pgcparam->nb_to_be_purged--;
@@ -692,7 +686,7 @@ static void cache_inode_gc_acl(cache_entry_t * pentry)
     case FIFO_FILE:
     case BLOCK_FILE:
     case CHARACTER_FILE:
-      pacl = pentry->attributes.acl;
+      pacl = pentry->obj_handle->attributes.acl;
       break;
 
     case UNASSIGNED:
