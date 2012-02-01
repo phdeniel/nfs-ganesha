@@ -41,19 +41,17 @@
 #include "solaris_port.h"
 #endif                          /* _SOLARIS */
 
-#include "LRU_List.h"
-#include "log.h"
-#include "HashData.h"
-#include "HashTable.h"
-#include "fsal.h"
-#include "cache_inode.h"
-#include "stuff_alloc.h"
-
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/param.h>
 #include <time.h>
 #include <pthread.h>
+#include "LRU_List.h"
+#include "log.h"
+#include "HashData.h"
+#include "HashTable.h"
+#include "cache_inode.h"
+#include "stuff_alloc.h"
 
 /**
  *
@@ -65,7 +63,7 @@
  * @param access_type [IN]    flags used to describe the kind of access to be checked.
  * @param ht          [INOUT] hash table used for the cache.
  * @param pclient     [INOUT] ressource allocated by the client for the nfs management.
- * @param pcontext    [IN]    FSAL context
+ * @param creds       [IN]    client credentials
  * @param pstatus     [OUT]   returned status.
  * @param use_mutex   [IN]    a flag to tell if mutex are to be used or not.
  *
@@ -79,14 +77,14 @@ cache_inode_access_sw(cache_entry_t * pentry,
                       fsal_accessflags_t access_type,
                       hash_table_t * ht,
                       cache_inode_client_t * pclient,
-                      fsal_op_context_t * pcontext,
+                      struct user_cred *creds,
                       cache_inode_status_t * pstatus, int use_mutex)
 {
     fsal_attrib_list_t attr;
     fsal_status_t fsal_status;
     cache_inode_status_t cache_status;
     fsal_accessflags_t used_access_type;
-    fsal_handle_t *pfsal_handle = NULL;
+    struct fsal_obj_handle *pfsal_handle = NULL;
 
     LogFullDebug(COMPONENT_CACHE_INODE, "cache_inode_access_sw: access_type=0X%x",
                  access_type);
@@ -113,20 +111,26 @@ cache_inode_access_sw(cache_entry_t * pentry,
             used_access_type = access_type & ~FSAL_F_OK;
 
             /* We get the attributes */
-            attr = pentry->attributes;
+            attr = pentry->obj_handle->attributes;
             /*
              * Function FSAL_test_access is used instead of FSAL_access.
              * This allow to take benefit of the previously cached
              * attributes. This behavior is configurable via the
              * configuration file.
              */
-
+/** @TODO There is something way too clever with this use_test_access
+ * flag.  If the flag is set, the FSAL_IS_ERROR is testing an uninitialized
+ * fsal_status.  Also, the 'then' part is a NOP given the line above.
+ * we will get the deref right for now.  The issue in the comment is solved
+ * at the fsal level anyway because we have the access method but the fsal
+ * writer makes the decision on how it is to be handled (locally in the fsal
+ * or using the supplied common. This is also another struct copy...
+ */
             if(pclient->use_test_access == 1)
                 {
                     /* We get the attributes */
-		    attr = pentry->attributes;
+		    attr = pentry->obj_handle->attributes;
 
-                    fsal_status = FSAL_test_access(pcontext, used_access_type, &attr);
                 }
             else
                 {
@@ -137,10 +141,8 @@ cache_inode_access_sw(cache_entry_t * pentry,
                                 V_r(&pentry->lock);
                             return *pstatus;
                         }
-                    fsal_status = FSAL_access(pfsal_handle, pcontext,
-                                              used_access_type, &attr);
+                    fsal_status = pfsal_handle->ops->getattrs(pfsal_handle, &attr);
                 }
-
             if(FSAL_IS_ERROR(fsal_status))
                 {
                     *pstatus = cache_inode_error_convert(fsal_status);
@@ -170,9 +172,11 @@ cache_inode_access_sw(cache_entry_t * pentry,
                             return *pstatus;
                         }
                 }
-            else
-                *pstatus = CACHE_INODE_SUCCESS;
-
+	    fsal_status = pfsal_handle->ops->test_access(pfsal_handle,
+							 creds,
+							 used_access_type);
+	    *pstatus = FSAL_IS_ERROR(fsal_status) ?
+		    CACHE_INODE_FSAL_EACCESS : CACHE_INODE_SUCCESS;
         }
 
     if(*pstatus != CACHE_INODE_SUCCESS)
@@ -207,7 +211,7 @@ cache_inode_access_sw(cache_entry_t * pentry,
  * @param access_type [IN]    flags used to describe the kind of access to be checked.
  * @param ht          [INOUT] hash table used for the cache.
  * @param pclient     [INOUT] ressource allocated by the client for the nfs management.
- * @param pcontext       [IN]    FSAL credentials
+ * @param creds       [IN]    client credentials
  * @param pstatus     [OUT]   returned status.
  *
  * @return CACHE_INODE_SUCCESS if operation is a success \n
@@ -219,11 +223,11 @@ cache_inode_access_no_mutex(cache_entry_t * pentry,
                             fsal_accessflags_t access_type,
                             hash_table_t * ht,
                             cache_inode_client_t * pclient,
-                            fsal_op_context_t * pcontext,
+			    struct user_cred *creds,
                             cache_inode_status_t * pstatus)
 {
     return cache_inode_access_sw(pentry, access_type, ht,
-                                 pclient, pcontext, pstatus, FALSE);
+                                 pclient, creds, pstatus, FALSE);
 }
 
 /**
@@ -236,7 +240,7 @@ cache_inode_access_no_mutex(cache_entry_t * pentry,
  * @param access_type [IN]    flags used to describe the kind of access to be checked.
  * @param ht          [INOUT] hash table used for the cache.
  * @param pclient     [INOUT] ressource allocated by the client for the nfs management.
- * @param pcontext       [IN]    FSAL credentials
+ * @param creds       [IN]    client credentials
  * @param pstatus     [OUT]   returned status.
  *
  * @return CACHE_INODE_SUCCESS if operation is a success \n
@@ -248,9 +252,9 @@ cache_inode_access(cache_entry_t * pentry,
                    fsal_accessflags_t access_type,
                    hash_table_t * ht,
                    cache_inode_client_t * pclient,
-                   fsal_op_context_t * pcontext,
+		   struct user_cred *creds,
                    cache_inode_status_t * pstatus)
 {
     return cache_inode_access_sw(pentry, access_type, ht,
-                                 pclient, pcontext, pstatus, TRUE);
+                                 pclient, creds, pstatus, TRUE);
 }

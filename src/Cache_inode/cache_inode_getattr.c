@@ -80,16 +80,15 @@ cache_inode_getattr(cache_entry_t * pentry,
                     fsal_attrib_list_t * pattr,
                     hash_table_t * ht, /* Unused, kept for protototype's homogeneity */
                     cache_inode_client_t * pclient,
-                    fsal_op_context_t * pcontext,
                     cache_inode_status_t * pstatus)
 {
     cache_inode_status_t status;
-    fsal_handle_t *pfsal_handle = NULL;
+    struct fsal_obj_handle *obj_handle = NULL;
     fsal_status_t fsal_status;
 
     /* sanity check */
     if(pentry == NULL || pattr == NULL ||
-       ht == NULL || pclient == NULL || pcontext == NULL)
+       ht == NULL || pclient == NULL)
         {
             *pstatus = CACHE_INODE_INVALID_ARGUMENT;
             LogDebug(COMPONENT_CACHE_INODE,
@@ -107,7 +106,7 @@ cache_inode_getattr(cache_entry_t * pentry,
     /* Lock the entry */
     P_w(&pentry->lock);
     status = cache_inode_renew_entry(pentry, pattr, ht,
-                                     pclient, pcontext, pstatus);
+                                     pclient, pstatus);
     if(status != CACHE_INODE_SUCCESS)
         {
             V_w(&pentry->lock);
@@ -121,7 +120,7 @@ cache_inode_getattr(cache_entry_t * pentry,
     /* RW Lock goes for writer to reader */
     rw_lock_downgrade(&pentry->lock);
 
-    *pattr = pentry->attributes;
+    *pattr = pentry->obj_handle->attributes;
 
     if(FSAL_TEST_MASK(pattr->asked_attributes,
                       FSAL_ATTR_RDATTR_ERR))
@@ -137,13 +136,13 @@ cache_inode_getattr(cache_entry_t * pentry,
                                  *pstatus, cache_inode_err_str(*pstatus));
                     return *pstatus;
                 }
-            pfsal_handle = &pentry->handle;
+            obj_handle = pentry->obj_handle;
 
             /*
              * An error occured when trying to get
              * the attributes, they have to be renewed
              */
-            fsal_status = FSAL_getattrs_descriptor(cache_inode_fd(pentry), pfsal_handle, pcontext, pattr);
+	    fsal_status = obj_handle->ops->getattrs(obj_handle, pattr);
             if(FSAL_IS_ERROR(fsal_status))
                 {
                     *pstatus = cache_inode_error_convert(fsal_status);

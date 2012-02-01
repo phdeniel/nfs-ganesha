@@ -42,6 +42,12 @@
 #include "solaris_port.h"
 #endif                          /* _SOLARIS */
 
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/param.h>
+#include <time.h>
+#include <pthread.h>
+#include <assert.h>
 #include "LRU_List.h"
 #include "log.h"
 #include "HashData.h"
@@ -50,13 +56,8 @@
 #include "cache_inode.h"
 #include "stuff_alloc.h"
 #include "nfs4_acls.h"
+#include "FSAL/access_check.h"
 
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/param.h>
-#include <time.h>
-#include <pthread.h>
-#include <assert.h>
 
 /**
  *
@@ -76,13 +77,15 @@
  * @return CACHE_INODE_LRU_ERROR if allocation error occured when validating the entry
  *
  */
-cache_inode_status_t cache_inode_setattr(cache_entry_t * pentry, fsal_attrib_list_t * pattr, hash_table_t * ht, /* Unused, kept for protototype's homogeneity */
+cache_inode_status_t cache_inode_setattr(cache_entry_t * pentry,
+					 fsal_attrib_list_t * pattr,
+					 hash_table_t * ht, /* Unused, kept for protototype's homogeneity */
                                          cache_inode_client_t * pclient,
-                                         fsal_op_context_t * pcontext,
+                                         struct user_cred *creds,
                                          cache_inode_status_t * pstatus)
 {
-  fsal_handle_t *pfsal_handle = NULL;
-  fsal_status_t fsal_status;
+  struct fsal_obj_handle *obj_handle = NULL;
+  fsal_status_t fsal_status = {ERR_FSAL_ACCESS, 0};
   fsal_attrib_list_t *p_object_attributes = NULL;
   fsal_attrib_list_t result_attributes;
   fsal_attrib_list_t truncate_attributes;
@@ -107,7 +110,91 @@ cache_inode_status_t cache_inode_setattr(cache_entry_t * pentry, fsal_attrib_lis
       *pstatus = CACHE_INODE_BAD_TYPE;
       return *pstatus;
     }
-  pfsal_handle = &pentry->handle;
+  obj_handle = pentry->obj_handle;
+
+  /* Is it allowed to change times ? */
+  if( !obj_handle->export->ops->fs_supports(obj_handle->export, cansettime) &&
+      (pattr->asked_attributes & (FSAL_ATTR_ATIME | FSAL_ATTR_CREATION |
+				  FSAL_ATTR_CTIME | FSAL_ATTR_MTIME)))
+    {
+      fsal_status.major = ERR_FSAL_INVAL;
+      goto errout;
+    }
+
+  /* Only superuser and the owner get a free pass.
+   * Everybody else gets a full body scan
+   */
+  if(creds->caller_uid != 0 &&
+     creds->caller_uid != p_object_attributes->owner)
+    {
+      if(FSAL_TEST_MASK(pattr->asked_attributes, FSAL_ATTR_MODE))
+        {
+          LogFullDebug(COMPONENT_FSAL,
+		       "Permission denied for CHMOD operation: current owner=%d, credential=%d",
+		       p_object_attributes->owner, creds->caller_uid);
+	  goto errout;
+        }
+      if(FSAL_TEST_MASK(pattr->asked_attributes, FSAL_ATTR_OWNER))
+        {
+          LogFullDebug(COMPONENT_FSAL,
+		       "Permission denied for CHOWN operation: current owner=%d, credential=%d",
+		       p_object_attributes->owner, creds->caller_uid);
+	  goto errout;
+        }
+      if(FSAL_TEST_MASK(pattr->asked_attributes, FSAL_ATTR_GROUP))
+        {
+          int in_group = 0, i;
+
+          if(creds->caller_gid == p_object_attributes->group)
+            {
+              in_group = 1;
+            }
+          else
+	    { 
+              for(i = 0; i < creds->caller_glen; i++)
+		{
+		  if(creds->caller_garray[i] == p_object_attributes->group)
+		    {
+                      in_group = 1;
+                      break;
+                    }
+                }
+            }
+	  if( !in_group)
+	    {
+	      LogFullDebug(COMPONENT_FSAL,
+			   "Permission denied for CHOWN operation: current group=%d, credential=%d, new group=%d",
+			   p_object_attributes->group, creds->caller_gid, pattr->group);
+	      goto errout;
+	    }
+	}
+      if(FSAL_TEST_MASK(pattr->asked_attributes, FSAL_ATTR_ATIME) &&
+	 FSAL_IS_ERROR(obj_handle->ops->test_access(obj_handle, creds, FSAL_R_OK)))
+	      goto errout;
+      if(FSAL_TEST_MASK(pattr->asked_attributes, FSAL_ATTR_MTIME) &&
+	 FSAL_IS_ERROR(obj_handle->ops->test_access(obj_handle, creds, FSAL_W_OK)))
+	      goto errout;
+      if(FSAL_TEST_MASK(pattr->asked_attributes, FSAL_ATTR_SIZE) &&
+	 FSAL_IS_ERROR(obj_handle->ops->test_access(obj_handle, creds, FSAL_W_OK)))
+	      goto errout;
+    }
+
+  memset(&result_attributes, 0, sizeof(fsal_attrib_list_t));
+  result_attributes.asked_attributes = pclient->attrmask;
+  /* end of mod */
+
+  fsal_status = obj_handle->ops->setattrs(obj_handle, pattr);
+  if(FSAL_IS_ERROR(fsal_status))
+	  goto errout;
+
+  if(pattr->asked_attributes & FSAL_ATTR_SIZE)
+    {
+      truncate_attributes.asked_attributes = pclient->attrmask;
+
+      fsal_status = obj_handle->ops->truncate(obj_handle, pattr->filesize);
+      if(FSAL_IS_ERROR(fsal_status))
+	      goto errout;
+    }
 
   /* Call FSAL to set the attributes */
   /* result_attributes.asked_attributes = pattr->asked_attributes ; */
@@ -117,77 +204,9 @@ cache_inode_status_t cache_inode_setattr(cache_entry_t * pentry, fsal_attrib_lis
    * by another program (pftp, rcpd...)
    */
 
-  memset(&result_attributes, 0, sizeof(fsal_attrib_list_t));
-  result_attributes.asked_attributes = pclient->attrmask;
-  /* end of mod */
-
-  fsal_status = FSAL_setattrs(pfsal_handle, pcontext, pattr, &result_attributes);
+  fsal_status = obj_handle->ops->getattrs(obj_handle, &result_attributes);
   if(FSAL_IS_ERROR(fsal_status))
-    {
-      *pstatus = cache_inode_error_convert(fsal_status);
-      V_w(&pentry->lock);
-
-      /* stat */
-      pclient->stat.func_stats.nb_err_unrecover[CACHE_INODE_SETATTR] += 1;
-
-      if(fsal_status.major == ERR_FSAL_STALE)
-        {
-          cache_inode_status_t kill_status;
-
-          LogEvent(COMPONENT_CACHE_INODE,
-                   "cache_inode_setattr: Stale FSAL File Handle detected for pentry = %p, fsal_status=(%u,%u)",
-                   pentry, fsal_status.major, fsal_status.minor);
-
-          if(cache_inode_kill_entry(pentry, NO_LOCK, ht, pclient, &kill_status) !=
-             CACHE_INODE_SUCCESS)
-            LogCrit(COMPONENT_CACHE_INODE,
-                    "cache_inode_setattr: Could not kill entry %p, status = %u",
-                    pentry, kill_status);
-
-          *pstatus = CACHE_INODE_FSAL_ESTALE;
-        }
-
-      return *pstatus;
-    }
-
-  if(pattr->asked_attributes & FSAL_ATTR_SIZE)
-    {
-      truncate_attributes.asked_attributes = pclient->attrmask;
-
-      fsal_status = FSAL_truncate(pfsal_handle,
-                                  pcontext, pattr->filesize, NULL, &truncate_attributes);
-      if(FSAL_IS_ERROR(fsal_status))
-        {
-          *pstatus = cache_inode_error_convert(fsal_status);
-          V_w(&pentry->lock);
-
-          /* stat */
-          pclient->stat.func_stats.nb_err_unrecover[CACHE_INODE_SETATTR] += 1;
-
-          if(fsal_status.major == ERR_FSAL_STALE)
-            {
-              cache_inode_status_t kill_status;
-
-              LogEvent(COMPONENT_CACHE_INODE,
-                       "cache_inode_setattr: Stale FSAL File Handle detected for pentry = %p, fsal_status=(%u,%u)",
-                       pentry,fsal_status.major, fsal_status.minor );
-
-              if(cache_inode_kill_entry(pentry, NO_LOCK, ht, pclient, &kill_status) !=
-                 CACHE_INODE_SUCCESS)
-                LogCrit(COMPONENT_CACHE_INODE,
-                        "cache_inode_setattr: Could not kill entry %p, status = %u",
-                        pentry, kill_status);
-
-              *pstatus = CACHE_INODE_FSAL_ESTALE;
-            }
-
-          return *pstatus;
-        }
-
-    }
-
-  /* Keep the new attribute in cache */
-  p_object_attributes = &(pentry->attributes);
+	  goto errout;
 
   /* Update the cached attributes */
   if((result_attributes.asked_attributes & FSAL_ATTR_SIZE) ||
@@ -291,6 +310,32 @@ cache_inode_status_t cache_inode_setattr(cache_entry_t * pentry, fsal_attrib_lis
     pclient->stat.func_stats.nb_err_retryable[CACHE_INODE_SETATTR] += 1;
   else
     pclient->stat.func_stats.nb_success[CACHE_INODE_SETATTR] += 1;
+
+  return *pstatus; /* happy camper return */
+
+errout:
+  *pstatus = cache_inode_error_convert(fsal_status);
+  V_w(&pentry->lock);
+
+  /* stat */
+  pclient->stat.func_stats.nb_err_unrecover[CACHE_INODE_SETATTR] += 1;
+
+  if(fsal_status.major == ERR_FSAL_STALE)
+    {
+      cache_inode_status_t kill_status;
+
+      LogEvent(COMPONENT_CACHE_INODE,
+	       "cache_inode_setattr: Stale FSAL File Handle detected for pentry = %p",
+	       pentry);
+
+      if(cache_inode_kill_entry(pentry, NO_LOCK, ht, pclient, &kill_status) !=
+	 CACHE_INODE_SUCCESS)
+	LogCrit(COMPONENT_CACHE_INODE,
+		"cache_inode_setattr: Could not kill entry %p, status = %u",
+		pentry, kill_status);
+
+       *pstatus = CACHE_INODE_FSAL_ESTALE;
+    }
 
   return *pstatus;
 }                               /* cache_inode_setattr */
