@@ -78,10 +78,9 @@
 cache_content_status_t cache_content_flush(cache_content_entry_t * pentry,
                                            cache_content_flush_behaviour_t flushhow,
                                            cache_content_client_t * pclient,
-                                           fsal_op_context_t * pcontext,
                                            cache_content_status_t * pstatus)
 {
-  fsal_handle_t *pfsal_handle = NULL;
+  struct fsal_obj_handle *obj_hdl = NULL;
   fsal_status_t fsal_status;
   cache_inode_status_t cache_inode_status;
   fsal_path_t local_path;
@@ -92,7 +91,7 @@ cache_content_status_t cache_content_flush(cache_content_entry_t * pentry,
   pclient->stat.func_stats.nb_call[CACHE_CONTENT_FLUSH] += 1;
 
   /* Get the fsal handle */
-  if((pfsal_handle =
+  if((obj_hdl =
       cache_inode_get_fsal_handle(pentry->pentry_inode, &cache_inode_status)) == NULL)
     {
       *pstatus = CACHE_CONTENT_BAD_CACHE_INODE_ENTRY;
@@ -125,7 +124,7 @@ cache_content_status_t cache_content_flush(cache_content_entry_t * pentry,
       return *pstatus;
     }
   /* Write the data from the local data file to the fs file */
-  fsal_status = FSAL_rcp(pfsal_handle, pcontext, &local_path, FSAL_RCP_LOCAL_TO_FS);
+  fsal_status = obj_hdl->ops->rcp(obj_hdl, local_path.path, FSAL_RCP_LOCAL_TO_FS);
   if(FSAL_IS_ERROR(fsal_status))
     {
       LogMajor(COMPONENT_CACHE_CONTENT,
@@ -204,11 +203,10 @@ cache_content_status_t cache_content_flush(cache_content_entry_t * pentry,
  */
 cache_content_status_t cache_content_refresh(cache_content_entry_t * pentry,
                                              cache_content_client_t * pclient,
-                                             fsal_op_context_t * pcontext,
                                              cache_content_refresh_how_t how,
                                              cache_content_status_t * pstatus)
 {
-  fsal_handle_t *pfsal_handle = NULL;
+  struct fsal_obj_handle *obj_hdl = NULL;
   fsal_status_t fsal_status;
   cache_inode_status_t cache_inode_status;
   cache_entry_t *pentry_inode = NULL;
@@ -224,7 +222,7 @@ cache_content_status_t cache_content_refresh(cache_content_entry_t * pentry,
   pentry_inode = (cache_entry_t *) pentry->pentry_inode;
 
   /* Get the fsal handle */
-  if((pfsal_handle =
+  if((obj_hdl =
       cache_inode_get_fsal_handle(pentry_inode, &cache_inode_status)) == NULL)
     {
       *pstatus = CACHE_CONTENT_BAD_CACHE_INODE_ENTRY;
@@ -273,24 +271,24 @@ cache_content_status_t cache_content_refresh(cache_content_entry_t * pentry,
 
 
   if((how != FORCE_FROM_FSAL)
-     && (buffstat.st_mtime > (time_t) pentry_inode->attributes.mtime.seconds))
+     && (buffstat.st_mtime > (time_t) pentry_inode->obj_handle->attributes.mtime.seconds))
     {
       *pstatus = CACHE_CONTENT_SUCCESS;
 
       LogDebug(COMPONENT_CACHE_CONTENT,
                         "Entry %p is more recent in data cache, keeping it", pentry);
-      pentry_inode->attributes.mtime.seconds = buffstat.st_mtime;
-      pentry_inode->attributes.mtime.nseconds = 0;
-      pentry_inode->attributes.atime.seconds = buffstat.st_atime;
-      pentry_inode->attributes.atime.nseconds = 0;
-      pentry_inode->attributes.ctime.seconds = buffstat.st_ctime;
-      pentry_inode->attributes.ctime.nseconds = 0;
+      pentry_inode->obj_handle->attributes.mtime.seconds = buffstat.st_mtime;
+      pentry_inode->obj_handle->attributes.mtime.nseconds = 0;
+      pentry_inode->obj_handle->attributes.atime.seconds = buffstat.st_atime;
+      pentry_inode->obj_handle->attributes.atime.nseconds = 0;
+      pentry_inode->obj_handle->attributes.ctime.seconds = buffstat.st_ctime;
+      pentry_inode->obj_handle->attributes.ctime.nseconds = 0;
     }
   else
     {
       /* Write the data from the local data file to the fs file */
-      fsal_status = FSAL_rcp(pfsal_handle, pcontext, &local_path,
-                             FSAL_RCP_FS_TO_LOCAL);
+      fsal_status = obj_hdl->ops->rcp(obj_hdl, local_path.path,
+				      FSAL_RCP_FS_TO_LOCAL);
       if(FSAL_IS_ERROR(fsal_status))
         {
           *pstatus = CACHE_CONTENT_FSAL_ERROR;
@@ -318,7 +316,6 @@ cache_content_status_t cache_content_refresh(cache_content_entry_t * pentry,
 }                               /* cache_content_refresh */
 
 cache_content_status_t cache_content_sync_all(cache_content_client_t * pclient,
-                                              fsal_op_context_t * pcontext,
                                               cache_content_status_t * pstatus)
 {
   *pstatus = CACHE_CONTENT_SUCCESS;
