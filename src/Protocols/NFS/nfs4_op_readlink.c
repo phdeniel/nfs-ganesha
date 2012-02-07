@@ -129,7 +129,8 @@ int nfs4_op_readlink(struct nfs_argop4 *op,
                           &symlink_path,
                           data->ht,
                           data->pclient,
-                          data->pcontext, &cache_status) == CACHE_INODE_SUCCESS)
+                          &data->user_credentials,
+			  &cache_status) == CACHE_INODE_SUCCESS)
     {
       /* Alloc read link */
 

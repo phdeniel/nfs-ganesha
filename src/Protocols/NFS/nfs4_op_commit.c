@@ -164,7 +164,7 @@ int nfs4_op_commit(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
                         &attr,
                         data->ht,
                         data->pclient,
-                        data->pcontext,
+                        &data->user_credentials,
                         FSAL_UNSAFE_WRITE_TO_FS_BUFFER,
                         &cache_status) != CACHE_INODE_SUCCESS)
     {

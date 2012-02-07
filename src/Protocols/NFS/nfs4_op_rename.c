@@ -92,8 +92,8 @@ int nfs4_op_rename(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
 
   fsal_status_t fsal_status;
 
-  fsal_handle_t *handlenew;
-  fsal_handle_t *handleold;
+  struct fsal_obj_handle *handlenew;
+  struct fsal_obj_handle *handleold;
 
   fsal_name_t oldname;
   fsal_name_t newname;
@@ -271,7 +271,6 @@ int nfs4_op_rename(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
                                          &attr_src,
                                          data->ht,
                                          data->pclient,
-                                         data->pcontext,
                                          &cache_status)) != CACHE_INODE_SUCCESS)
     {
       res_RENAME4.status = nfs4_Errno(cache_status);
@@ -294,7 +293,8 @@ int nfs4_op_rename(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
                                          &attr_tst_src,
                                          data->ht,
                                          data->pclient,
-                                         data->pcontext, &cache_status)) == NULL)
+                                         &data->user_credentials,
+					 &cache_status)) == NULL)
     {
       res_RENAME4.status = nfs4_Errno(cache_status);
       return res_RENAME4.status;
@@ -307,7 +307,9 @@ int nfs4_op_rename(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
                                      data->pexport->cache_inode_policy,
                                      &attr_tst_dst,
                                      data->ht,
-                                     data->pclient, data->pcontext, &cache_status);
+                                     data->pclient,
+				     &data->user_credentials,
+				     &cache_status);
   if((cache_status != CACHE_INODE_SUCCESS) && (cache_status != CACHE_INODE_NOT_FOUND))
     {
       /* Unexpected status at this step, exit with an error */
@@ -392,7 +394,7 @@ int nfs4_op_rename(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
           return res_RENAME4.status;
         }
 
-      if(!FSAL_handlecmp(handlenew, handleold, &fsal_status))
+      if( !handlenew->ops->compare(handlenew, handleold))
         {
           /* For the change_info4, get the 'change' attributes for both directories */
           res_RENAME4.RENAME4res_u.resok4.source_cinfo.before =
@@ -421,7 +423,8 @@ int nfs4_op_rename(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
                                     &attr_dst,
                                     data->ht,
                                     data->pclient,
-                                    data->pcontext, &cache_status) != CACHE_INODE_SUCCESS)
+                                    &data->user_credentials,
+				    &cache_status) != CACHE_INODE_SUCCESS)
                {
 
                  res_RENAME4.status = nfs4_Errno(cache_status);
@@ -446,7 +449,8 @@ int nfs4_op_rename(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
                             &attr_dst,
                             data->ht,
                             data->pclient,
-                            data->pcontext, &cache_status) != CACHE_INODE_SUCCESS)
+                            &data->user_credentials,
+			    &cache_status) != CACHE_INODE_SUCCESS)
         {
           res_RENAME4.status = nfs4_Errno(cache_status);
           return res_RENAME4.status;

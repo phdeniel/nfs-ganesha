@@ -212,7 +212,6 @@ int nfs4_Init_state_id(nfs_state_id_parameter_t param)
  * pentry is supposed to be locked when this function is called.
  *
  * @param pentry      [INOUT] related pentry (should be a REGULAR FILE)
- * @param pcontext    [IN]    FSAL's operation context
  * @param popen_owner [IN]    the NFSV4.x open_owner for whom this stateid is built
  * @param other       [OUT]   the stateid.other object (a char[OTHERSIZE] string)
  *
@@ -221,7 +220,6 @@ int nfs4_Init_state_id(nfs_state_id_parameter_t param)
  */
 
 int nfs4_BuildStateId_Other(cache_entry_t     * pentry,
-                            fsal_op_context_t * pcontext,
                             state_owner_t     * popen_owner,
                             char              * other)
 {
@@ -229,6 +227,7 @@ int nfs4_BuildStateId_Other(cache_entry_t     * pentry,
   u_int16_t srvboot_digest = 0;
   uint32_t open_owner_digest = 0;
   struct fsal_handle_desc fh_desc;
+  fsal_status_t fsal_status;
 
   LogFullDebug(COMPONENT_STATE,
                "pentry=%p popen_owner=%u|%s",
@@ -236,7 +235,9 @@ int nfs4_BuildStateId_Other(cache_entry_t     * pentry,
                popen_owner->so_owner_len,
                popen_owner->so_owner_val);
 
-  /* Get several digests to build the stateid : the server boot time, the fileid and a monotonic counter */
+  /* Get several digests to build the stateid :
+   * the server boot time, the fileid and a monotonic counter
+   */
   fh_desc.start = (caddr_t)&fileid_digest;
   fh_desc.len = sizeof(uint64_t);
   fsal_status = pentry->obj_handle->ops->handle_digest(pentry->obj_handle,

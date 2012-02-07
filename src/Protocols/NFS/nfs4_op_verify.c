@@ -139,7 +139,6 @@ int nfs4_op_verify(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
                                          &file_attr,
                                          data->ht,
                                          data->pclient,
-                                         data->pcontext,
                                          &cache_status)) != CACHE_INODE_SUCCESS)
     {
       res_VERIFY4.status = NFS4ERR_INVAL;

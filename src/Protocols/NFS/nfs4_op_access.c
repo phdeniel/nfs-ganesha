@@ -135,7 +135,7 @@ int nfs4_op_access(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
     }
 
   /* Get the attributes for the object */
-  attr = data->current_entry->attributes;
+  attr = data->current_entry->obj_handle->attributes;
 
   /* determine the rights to be tested in FSAL */
 
@@ -181,7 +181,7 @@ int nfs4_op_access(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
   if(cache_inode_access(data->current_entry,
                         access_mask,
                         data->ht, data->pclient,
-                        data->pcontext, &cache_status) == CACHE_INODE_SUCCESS)
+                        &data->user_credentials, &cache_status) == CACHE_INODE_SUCCESS)
         {
       res_ACCESS4.ACCESS4res_u.resok4.access = res_ACCESS4.ACCESS4res_u.resok4.supported;
       nfs4_access_debug("granted access", arg_ACCESS4.access, 0);
@@ -198,7 +198,8 @@ int nfs4_op_access(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
       if(cache_inode_access(data->current_entry,
                             access_mask,
                             data->ht, data->pclient,
-                            data->pcontext, &cache_status) == CACHE_INODE_SUCCESS)
+                            &data->user_credentials,
+			    &cache_status) == CACHE_INODE_SUCCESS)
         res_ACCESS4.ACCESS4res_u.resok4.access |= ACCESS4_READ;
 
       if(attr.type == FSAL_TYPE_DIR)
@@ -207,7 +208,8 @@ int nfs4_op_access(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
           if(cache_inode_access(data->current_entry,
                                 access_mask,
                                 data->ht, data->pclient,
-                                data->pcontext, &cache_status) == CACHE_INODE_SUCCESS)
+                                &data->user_credentials,
+				&cache_status) == CACHE_INODE_SUCCESS)
             res_ACCESS4.ACCESS4res_u.resok4.access |= ACCESS4_LOOKUP;
     }
 
@@ -215,14 +217,16 @@ int nfs4_op_access(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
       if(cache_inode_access(data->current_entry,
                             access_mask,
                             data->ht, data->pclient,
-                            data->pcontext, &cache_status) == CACHE_INODE_SUCCESS)
+                            &data->user_credentials,
+			    &cache_status) == CACHE_INODE_SUCCESS)
         res_ACCESS4.ACCESS4res_u.resok4.access |= ACCESS4_MODIFY;
 
       access_mask = nfs_get_access_mask(ACCESS4_EXTEND, &attr);
       if(cache_inode_access(data->current_entry,
                             access_mask,
                             data->ht, data->pclient,
-                            data->pcontext, &cache_status) == CACHE_INODE_SUCCESS)
+                            &data->user_credentials,
+			    &cache_status) == CACHE_INODE_SUCCESS)
         res_ACCESS4.ACCESS4res_u.resok4.access |= ACCESS4_EXTEND;
 
       if(attr.type == FSAL_TYPE_DIR)
@@ -231,7 +235,8 @@ int nfs4_op_access(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
           if(cache_inode_access(data->current_entry,
                                 access_mask,
                                 data->ht, data->pclient,
-                                data->pcontext, &cache_status) == CACHE_INODE_SUCCESS)
+                                &data->user_credentials,
+				&cache_status) == CACHE_INODE_SUCCESS)
             res_ACCESS4.ACCESS4res_u.resok4.access |= ACCESS4_DELETE;
         }
 
@@ -241,7 +246,8 @@ int nfs4_op_access(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
           if(cache_inode_access(data->current_entry,
                                 access_mask,
                                 data->ht, data->pclient,
-                                data->pcontext, &cache_status) == CACHE_INODE_SUCCESS)
+                                &data->user_credentials,
+				&cache_status) == CACHE_INODE_SUCCESS)
             res_ACCESS4.ACCESS4res_u.resok4.access |= ACCESS4_EXECUTE;
         }
 

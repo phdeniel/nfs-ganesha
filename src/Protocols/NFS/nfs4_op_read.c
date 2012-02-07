@@ -101,8 +101,6 @@ int nfs4_op_read(struct nfs_argop4 *op, compound_data_t * data, struct nfs_resop
   fsal_attrib_list_t       attr;
   cache_entry_t          * pentry = NULL;
   int                      rc = 0;
-  fsal_staticfsinfo_t    * pstaticinfo = NULL ;
-
   cache_content_policy_data_t datapol;
 
   datapol.UseMaxCacheSize = FALSE;
@@ -186,8 +184,6 @@ int nfs4_op_read(struct nfs_argop4 *op, compound_data_t * data, struct nfs_resop
       res_READ4.status = rc;
       return res_READ4.status;
     }
-
-  pstaticinfo = data->pcontext->export_context->fe_static_fs_info;
 
   /* NB: After this points, if pstate_found == NULL, then the stateid is all-0 or all-1 */
 
@@ -287,7 +283,7 @@ int nfs4_op_read(struct nfs_argop4 *op, compound_data_t * data, struct nfs_resop
                             FSAL_READ_ACCESS,
                             data->ht,
                             data->pclient,
-                            data->pcontext,
+                            &data->user_credentials,
                             &cache_status) != CACHE_INODE_SUCCESS)
         {
           res_READ4.status = nfs4_Errno(cache_status);
@@ -317,7 +313,7 @@ int nfs4_op_read(struct nfs_argop4 *op, compound_data_t * data, struct nfs_resop
   if( ((data->pexport->options & EXPORT_OPTION_MAXREAD) == EXPORT_OPTION_MAXREAD))
     check_size = data->pexport->MaxRead;
   else
-    check_size = pstaticinfo->maxread;
+    check_size = pentry->obj_handle->export->ops->fs_maxread(pentry->obj_handle->export);
   if( size > check_size )
     {
       /* the client asked for too much data,
@@ -354,7 +350,7 @@ int nfs4_op_read(struct nfs_argop4 *op, compound_data_t * data, struct nfs_resop
       datapol.MaxCacheSize = data->pexport->MaxCacheSize;
 
       /* Status is set in last argument */
-      cache_inode_add_data_cache(pentry, data->ht, data->pclient, data->pcontext,
+      cache_inode_add_data_cache(pentry, data->ht, data->pclient,
                                  &cache_status);
 
       if((cache_status != CACHE_INODE_SUCCESS) &&
@@ -392,7 +388,9 @@ int nfs4_op_read(struct nfs_argop4 *op, compound_data_t * data, struct nfs_resop
                       &eof_met,
                       data->ht,
                       data->pclient,
-                      data->pcontext, TRUE, &cache_status) != CACHE_INODE_SUCCESS)
+                      &data->user_credentials,
+		      TRUE,
+		      &cache_status) != CACHE_INODE_SUCCESS)
     {
       res_READ4.status = nfs4_Errno(cache_status);
       return res_READ4.status;

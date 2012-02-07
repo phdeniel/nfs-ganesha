@@ -83,7 +83,7 @@ int nfs4_op_readdir(struct nfs_argop4 *op,
   verifier4 cookie_verifier;
   uint64_t cookie = 0;
   uint64_t end_cookie = 0;
-  fsal_handle_t *entry_FSALhandle;
+  struct fsal_obj_handle *entry_FSALhandle;
   nfs_fh4 entryFH;
   struct alloc_file_handle_v4 entry_handle;
   entry_name_array_item_t *entry_name_array = NULL;
@@ -245,7 +245,8 @@ int nfs4_op_readdir(struct nfs_argop4 *op,
                          data->ht,
                          &dir_pentry_unlock,
                          data->pclient,
-                         data->pcontext, &cache_status) != CACHE_INODE_SUCCESS)
+                         &data->user_credentials,
+			 &cache_status) != CACHE_INODE_SUCCESS)
     {
       res_READDIR4.status = nfs4_Errno(cache_status);
       goto out;
@@ -311,7 +312,7 @@ int nfs4_op_readdir(struct nfs_argop4 *op,
                                                       &attrlookup,
                                                       data->ht,
                                                       data->pclient,
-                                                      data->pcontext,
+                                                      &data->user_credentials,
                                                       &cache_status ) ) == NULL )
             {
               Mem_Free((char *)entry_nfs_array);

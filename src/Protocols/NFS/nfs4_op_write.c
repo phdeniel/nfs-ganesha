@@ -102,7 +102,6 @@ int nfs4_op_write(struct nfs_argop4 *op, compound_data_t * data, struct nfs_reso
   fsal_attrib_list_t       attr;
   cache_entry_t          * pentry = NULL;
   int                      rc = 0;
-  fsal_staticfsinfo_t    * pstaticinfo = NULL ;
 #ifdef _USE_QUOTA
   fsal_status_t            fsal_status ;
 #endif
@@ -160,7 +159,6 @@ int nfs4_op_write(struct nfs_argop4 *op, compound_data_t * data, struct nfs_reso
     }
 #endif /* _PNFS_DS */
 
-  pstaticinfo = data->pcontext->export_context->fe_static_fs_info;
   /* Manage access type */
   switch( data->pexport->access_type )
    {
@@ -281,7 +279,7 @@ int nfs4_op_write(struct nfs_argop4 *op, compound_data_t * data, struct nfs_reso
                             FSAL_WRITE_ACCESS,
                             data->ht,
                             data->pclient,
-                            data->pcontext,
+                            &data->user_credentials,
                             &cache_status) != CACHE_INODE_SUCCESS)
         {
           res_WRITE4.status = nfs4_Errno(cache_status);;
@@ -314,7 +312,7 @@ int nfs4_op_write(struct nfs_argop4 *op, compound_data_t * data, struct nfs_reso
   if( ((data->pexport->options & EXPORT_OPTION_MAXWRITE) == EXPORT_OPTION_MAXWRITE)) 
     check_size = data->pexport->MaxWrite;
   else
-    check_size = pstaticinfo->maxwrite;
+    check_size = pentry->obj_handle->export->ops->fs_maxwrite(pentry->obj_handle->export);
   if( size > check_size )
     {
       /*
@@ -367,7 +365,7 @@ int nfs4_op_write(struct nfs_argop4 *op, compound_data_t * data, struct nfs_reso
       datapol.MaxCacheSize = data->pexport->MaxCacheSize;
 
       /* Status is set in last argument */
-      cache_inode_add_data_cache(pentry, data->ht, data->pclient, data->pcontext,
+      cache_inode_add_data_cache(pentry, data->ht, data->pclient,
                                  &cache_status);
 
       if((cache_status != CACHE_INODE_SUCCESS) &&
@@ -404,7 +402,8 @@ int nfs4_op_write(struct nfs_argop4 *op, compound_data_t * data, struct nfs_reso
                       &eof_met,
                       data->ht,
                       data->pclient,
-                      data->pcontext, stable_flag, &cache_status) != CACHE_INODE_SUCCESS)
+                      &data->user_credentials,
+		      stable_flag, &cache_status) != CACHE_INODE_SUCCESS)
     {
       LogDebug(COMPONENT_NFS_V4,
                "cache_inode_rdwr returned %s",

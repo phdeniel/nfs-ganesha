@@ -117,7 +117,7 @@ int nfs4_op_lookupp(struct nfs_argop4 *op,
   fsal_attrib_list_t attrlookup;
   cache_inode_status_t cache_status;
   int error = 0;
-  fsal_handle_t *pfsal_handle = NULL;
+  struct fsal_obj_handle *obj_hdl = NULL;
 
   char __attribute__ ((__unused__)) funcname[] = "nfs4_op_lookupp";
 
@@ -185,10 +185,10 @@ int nfs4_op_lookupp(struct nfs_argop4 *op,
                                        &attrlookup,
                                        data->ht,
                                        data->pclient,
-                                       data->pcontext, &cache_status)) != NULL)
+                                       &data->user_credentials, &cache_status)) != NULL)
     {
       /* Extract the fsal attributes from the cache inode pentry */
-      pfsal_handle = cache_inode_get_fsal_handle(file_pentry, &cache_status);
+      obj_hdl = cache_inode_get_fsal_handle(file_pentry, &cache_status);
       if(cache_status != CACHE_INODE_SUCCESS)
         {
           res_LOOKUPP4.status = NFS4ERR_SERVERFAULT;
@@ -196,7 +196,7 @@ int nfs4_op_lookupp(struct nfs_argop4 *op,
         }
 
       /* Convert it to a file handle */
-      if(!nfs4_FSALToFhandle(&data->currentFH, pfsal_handle, data))
+      if(!nfs4_FSALToFhandle(&data->currentFH, obj_hdl, data))
         {
           res_LOOKUPP4.status = NFS4ERR_SERVERFAULT;
           return res_LOOKUPP4.status;
