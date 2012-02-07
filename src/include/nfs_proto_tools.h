@@ -83,27 +83,23 @@ cache_entry_t *nfs_FhandleToCache(u_long rq_vers,
                                   nfsstat3 * pstatus3,
                                   nfsstat4 * pstatus4,
                                   fsal_attrib_list_t * pattr,
-                                  fsal_op_context_t * pcontext,
+                                  exportlist_t *pexport,
                                   cache_inode_client_t * pclient,
                                   hash_table_t * ht, int *prc);
 
-void nfs_SetWccData(fsal_op_context_t * pcontext,
-                    exportlist_t * pexport,
+void nfs_SetWccData(exportlist_t * pexport,
                     cache_entry_t * pentry,
                     fsal_attrib_list_t * pbefore_attr,
                     fsal_attrib_list_t * pafter_attr, wcc_data * pwcc_data);
 
-int nfs_SetPostOpAttr(fsal_op_context_t * pcontext,
-                      exportlist_t * pexport,
+int nfs_SetPostOpAttr(exportlist_t * pexport,
                       cache_entry_t * pentry,
                       fsal_attrib_list_t * pfsal_attr, post_op_attr * presult);
 
-int nfs_SetPostOpXAttrDir(fsal_op_context_t * pcontext,
-                          exportlist_t * pexport,
+int nfs_SetPostOpXAttrDir(exportlist_t * pexport,
                           fsal_attrib_list_t * pfsal_attr, post_op_attr * presult);
 
-int nfs_SetPostOpXAttrFile(fsal_op_context_t * pcontext,
-                           exportlist_t * pexport,
+int nfs_SetPostOpXAttrFile(exportlist_t * pexport,
                            fsal_attrib_list_t * pfsal_attr, post_op_attr * presult);
 
 void nfs_SetPreOpAttr(fsal_attrib_list_t * pfsal_attr, pre_op_attr * pattr);
@@ -112,14 +108,7 @@ int nfs_RetryableError(cache_inode_status_t cache_status);
 
 int nfs3_Sattr_To_FSAL_attr(fsal_attrib_list_t * pFSALattr, sattr3 * psattr);
 
-void nfs_SetWccData(fsal_op_context_t * pcontext,
-                    exportlist_t * pexport,
-                    cache_entry_t * pentry,
-                    fsal_attrib_list_t * pbefore_attr,
-                    fsal_attrib_list_t * pafter_attr, wcc_data * pwcc_data);
-
-void nfs_SetFailedStatus(fsal_op_context_t * pcontext,
-                         exportlist_t * pexport,
+void nfs_SetFailedStatus(exportlist_t * pexport,
                          int version,
                          cache_inode_status_t status,
                          nfsstat2 * pstatus2,
