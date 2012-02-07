@@ -90,7 +90,7 @@ cache_inode_commit(cache_entry_t * pentry,
                    fsal_attrib_list_t * pfsal_attr,
                    hash_table_t * ht,
                    cache_inode_client_t * pclient,
-                   fsal_op_context_t * pcontext,
+                   struct user_cred *creds,
                    uint64_t typeofcommit,
                    cache_inode_status_t * pstatus)
 {
@@ -122,7 +122,7 @@ cache_inode_commit(cache_entry_t * pentry,
       /* Can't sync a file descriptor if it's currently closed. */
       if(cache_inode_open(pentry,
                           pclient,
-                          FSAL_O_WRONLY, pcontext, pstatus) != CACHE_INODE_SUCCESS)
+                          FSAL_O_WRONLY, creds, pstatus) != CACHE_INODE_SUCCESS)
         {
 
           V_w(&pentry->lock);
@@ -133,7 +133,8 @@ cache_inode_commit(cache_entry_t * pentry,
           return *pstatus;
         }
 
-      fsal_status = FSAL_commit(&(pentry->object.file.open_fd.fd), offset, count );
+      fsal_status = pentry->obj_handle->ops->commit(pentry->obj_handle,
+						    offset, count );
       if(FSAL_IS_ERROR(fsal_status))
       {
         LogMajor(COMPONENT_CACHE_INODE,
@@ -195,7 +196,7 @@ cache_inode_commit(cache_entry_t * pentry,
                                       &seek_descriptor, udata->length,
                                       &size_io_done, pfsal_attr,
                                       udata->buffer, &eof, ht,
-                                      pclient, pcontext, TRUE, pstatus);
+                                      pclient, creds, TRUE, pstatus);
             if (status != CACHE_INODE_SUCCESS)
                 return *pstatus;
 
@@ -225,7 +226,7 @@ cache_inode_commit(cache_entry_t * pentry,
                                     pfsal_attr,
                                     (char *)(udata->buffer + offset - udata->offset),
                                     &eof, ht, pclient,
-                                    pcontext, TRUE, pstatus);
+                                    creds, TRUE, pstatus);
     }
   /* Regulat exit */
   *pstatus = CACHE_INODE_SUCCESS;

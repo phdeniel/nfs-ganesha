@@ -67,13 +67,13 @@ fsal_file_t * cache_inode_fd(cache_entry_t * pentry)
   if(pentry->internal_md.type != REGULAR_FILE)
       return NULL;
 
-  if(((pentry->object.file.open_fd.openflags == FSAL_O_RDONLY) ||
-      (pentry->object.file.open_fd.openflags == FSAL_O_RDWR) ||
-      (pentry->object.file.open_fd.openflags == FSAL_O_WRONLY)) &&
-     (pentry->object.file.open_fd.fileno != 0))
-    {
-      return &pentry->object.file.open_fd.fd;
-    }
+/*   if(((pentry->object.file.open_fd.openflags == FSAL_O_RDONLY) || */
+/*       (pentry->object.file.open_fd.openflags == FSAL_O_RDWR) || */
+/*       (pentry->object.file.open_fd.openflags == FSAL_O_WRONLY)) && */
+/*      (pentry->object.file.open_fd.fileno != 0)) */
+/*     { */
+/*       return &pentry->object.file.open_fd.fd; */
+/*     } */
 
   return NULL;
 }
@@ -97,12 +97,13 @@ fsal_file_t * cache_inode_fd(cache_entry_t * pentry)
 cache_inode_status_t cache_inode_open(cache_entry_t * pentry,
                                       cache_inode_client_t * pclient,
                                       fsal_openflags_t openflags,
-                                      fsal_op_context_t * pcontext,
+                                      struct user_cred *creds,
                                       cache_inode_status_t * pstatus)
 {
   fsal_status_t fsal_status;
+  fsal_accessflags_t access_type;
 
-  if((pentry == NULL) || (pclient == NULL) || (pcontext == NULL) || (pstatus == NULL))
+  if((pentry == NULL) || (pclient == NULL) || (pstatus == NULL))
     return CACHE_INODE_INVALID_ARGUMENT;
 
   if(pentry->internal_md.type != REGULAR_FILE)
@@ -111,39 +112,25 @@ cache_inode_status_t cache_inode_open(cache_entry_t * pentry,
       return *pstatus;
     }
 
-  /* Open file need to be closed, unless it is already open as read/write */
-  if((pentry->object.file.open_fd.openflags != FSAL_O_RDWR) &&
-     (pentry->object.file.open_fd.openflags != 0) &&
-     (pentry->object.file.open_fd.fileno != 0) &&
-     (pentry->object.file.open_fd.openflags != openflags))
+  /* access check but based on fsal_open_flags_t, not fsal_access_flags_t
+   * this may be checked above but here is a last stop check.
+   * Execute access not considered here.  Could fail execute opens.
+   * FIXME: sort out access checks in callers.
+   */
+  access_type = (openflags == FSAL_O_RDWR) ? FSAL_R_OK : FSAL_W_OK;
+  fsal_status = pentry->obj_handle->ops->test_access(pentry->obj_handle, creds, access_type);
+  if(FSAL_IS_ERROR(fsal_status))
     {
-      fsal_status = FSAL_close(&(pentry->object.file.open_fd.fd));
-      if(FSAL_IS_ERROR(fsal_status) && (fsal_status.major != ERR_FSAL_NOT_OPENED))
-        {
-          *pstatus = cache_inode_error_convert(fsal_status);
+      *pstatus = cache_inode_error_convert(fsal_status);
 
-          LogDebug(COMPONENT_CACHE_INODE,
-                   "cache_inode_open: returning %d(%s) from FSAL_close",
-                   *pstatus, cache_inode_err_str(*pstatus));
+      LogDebug(COMPONENT_CACHE_INODE,
+	       "cache_inode_open: returning %d(%s) from access check",
+	       *pstatus, cache_inode_err_str(*pstatus));
 
-          return *pstatus;
-        }
-
-      /* force re-openning */
-      pentry->object.file.open_fd.last_op = 0;
-      pentry->object.file.open_fd.fileno = 0;
-
+      return *pstatus;
     }
 
-  if((pentry->object.file.open_fd.last_op == 0)
-     || (pentry->object.file.open_fd.fileno == 0))
-    {
-      /* opened file is not preserved yet */
-      fsal_status = FSAL_open(&(pentry->handle),
-                              pcontext,
-                              openflags,
-                              &pentry->object.file.open_fd.fd,
-                              &(pentry->attributes));
+      fsal_status = pentry->obj_handle->ops->open(pentry->obj_handle, openflags);
 
       if(FSAL_IS_ERROR(fsal_status))
         {
@@ -156,29 +143,9 @@ cache_inode_status_t cache_inode_open(cache_entry_t * pentry,
           return *pstatus;
         }
 
-      pentry->object.file.open_fd.fileno = FSAL_FILENO(&(pentry->object.file.open_fd.fd));
-      pentry->object.file.open_fd.openflags = openflags;
-
       LogFullDebug(COMPONENT_CACHE_INODE,
-               "cache_inode_open: pentry %p: lastop=0, fileno = %d, openflags = %d",
-               pentry, pentry->object.file.open_fd.fileno, (int) openflags);
-    }
-
-  /* regular exit */
-  pentry->object.file.open_fd.last_op = time(NULL);
-
-  /* if file descriptor is too high, garbage collect FDs */
-  if(pclient->use_fd_cache
-     && (pentry->object.file.open_fd.fileno > pclient->max_fd))
-    {
-      if(cache_inode_gc_fd(pclient, pstatus) != CACHE_INODE_SUCCESS)
-        {
-          LogCrit(COMPONENT_CACHE_INODE_GC,
-                  "FAILURE performing FD garbage collection");
-          return *pstatus;
-        }
-    }
-
+               "cache_inode_open: pentry %p: lastop=0, openflags = %d",
+               pentry, (int) openflags);
   *pstatus = CACHE_INODE_SUCCESS;
   return *pstatus;
 
@@ -202,15 +169,18 @@ cache_inode_status_t cache_inode_open(cache_entry_t * pentry,
  *
  */
 
+/* FIXME: deprecate this
+ */
 cache_inode_status_t cache_inode_open_by_name(cache_entry_t * pentry_dir,
                                               fsal_name_t * pname,
                                               cache_entry_t * pentry_file,
                                               cache_inode_client_t * pclient,
                                               fsal_openflags_t openflags,
-                                              fsal_op_context_t * pcontext,
+					      struct user_cred *creds,
                                               cache_inode_status_t * pstatus)
 {
   fsal_status_t fsal_status;
+  fsal_accessflags_t access_type;
   fsal_size_t save_filesize = 0;
   fsal_size_t save_spaceused = 0;
   fsal_time_t save_mtime = {
@@ -219,7 +189,7 @@ cache_inode_status_t cache_inode_open_by_name(cache_entry_t * pentry_dir,
   };
 
   if((pentry_dir == NULL) || (pname == NULL) || (pentry_file == NULL) ||
-     (pclient == NULL) || (pcontext == NULL) || (pstatus == NULL))
+     (pclient == NULL) || (pstatus == NULL))
     return CACHE_INODE_INVALID_ARGUMENT;
 
   if((pentry_dir->internal_md.type != DIRECTORY))
@@ -234,49 +204,45 @@ cache_inode_status_t cache_inode_open_by_name(cache_entry_t * pentry_dir,
       return *pstatus;
     }
 
-  /* Open file need to be closed, unless it is already open as read/write */
-  if((pentry_file->object.file.open_fd.openflags != FSAL_O_RDWR) &&
-     (pentry_file->object.file.open_fd.openflags != 0) &&
-     (pentry_file->object.file.open_fd.fileno != 0) &&
-     (pentry_file->object.file.open_fd.openflags != openflags))
+  /* access check but based on fsal_open_flags_t, not fsal_access_flags_t
+   * this may be checked above but here is a last stop check.
+   * Execute access not considered here.  Could fail execute opens.
+   * FIXME: sort out access checks in callers.
+   */
+  access_type = (openflags == FSAL_O_RDWR) ? FSAL_R_OK : FSAL_W_OK;
+  fsal_status = pentry_file->obj_handle->ops->test_access(pentry_file->obj_handle,
+						      creds, access_type);
+  if(FSAL_IS_ERROR(fsal_status))
     {
-      fsal_status = FSAL_close(&(pentry_file->object.file.open_fd.fd));
-      if(FSAL_IS_ERROR(fsal_status) && (fsal_status.major != ERR_FSAL_NOT_OPENED))
-        {
-          *pstatus = cache_inode_error_convert(fsal_status);
+      *pstatus = cache_inode_error_convert(fsal_status);
 
-          LogDebug(COMPONENT_CACHE_INODE,
-                   "cache_inode_open_by_name: returning %d(%s) from FSAL_close",
-                   *pstatus, cache_inode_err_str(*pstatus));
+      LogDebug(COMPONENT_CACHE_INODE,
+	       "cache_inode_open: returning %d(%s) from access check",
+	       *pstatus, cache_inode_err_str(*pstatus));
 
-          return *pstatus;
-        }
-
-      pentry_file->object.file.open_fd.last_op = 0;
-      pentry_file->object.file.open_fd.fileno = 0;
+      return *pstatus;
     }
-
-  if(pentry_file->object.file.open_fd.last_op == 0
-     || pentry_file->object.file.open_fd.fileno == 0)
-    {
       LogFullDebug(COMPONENT_FSAL,
                "cache_inode_open_by_name: pentry %p: lastop=0", pentry_file);
 
       /* Keep coherency with the cache_content */
       if(pentry_file->object.file.pentry_content != NULL)
         {
-          save_filesize = pentry_file->attributes.filesize;
-          save_spaceused = pentry_file->attributes.spaceused;
-          save_mtime = pentry_file->attributes.mtime;
+          save_filesize = pentry_file->obj_handle->attributes.filesize;
+          save_spaceused = pentry_file->obj_handle->attributes.spaceused;
+          save_mtime = pentry_file->obj_handle->attributes.mtime;
         }
 
       /* opened file is not preserved yet */
-      fsal_status = FSAL_open_by_name(&(pentry_dir->handle),
-                                      pname,
-                                      pcontext,
-                                      openflags,
-                                      &pentry_file->object.file.open_fd.fd,
-                                      &(pentry_file->attributes));
+/* FIXME: I'm not sure why this is here.  The caller does a lookup to get the handle,
+ * passing pname into the method.  Therefore, we *should* have the same thing!
+ * for now, short circuit this with a simple open and refactor this whole function out
+ * of nfs4_op_open and nfs41_op_open. also, let attributes bit slide for now...
+ */
+      fsal_status = pentry_dir->obj_handle->ops->open(pentry_file->obj_handle, openflags);
+      if( !FSAL_IS_ERROR(fsal_status))
+	 fsal_status = pentry_dir->obj_handle->ops->getattrs(pentry_file->obj_handle,
+							     &(pentry_file->obj_handle->attributes));
 
       if(FSAL_IS_ERROR(fsal_status))
         {
@@ -292,36 +258,15 @@ cache_inode_status_t cache_inode_open_by_name(cache_entry_t * pentry_dir,
       /* Keep coherency with the cache_content */
       if(pentry_file->object.file.pentry_content != NULL)
         {
-          pentry_file->attributes.filesize = save_filesize;
-          pentry_file->attributes.spaceused = save_spaceused;
-          pentry_file->attributes.mtime = save_mtime;
+          pentry_file->obj_handle->attributes.filesize = save_filesize;
+          pentry_file->obj_handle->attributes.spaceused = save_spaceused;
+          pentry_file->obj_handle->attributes.mtime = save_mtime;
         }
-
-      pentry_file->object.file.open_fd.fileno =
-          (int)FSAL_FILENO(&(pentry_file->object.file.open_fd.fd));
-      pentry_file->object.file.open_fd.last_op = time(NULL);
-      pentry_file->object.file.open_fd.openflags = openflags;
 
       LogFullDebug(COMPONENT_FSAL,
-               "cache_inode_open_by_name: pentry %p: fd=%u",
-               pentry_file, pentry_file->object.file.open_fd.fileno);
+               "cache_inode_open_by_name: pentry %p",
+               pentry_file);
 
-    }
-
-  /* regular exit */
-  pentry_file->object.file.open_fd.last_op = time(NULL);
-
-  /* if file descriptor is too high, garbage collect FDs */
-  if(pclient->use_fd_cache
-     && (pentry_file->object.file.open_fd.fileno > pclient->max_fd))
-    {
-      if(cache_inode_gc_fd(pclient, pstatus) != CACHE_INODE_SUCCESS)
-        {
-          LogCrit(COMPONENT_CACHE_INODE_GC,
-                  "FAILURE performing FD garbage collection");
-          return *pstatus;
-        }
-    }
 
   *pstatus = CACHE_INODE_SUCCESS;
   return *pstatus;
@@ -359,34 +304,21 @@ cache_inode_status_t cache_inode_close(cache_entry_t * pentry,
       return *pstatus;
     }
 
-  /* if nothing is opened, do nothing */
-  if(pentry->object.file.open_fd.fileno < 0)
-    {
-      *pstatus = CACHE_INODE_SUCCESS;
-      return *pstatus;
-    }
-
   /* if locks are held in the file, do not close */
   if( cache_inode_file_holds_state( pentry ) )
     {
       *pstatus = CACHE_INODE_SUCCESS; /** @todo : PhD : May be CACHE_INODE_STATE_CONFLICTS would be better ? */
       return *pstatus;
     }
-
-  if((pclient->use_fd_cache == 0) ||
-     (time(NULL) - pentry->object.file.open_fd.last_op > pclient->retention) ||
-     (pentry->object.file.open_fd.fileno > (int)(pclient->max_fd)))
+  /** @TODO used to be file aging.  that is in the fsal now so close unconditionally for now..*/
+  if(pclient->use_fd_cache == 0)
     {
 
       LogFullDebug(COMPONENT_CACHE_INODE,
-               "cache_inode_close: pentry %p, fileno = %d, lastop=%d ago",
-               pentry, pentry->object.file.open_fd.fileno,
-               (int)(time(NULL) - pentry->object.file.open_fd.last_op));
+               "cache_inode_close: pentry %p",
+               pentry);
 
-      fsal_status = FSAL_close(&(pentry->object.file.open_fd.fd));
-
-      pentry->object.file.open_fd.fileno = 0;
-      pentry->object.file.open_fd.last_op = 0;
+      fsal_status = pentry->obj_handle->ops->close(pentry->obj_handle);
 
       if(FSAL_IS_ERROR(fsal_status) && (fsal_status.major != ERR_FSAL_NOT_OPENED))
         {
@@ -399,7 +331,6 @@ cache_inode_status_t cache_inode_close(cache_entry_t * pentry,
           return *pstatus;
         }
     }
-
   *pstatus = CACHE_CONTENT_SUCCESS;
 
   return *pstatus;
