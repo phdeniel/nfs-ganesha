@@ -62,7 +62,6 @@ cache_inode_status_t
 cache_inode_add_data_cache(cache_entry_t * pentry,
                            hash_table_t * ht,
                            cache_inode_client_t * pclient,
-                           fsal_op_context_t * pcontext,
                            cache_inode_status_t * pstatus)
 {
     cache_content_status_t cache_content_status;
@@ -101,7 +100,7 @@ cache_inode_add_data_cache(cache_entry_t * pentry,
         }
     pcontent_client = (cache_content_client_t *) pclient->pcontent_client;
     pentry_content = cache_content_new_entry(pentry, NULL, pcontent_client,
-                                             ADD_ENTRY, pcontext,
+                                             ADD_ENTRY,
                                              &cache_content_status);
     if(pentry_content == NULL)
         {
