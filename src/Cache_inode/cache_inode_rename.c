@@ -379,12 +379,6 @@ cache_inode_status_t cache_inode_rename(cache_entry_t * pentry_dirsrc,
     }
   else
     {
-      V_w(&pentry_dirsrc->lock);
-      if(pentry_dirsrc != pentry_dirdest)
-        {
-          V_w(&pentry_dirdest->lock);
-        }
-
       *pstatus = CACHE_INODE_BAD_TYPE;
       pclient->stat.func_stats.nb_err_unrecover[CACHE_INODE_RENAME] += 1;
 

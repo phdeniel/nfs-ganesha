@@ -186,6 +186,9 @@ cache_inode_status_t cache_inode_link(cache_entry_t * pentry_src,
   if((pentry_src->internal_md.type == UNASSIGNED) ||
      (pentry_src->internal_md.type == RECYCLED))
     {
+      V_w(&pentry_dir_dest->lock);
+      V_w(&pentry_src->lock);
+
       LogCrit(COMPONENT_CACHE_INODE,
               "WARNING: unknown source pentry type: internal_md.type=%d, line %d in file %s",
               pentry_src->internal_md.type, __LINE__, __FILE__);
@@ -198,9 +201,12 @@ cache_inode_status_t cache_inode_link(cache_entry_t * pentry_src,
   if( !((pentry_dir_dest->internal_md.type == FS_JUNCTION) ||
 	(pentry_dir_dest->internal_md.type == DIRECTORY)))
     {
+      V_w(&pentry_dir_dest->lock);
+      V_w(&pentry_src->lock);
+
       LogCrit(COMPONENT_CACHE_INODE,
-              "WARNING: unknown source pentry type: internal_md.type=%d, line %d in file %s",
-              pentry_src->internal_md.type, __LINE__, __FILE__);
+              "WARNING: destination is not a directory: internal_md.type=%d, line %d in file %s",
+              pentry_dir_dest->internal_md.type, __LINE__, __FILE__);
       *pstatus = CACHE_INODE_BAD_TYPE;
       pclient->stat.func_stats.nb_err_unrecover[CACHE_INODE_LINK] += 1;
       return *pstatus;
@@ -302,7 +308,8 @@ cache_inode_status_t cache_inode_link(cache_entry_t * pentry_src,
     {
       V_w(&pentry_dir_dest->lock);
       V_w(&pentry_src->lock);
-      return *pstatus;
+      *pstatus = status;
+      return status;
     }
 
   /* Regular exit */

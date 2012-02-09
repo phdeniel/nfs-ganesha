@@ -130,6 +130,7 @@ cache_inode_getattr(cache_entry_t * pentry,
 	       (pentry->internal_md.type == UNASSIGNED) ||
 	       (pentry->internal_md.type == RECYCLED))
                 {
+                    V_r(&pentry->lock);
                     *pstatus = CACHE_INODE_INVALID_ARGUMENT;
                     LogFullDebug(COMPONENT_CACHE_INODE,
                                  "cache_inode_getattr: returning %d(%s) "

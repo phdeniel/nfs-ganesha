@@ -158,18 +158,6 @@ cache_inode_status_t cache_inode_rdwr(cache_entry_t * pentry,
       return *pstatus;
     }
 
-  /* Non absolute address within the file are not supported (we act only like pread/pwrite) */
-  if(seek_descriptor->whence != FSAL_SEEK_SET)
-    {
-      *pstatus = CACHE_INODE_INVALID_ARGUMENT;
-      V_w(&pentry->lock);
-
-      /* stats */
-      pclient->stat.func_stats.nb_err_unrecover[statindex] += 1;
-
-      return *pstatus;
-    }
-
   /* Do we use stable or unstable storage ? */
   if(stable == FSAL_UNSAFE_WRITE_TO_GANESHA_BUFFER)
     {
@@ -378,6 +366,7 @@ cache_inode_status_t cache_inode_rdwr(cache_entry_t * pentry,
                   fsal_status = MFSL_commit(&(pentry->object.file.open_fd.mfsl_fd), NULL);
 #else
                   fsal_status = FSAL_commit(&(pentry->object.file.open_fd.fd));
+		}
 #endif
 #endif
 

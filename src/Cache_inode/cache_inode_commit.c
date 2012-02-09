@@ -66,12 +66,9 @@
  * Reads/Writes through the cache layer.
  *
  * @param pentry [IN] entry in cache inode layer whose content is to be accessed.
- * @param read_or_write [IN] a flag of type cache_content_io_direction_t to tell if a read or write is to be done.
- * @param seek_descriptor [IN] absolute position (in the FSAL file) where the IO will be done.
- * @param buffer_size [IN] size of the buffer pointed by parameter 'buffer'.
- * @param pio_size [OUT] the size of the io that was successfully made.
+ * @param offset [IN] offset of the region to be commited from the start of the file
+ * @param count [IN] size of the region to be commited
  * @param pfsal_attr [OUT] the FSAL attributes after the operation.
- * @param buffer write:[IN] read:[OUT] the buffer for the data.
  * @param ht [INOUT] the hashtable used for managing the cache.
  * @param pclient [IN]  ressource allocated by the client for the nfs management.
  * @param pcontext [IN] fsal context for the operation.
