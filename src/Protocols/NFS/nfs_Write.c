@@ -103,11 +103,11 @@ int nfs_Write(nfs_arg_t * parg,
   cache_content_status_t content_status;
   fsal_seek_t seek_descriptor;
   fsal_size_t size = 0;
-  fsal_size_t written_size;
+  fsal_size_t written_size=0;
   fsal_off_t offset = 0;
   caddr_t data = NULL;
   cache_inode_file_type_t filetype;
-  fsal_boolean_t eof_met;
+  fsal_boolean_t eof_met=FALSE;
   uint64_t stable_flag = FSAL_SAFE_WRITE_TO_FS;
 
   if(isDebug(COMPONENT_NFSPROTO))
@@ -226,18 +226,38 @@ int nfs_Write(nfs_arg_t * parg,
   /* For MDONLY export, reject write operation */
   /* Request of type MDONLY_RO were rejected at the nfs_rpc_dispatcher level */
   /* This is done by replying EDQUOT (this error is known for not disturbing the client's requests cache */
-  if(pexport->access_type == ACCESSTYPE_MDONLY)
+  if( pexport->access_type != ACCESSTYPE_RW )
     {
       switch (preq->rq_vers)
         {
         case NFS_V2:
-          pres->res_attr2.status = NFSERR_DQUOT;
-          break;
+          switch( pexport->access_type )
+            {
+                case ACCESSTYPE_MDONLY:
+                case ACCESSTYPE_MDONLY_RO:
+                  pres->res_attr2.status = NFSERR_DQUOT;
+                  break;
+
+                case ACCESSTYPE_RO:
+                  pres->res_attr2.status = NFSERR_ROFS;
+                  break ;
+             }
+           break ;
 
         case NFS_V3:
-          pres->res_write3.status = NFS3ERR_DQUOT;
+          switch( pexport->access_type )
+            {
+                case ACCESSTYPE_MDONLY:
+                case ACCESSTYPE_MDONLY_RO:
+                  pres->res_write3.status = NFS3ERR_DQUOT;
+                  break;
+
+                case ACCESSTYPE_RO:
+                  pres->res_write3.status = NFS3ERR_ROFS;
+                  break ;
+             }
           break;
-        }
+        } /* switch (preq->rq_vers) */
 
       nfs_SetFailedStatus(pcontext, pexport,
                           preq->rq_vers,

@@ -87,7 +87,6 @@ int nfs4_op_readdir(struct nfs_argop4 *op,
   nfs_fh4 entryFH;
   char val_fh[NFS4_FHSIZE];
   entry_name_array_item_t *entry_name_array = NULL;
-  unsigned long space_used;
   unsigned int estimated_num_entries;
   unsigned int num_entries;
   int dir_pentry_unlock = FALSE;
@@ -288,6 +287,7 @@ int nfs4_op_readdir(struct nfs_argop4 *op,
           res_READDIR4.status = NFS4ERR_SERVERFAULT;
           return res_READDIR4.status;
         }
+      memset((char *)entry_nfs_array, 0, num_entries * sizeof(entry4));
 
       for(i = 0; i < num_entries; i++) 
         {

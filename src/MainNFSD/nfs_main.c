@@ -153,6 +153,7 @@ int main(int argc, char *argv[])
           printf("Release = %s\n", VERSION);
           printf("Release comment = %s\n", VERSION_COMMENT);
           printf("Git HEAD = %s\n", _GIT_HEAD_COMMIT ) ;
+          printf("Git Describe = %s\n", _GIT_DESCRIBE ) ;
           exit(0);
           break;
 
@@ -298,6 +299,7 @@ int main(int argc, char *argv[])
   sigemptyset(&signals_to_block);
   sigaddset(&signals_to_block, SIGTERM);
   sigaddset(&signals_to_block, SIGHUP);
+  sigaddset(&signals_to_block, SIGPIPE);
   if(pthread_sigmask(SIG_BLOCK, &signals_to_block, NULL) != 0)
     LogFatal(COMPONENT_MAIN,
              "Could not start nfs daemon, pthread_sigmask failed");

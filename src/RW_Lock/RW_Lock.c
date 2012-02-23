@@ -38,8 +38,12 @@
 
 #include <pthread.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <execinfo.h>
 #include "RW_Lock.h"
+#include <execinfo.h>
+#include <malloc.h>
 
 /*
  * Debugging function
