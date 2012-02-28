@@ -44,6 +44,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 #include <pthread.h>
 #include <fcntl.h>
 #include <sys/file.h>           /* for having FNDELAY */
@@ -241,6 +242,9 @@ int nfs_Write(nfs_arg_t * parg,
                 case ACCESSTYPE_RO:
                   pres->res_attr2.status = NFSERR_ROFS;
                   break ;
+
+               default:
+		   assert(0); // we'll never grt into this block but some compiler dont get it
              }
            break ;
 
@@ -255,6 +259,9 @@ int nfs_Write(nfs_arg_t * parg,
                 case ACCESSTYPE_RO:
                   pres->res_write3.status = NFS3ERR_ROFS;
                   break ;
+
+               default:
+		   assert(0); // we'll never grt into this block but some compiler dont get it
              }
           break;
         } /* switch (preq->rq_vers) */

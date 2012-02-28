@@ -556,6 +556,34 @@ typedef struct fridge_entry__
   struct fridge_entry__ * pnext ;
 } fridge_entry_t  ;
 
+/**
+ * group together all of NFS-Ganesha's statistics
+ */
+typedef struct ganesha_stats__ {
+    cache_inode_stat_t      global_cache_inode;
+    nfs_worker_stat_t       global_worker_stat;
+    hash_stat_t             cache_inode_hstat;
+    hash_stat_t             uid_map;
+    hash_stat_t             gid_map;
+    hash_stat_t             ip_name_map;
+    hash_stat_t             uid_reverse;
+    hash_stat_t             gid_reverse;
+    hash_stat_t             drc_udp;
+    hash_stat_t             drc_tcp;
+    fsal_statistics_t       global_fsal;
+#ifndef _NO_BUDDY_SYSTEM
+    buddy_stats_t           global_buddy;
+#endif
+
+    unsigned int min_pending_request;
+    unsigned int max_pending_request;
+    unsigned int total_pending_request;
+    unsigned int average_pending_request;
+    unsigned int len_pending_request;
+    unsigned int avg_latency;
+    unsigned long long     total_fsal_calls;
+} ganesha_stats_t;
+
 extern nfs_parameter_t nfs_param;
 extern time_t ServerBootTime;
 extern nfs_worker_data_t *workers_data;
@@ -611,14 +639,21 @@ pause_rc wait_for_workers_to_awaken();
 void DispatchWorkNFS(request_data_t *pnfsreq, unsigned int worker_index);
 void *worker_thread(void *IndexArg);
 process_status_t process_rpc_request(SVCXPRT *xprt);
+int stats_snmp(nfs_worker_data_t * workers_data_local);
+/*
+ * Thread entry functions
+ */
 void *rpc_dispatcher_thread(void *arg);
 void *admin_thread(void *arg);
 void *stats_thread(void *IndexArg);
 void *long_processing_thread(void *arg);
 void *stat_exporter_thread(void *IndexArg);
-int stats_snmp(nfs_worker_data_t * workers_data_local);
 void *file_content_gc_thread(void *IndexArg);
 void *nfs_file_content_flush_thread(void *flush_data_arg);
+void *rpc_tcp_socket_manager_thread(void *Arg);
+void *sigmgr_thread( void * arg );
+void *fsal_up_thread(void *Arg);
+void *state_async_thread(void *argp);
 
 #ifdef _USE_UPCALL_SIMULATOR
 void * upcall_simulator_thread( void * UnusedArg ) ;
@@ -855,5 +890,7 @@ int nfs_rpc_get_args(nfs_request_data_t * preqnfs, const nfs_function_desc_t *pf
 
 void create_fsal_up_threads();
 void nfs_Init_FSAL_UP();
+
+void stats_collect (ganesha_stats_t                 *ganesha_stats);
 
 #endif                          /* _NFS_CORE_H */
