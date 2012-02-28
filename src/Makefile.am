@@ -8,6 +8,7 @@ endif
 
 SUBDIRS = include             \
           Log 		      \
+          OS                  \
           $(LIBTREEDIR)       \
           $(BUDDYDIR)         \
           Common              \

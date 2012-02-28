@@ -72,13 +72,6 @@
 
 #define CONF_LABEL_FS_SPECIFIC   "VFS"
 
-/* -------------------------------------------
- *      POSIX FS dependant definitions
- * ------------------------------------------- */
-
-#define FSAL_VFS_HANDLE_LEN 29
-#define FSAL_VFS_FSHANDLE_LEN 64
-
 #include "fsal_handle_syscalls.h"
 #include "fsal_glue_const.h"
 
@@ -97,9 +90,9 @@ typedef union {
   {
      vfs_file_handle_t vfs_handle ;
   } data ;
-#ifdef _BUILD_SHARED_FSAL
+/** #ifdef _BUILD_SHARED_FSAL @todo: TMP fix for connectathon, waiting for Jim's patch on handles's size */
   char pad[FSAL_HANDLE_T_SIZE];
-#endif
+/** #endif @todo : second part of the TMP fix for connectathon */
 } vfsfsal_handle_t;  /**< FS object handle */
 
 /** Authentification context.    */
@@ -136,11 +129,12 @@ typedef struct
 typedef union {
  struct
  {
-  off_t cookie;
+  off_t seek_offset;    /* lseek offset */
+  int   skiprec;        /* dirents to skip after lseek */
  } data ;
-#ifdef _BUILD_SHARED_FSAL
+/** #ifdef _BUILD_SHARED_FSAL @todo: TMP fix for connectathon, waiting for Jim's patch on handles's size */
   char pad[FSAL_COOKIE_T_SIZE];
-#endif 
+/** #endif @todo : second part of the TMP fix for connectathon */
 } vfsfsal_cookie_t;
 
 #define FSAL_SET_PCOOKIE_BY_OFFSET( __pfsal_cookie, __cookie )           \
@@ -177,5 +171,28 @@ typedef struct
 
 //#define FSAL_GET_EXP_CTX( popctx ) (fsal_export_context_t *)(( (vfsfsal_op_context_t *)popctx)->export_context)
 //#define FSAL_FILENO( p_fsal_file )  ((vfsfsal_file_t *)p_fsal_file)->fd 
+
+/*
+ * Linux and FreeBSD dirent structures are slightly different.
+ * There is an OS-specific datatype returned from getdents.
+ * The following type is FSAL-generic, and the vfsfsal_get_dirent API
+ * converts from the OS-specific type to the generic type.
+ */
+typedef struct
+{
+  uint64_t d_ino;
+  uint64_t d_off;
+  uint32_t d_reclen;
+  uint32_t d_type;
+  char     d_name[256];         /* Well known dirent name size */
+} vfsfsal_dirent_t;
+
+/*
+ * dir_offset is the seek pointer for this record
+ * the addr is the pointer into the array of dirents returned by the syscall
+ * The dp pointer is the result.
+ */
+
+void vfsfsal_get_dirent(size_t dir_offset, char *addr, vfsfsal_dirent_t *dp);
 
 #endif                          /* _FSAL_TYPES__SPECIFIC_H */
