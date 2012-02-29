@@ -2470,6 +2470,10 @@ int export_client_match(sockaddr_t *hostaddr,
                   "Bad client in position %u seen in export list", i );
 	  continue ;
 
+        case HOSTIF_CLIENT_V6:
+          /* To noisey to log - probably the configuration file is wrong */
+          continue;
+
         default:
            LogCrit(COMPONENT_DISPATCH,
                    "Unsupported client in position %u in export list with type %u", i, clients->clientarray[i].type);
@@ -2965,8 +2969,8 @@ int nfs_export_create_root_entry(exportlist_t * pexportlist, hash_table_t * ht)
           if(FSAL_IS_ERROR(fsal_status))
             {
               LogCrit(COMPONENT_INIT,
-                      "Couldn't build export context for %s",
-                      pcurrent->fullpath);
+                      "Couldn't build export context for %s FSAL_ERROR=(%u,%u)",
+                      pcurrent->fullpath, fsal_status.major, fsal_status.minor);
               return FALSE;
             }
 

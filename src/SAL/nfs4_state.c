@@ -173,7 +173,7 @@ state_status_t state_add(cache_entry_t         * pentry,
 
   memset(pnew_state, 0, sizeof(*pnew_state));
 
-  /* Brwose the state's list */
+  /* Browse the state's list */
   glist_for_each(glist, &pentry->object.file.state_list)
     {
       piter_state = glist_entry(glist, state_t, state_list);

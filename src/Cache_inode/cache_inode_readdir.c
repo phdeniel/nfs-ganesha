@@ -136,13 +136,13 @@ static cache_inode_status_t cache_inode_readdir_nonamecache( cache_entry_t * pen
           cache_inode_status_t kill_status;
 
           LogEvent(COMPONENT_CACHE_INODE,
-                   "cache_inode_readdir: Stale FSAL File Handle detected for pentry = %p, fsal_status=(%u,%u)",
+                   "cache_inode_readdir_nocache: Stale FSAL File Handle detected for pentry = %p, fsal_status=(%u,%u)",
                    pentry_dir, fsal_status.major, fsal_status.minor);
 
           if(cache_inode_kill_entry(pentry_dir, WT_LOCK, ht, pclient, &kill_status) !=
              CACHE_INODE_SUCCESS)
             LogCrit(COMPONENT_CACHE_INODE,
-                    "cache_inode_readdir: Could not kill entry %p, status = %u",
+                    "cache_inode_readdir_nocache: Could not kill entry %p, status = %u",
                     pentry_dir, kill_status);
 
           *pstatus = CACHE_INODE_FSAL_ESTALE;
@@ -812,7 +812,7 @@ cache_inode_status_t cache_inode_readdir_populate(
   cache_entry_t *pentry_parent = pentry_dir;
   fsal_attrib_list_t object_attributes;
 
-  cache_inode_create_arg_t create_arg;
+  cache_inode_create_arg_t create_arg, *p_create_arg = NULL;
   cache_inode_file_type_t type;
   cache_inode_status_t cache_status;
   fsal_dirent_t array_dirent[FSAL_READDIR_SIZE + 20];
@@ -846,6 +846,9 @@ cache_inode_status_t cache_inode_readdir_populate(
   /* If directory is already populated , there is no job to do */
   if(pentry_dir->object.dir.has_been_readdir == CACHE_INODE_YES)
     {
+      LogEvent(COMPONENT_CACHE_INODE,
+	   "cache_inode_readdir_populate: skipping populate because dir.has_been_readdir, pentry = %p",
+	   pentry_dir);
       *pstatus = CACHE_INODE_SUCCESS;
       return *pstatus;
     }
@@ -876,13 +879,13 @@ cache_inode_status_t cache_inode_readdir_populate(
           cache_inode_status_t kill_status;
 
           LogEvent(COMPONENT_CACHE_INODE,
-                   "cache_inode_readdir: Stale FSAL File Handle detected for pentry = %p, fsal_status=(%u,%u)",
+                   "cache_inode_readdir_populate: Stale FSAL File Handle detected for pentry = %p, fsal_status=(%u,%u)",
                    pentry_dir, fsal_status.major, fsal_status.minor);
 
           if(cache_inode_kill_entry(pentry_dir, WT_LOCK, ht, pclient, &kill_status) !=
              CACHE_INODE_SUCCESS)
             LogCrit(COMPONENT_CACHE_INODE,
-                    "cache_inode_readdir: Could not kill entry %p, status = %u",
+                    "cache_inode_readdir_populate: Could not kill entry %p, status = %u",
                     pentry_dir, kill_status);
 
           *pstatus = CACHE_INODE_FSAL_ESTALE;
@@ -934,6 +937,7 @@ cache_inode_status_t cache_inode_readdir_populate(
               continue;
             }
 
+
           /* If dir entry is a symbolic link, its content has to be read */
           if((type =
               cache_inode_fsal_type_convert(array_dirent[iter].attributes.type)) ==
@@ -943,6 +947,8 @@ cache_inode_status_t cache_inode_readdir_populate(
               mfsl_object_t tmp_mfsl;
 #endif
               /* Let's read the link for caching its value */
+	      memset(&create_arg, 0, sizeof(create_arg));
+	      p_create_arg = &create_arg;
               object_attributes.asked_attributes = pclient->attrmask;
               if( CACHE_INODE_KEEP_CONTENT( policy ) )
                 {
@@ -973,13 +979,13 @@ cache_inode_status_t cache_inode_readdir_populate(
                       cache_inode_status_t kill_status;
 
                       LogEvent(COMPONENT_CACHE_INODE,
-                               "cache_inode_readdir: Stale FSAL File Handle detected for pentry = %p, fsal_status=(%u,%u)",
+                               "cache_inode_readdir_populate: Stale FSAL File Handle detected for pentry = %p, fsal_status=(%u,%u)",
                                pentry_dir, fsal_status.major, fsal_status.minor );
 
                       if(cache_inode_kill_entry(pentry_dir, WT_LOCK, ht, pclient, &kill_status) !=
                          CACHE_INODE_SUCCESS)
                         LogCrit(COMPONENT_CACHE_INODE,
-                                "cache_inode_readdir: Could not kill entry %p, status = %u",
+                                "cache_inode_readdir_populate: Could not kill entry %p, status = %u",
                                 pentry_dir, kill_status);
 
                       *pstatus = CACHE_INODE_FSAL_ESTALE;
@@ -998,7 +1004,7 @@ cache_inode_status_t cache_inode_readdir_populate(
 		                              &array_dirent[iter].attributes,
 		                              type, 
                                               policy,
-		                              &create_arg,
+		                              p_create_arg,
 		                              NULL, 
 		                              ht, 
 		                              pclient, 
@@ -1213,7 +1219,7 @@ cache_inode_status_t cache_inode_readdir(cache_entry_t * dir_pentry,
 
   LogFullDebug(COMPONENT_CACHE_INODE,
                "--> Cache_inode_readdir: parameters are cookie=%"PRIu64
-	       "nbwanted=%u",
+	       " nbwanted=%u",
                cookie, nbwanted);
 
   /* Sanity check */

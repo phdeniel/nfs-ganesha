@@ -786,11 +786,17 @@ int MakeLogError(char *buffer, int num_family, int num_error, int status,
   else
     {
       char tempstr[1024];
-      char *errstr;
-      errstr = strerror_r(status, tempstr, 1024);
 
-      return sprintf(buffer, "Error %s : %s : status %d : %s : Line %d",
-                     the_error.label, the_error.msg, status, errstr, ma_ligne);
+      if (strerror_r(status, tempstr, 1024) == 0)
+        {
+          return sprintf(buffer, "Error %s : %s : status %d : %s : Line %d",
+                               the_error.label, the_error.msg, status, tempstr, ma_ligne);
+        }
+      else
+      {
+          return sprintf(buffer, "Error %s : %s : status %d : %s : Line %d",
+                               the_error.label, the_error.msg, status, "(unknown error)", ma_ligne);
+        }
     }
 }                               /* MakeLogError */
 
@@ -1080,7 +1086,12 @@ log_component_info __attribute__ ((__unused__)) LogComponents[COMPONENT_COUNT] =
     SYSLOG,
     "SYSLOG"
   },
-  { COMPONENT_FSAL_UP,             "COMPONENT_FSAL_UP", "FSAL_UP",
+  { COMPONENT_FSAL_UP,           "COMPONENT_FSAL_UP", "FSAL_UP",
+    NIV_EVENT,
+    SYSLOG,
+    "SYSLOG"
+  },
+  { COMPONENT_OS,                "COMPONENT_OS", "OS",
     NIV_EVENT,
     SYSLOG,
     "SYSLOG"

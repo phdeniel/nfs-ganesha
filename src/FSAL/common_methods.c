@@ -15,7 +15,11 @@
 #include <errno.h>
 #include <string.h>
 #include <pthread.h>
+#ifdef FREEBSD
+#include <ufs/ufs/quota.h>
+#else
 #include <sys/quota.h>
+#endif
 #include "log_macros.h"
 #include "fsal.h"
 #include "FSAL/common_methods.h"
@@ -66,6 +70,9 @@ fsal_status_t COMMON_GetClientContext(fsal_op_context_t * p_thr_context,  /* IN/
 {
   fsal_count_t ng = nb_alt_groups;
   unsigned int i;
+#define PRINT_BUF_SIZE (FSAL_NGROUPS_MAX * 6 + 64)
+  int cursor;
+  char print_buf[PRINT_BUF_SIZE];
 
   /* sanity check */
   if(!p_thr_context || !p_export_context ||
@@ -84,16 +91,22 @@ fsal_status_t COMMON_GetClientContext(fsal_op_context_t * p_thr_context,  /* IN/
   for(i = 0; i < ng; i++)
 	  p_thr_context->credential.alt_groups[i] = alt_groups[i];
 
-  if(isFullDebug(COMPONENT_FSAL)) {
-	  /* traces: prints p_credential structure */
+  if(isFullDebug(COMPONENT_FSAL))
+    {
+      /* traces: prints p_credential structure on one line */
 
-	  LogFullDebug(COMPONENT_FSAL, "credential modified:\tuid = %d, gid = %d",
-		       p_thr_context->credential.user,
-		       p_thr_context->credential.group);
-	  for(i = 0; i < p_thr_context->credential.nbgroups; i++)
-		  LogFullDebug(COMPONENT_FSAL, "\tAlt grp: %d",
-			       p_thr_context->credential.alt_groups[i]);
-  }
+      snprintf(print_buf, PRINT_BUF_SIZE, "creds: uid = %d gid = %d",
+                        p_thr_context->credential.user, p_thr_context->credential.group);
+      cursor = strlen(print_buf);
+
+      for(i = 0; i < p_thr_context->credential.nbgroups && cursor < PRINT_BUF_SIZE; i++)
+        {
+          snprintf(&print_buf[cursor], PRINT_BUF_SIZE-cursor, " grp = %d",
+                   p_thr_context->credential.alt_groups[i]);
+          cursor = strlen(print_buf);
+        }
+      LogFullDebug(COMPONENT_FSAL, "%s", print_buf);
+   }
   Return(ERR_FSAL_NO_ERROR, 0, INDEX_FSAL_GetClientContext);
 }
 #endif

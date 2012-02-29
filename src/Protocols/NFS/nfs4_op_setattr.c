@@ -65,7 +65,7 @@
 #include "nfs_file_handle.h"
 
 /**
- * nfs4_op_rename: The NFS4_OP_SETATTR operation.
+ * nfs4_op_setattr: The NFS4_OP_SETATTR operation.
  * 
  * This functions handles the NFS4_OP_SETATTR operation in NFSv4. This function can be called only from nfs4_Compound
  *
