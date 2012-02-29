@@ -33,7 +33,9 @@
 #include <unistd.h>
 #include <strings.h>
 #include <string.h>
+#ifndef FREEBSD
 #include <malloc.h>
+#endif  /* FreeBSD prefers you just include <stdlib.h> */
 #include "rpc.h"
 #include "log_macros.h"
 #include "nlm_list.h"

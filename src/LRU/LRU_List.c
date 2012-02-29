@@ -99,6 +99,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
 #include "LRU_List.h"
 #include "stuff_alloc.h"
 #include "log_macros.h"
@@ -110,7 +111,6 @@
 #ifndef FALSE
 #define FALSE 0
 #endif
-
 
 /* ------ This group contains all the functions used to manipulate the LRU from outside this module ----- */
 

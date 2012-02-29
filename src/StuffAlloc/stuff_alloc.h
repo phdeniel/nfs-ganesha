@@ -45,7 +45,9 @@ struct prealloc_pool;
 
 #ifdef _NO_BUDDY_SYSTEM
 
+#ifndef FREEBSD
 #include <malloc.h>
+#endif  /* FreeBSD prefers you just include <stdlib.h> */
 #include <errno.h>
 
 #define Mem_Alloc( a )                  malloc( a )

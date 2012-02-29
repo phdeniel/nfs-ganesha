@@ -116,9 +116,35 @@ fsal_status_t fsal_internal_fd2handle(  fsal_op_context_t * p_context,
 
 fsal_status_t fsal_internal_link_at(int srcfd, int dfd, char *name);
 
-fsal_status_t fsal_stat_by_handle(fsal_op_context_t * p_context,
-                                  fsal_handle_t * p_handle, struct stat64 *buf);
+/*
+ * struct stat64 and friends are for 32-bit machines,
+ * and are identical to struct stat on 64-bit machines.
+ * This typedef helps hide the use of struct stat64, 
+ * which is especially handy for platforms that don't have it.
+ */
+#if HAVE_STRUCT_STAT64
+typedef struct stat64 fsal_statbuf_t;
+#else
+typedef struct stat fsal_statbuf_t;
+#define fstat64 fstat
+#endif
 
+/**
+ *  test the access to a file from its POSIX attributes (struct stat) OR its FSAL attributes (fsal_attrib_list_t).
+ *
+ * XXX This takes a struct stat, which isn't quite portable and should really be
+ * fsal_statbuf_t, but we'll make that API change later.  This means 32-builds are
+ * probably not correct
+ *
+ */
+fsal_status_t fsal_internal_testAccess(fsal_op_context_t * p_context,   /* IN */
+                                       fsal_accessflags_t access_type,  /* IN */
+                                       struct stat *p_buffstat, /* IN, optional XXX */
+                                       fsal_attrib_list_t *
+                                       p_object_attributes /* IN, optional */ );
+
+fsal_status_t fsal_stat_by_handle(fsal_op_context_t * p_context,
+                                  fsal_handle_t * p_handle, fsal_statbuf_t *buf);
 
 /* All the call to FSAL to be wrapped */
 fsal_status_t VFSFSAL_access(fsal_handle_t * p_object_handle,        /* IN */

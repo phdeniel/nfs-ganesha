@@ -173,6 +173,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stddef.h>
 #include <pthread.h>
 #include "RW_Lock.h"
 #include "HashTable.h"

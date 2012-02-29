@@ -287,7 +287,7 @@ fsal_status_t posix2fsal_attributes(struct stat * p_buffstat,
 }
 
 
-fsal_status_t posixstat64_2_fsal_attributes(struct stat64 *p_buffstat,
+fsal_status_t posixstat64_2_fsal_attributes(fsal_statbuf_t *p_buffstat,
                                             fsal_attrib_list_t *p_fsalattr_out)
 {
 

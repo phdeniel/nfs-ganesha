@@ -47,6 +47,14 @@ typedef struct sockaddr_in sockaddr_t;
 #define XP_SOCK xp_sock
 #endif
 
+#if defined(_FREEBSD)
+#include <rpc/xdr.h>
+/* FreeBSD and Linux disagree on how to spell this ... */
+#define xdr_uint16 xdr_u_int16
+#define xdr_uint32_t xdr_u_int32_t
+#define xdr_uint64_t xdr_u_int64_t
+#endif
+
 #ifndef AUTH_SYS
 #define AUTH_SYS 1
 #endif

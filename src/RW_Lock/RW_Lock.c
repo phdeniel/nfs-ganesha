@@ -37,13 +37,15 @@
 #endif
 
 #include <pthread.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <execinfo.h>
-#include "RW_Lock.h"
+#ifndef FREEBSD
 #include <execinfo.h>
 #include <malloc.h>
+#endif
+#include "RW_Lock.h"
 #include <assert.h>
 
 /*
@@ -62,12 +64,15 @@ static inline void print_lock(char *s, rw_lock_t * plock)
 void dbg_backtrace(void)
 {
   int j, nptrs;
+  char **strings = NULL;
+#ifndef FREEBSD
   void *buffer[DEBUG_STACK_SIZE];
-  char **strings;
 
+  /* Welch: backtrace_symbols (but not backtrace) is undefined in my FreeBSD 7.2 system */
   nptrs = backtrace(buffer, DEBUG_STACK_SIZE);
 
   strings = backtrace_symbols(buffer, nptrs);
+#endif
   if (strings == NULL)
     {
       LogFullDebug(COMPONENT_RW_LOCK, "dbg_backtrace...No symbols found.\n");

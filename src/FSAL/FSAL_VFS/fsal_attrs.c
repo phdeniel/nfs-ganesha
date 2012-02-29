@@ -42,7 +42,7 @@
 #include <utime.h>
 #include <sys/time.h>
 
-extern fsal_status_t posixstat64_2_fsal_attributes(struct stat64 *p_buffstat,
+extern fsal_status_t posixstat64_2_fsal_attributes(fsal_statbuf_t *p_buffstat,
                                                    fsal_attrib_list_t * p_fsalattr_out);
 
 /**
@@ -131,7 +131,7 @@ fsal_status_t VFSFSAL_getattrs_descriptor(fsal_file_t * p_file_descriptor,     /
     )
 {
   fsal_status_t st;
-  struct stat64 buffstat;
+  fsal_statbuf_t buffstat;
   int rc, errsv;
 
   /* sanity checks.

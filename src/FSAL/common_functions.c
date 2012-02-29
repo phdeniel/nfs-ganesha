@@ -14,8 +14,6 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
-#include <pthread.h>
-#include <sys/quota.h>
 #include "log_macros.h"
 #include "fsal.h"
 #include "FSAL/common_functions.h"

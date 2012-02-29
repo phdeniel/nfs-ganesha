@@ -35,7 +35,9 @@
 #include <unistd.h>
 #include <strings.h>
 #include <string.h>
+#ifndef FREEBSD
 #include <malloc.h>
+#endif  /* FreeBSD prefers you just include <stdlib.h> */
 
 #define MEM_SIZE  1000000LL
 #define NB_THREADS 30

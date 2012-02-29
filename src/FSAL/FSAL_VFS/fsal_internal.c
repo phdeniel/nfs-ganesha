@@ -44,11 +44,10 @@
 #include "SemN.h"
 #include "fsal_convert.h"
 #include <libgen.h>             /* used for 'dirname' */
+#include <limits.h>
 #include <pthread.h>
 #include <string.h>
 #include <sys/types.h>
-#include <mntent.h>
-
 
 /* Add missing prototype in vfs.h */
 int fd_to_handle(int fd, void **hanp, size_t * hlen);

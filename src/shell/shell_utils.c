@@ -60,6 +60,7 @@
 #endif
 
 #include <unistd.h>
+#include <stdlib.h>
 
 #include "cmd_tools.h"
 #include <errno.h>
