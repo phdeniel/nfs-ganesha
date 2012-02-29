@@ -133,7 +133,8 @@ fsal_status_t VFSFSAL_opendir(fsal_handle_t * p_dir_handle,  /* IN */
  * \param pdirent (output)
  *        Adresse of the buffer where the direntries are to be stored.
  * \param end_position (output)
- *        Cookie that indicates the current position in the directory.
+ *        Cookie that indicates the current position in the directory
+ *	  after reading the last record in the returned buffer.
  * \param nb_entries (output)
  *        Pointer to the number of entries read during the call.
  * \param end_of_dir (output)
@@ -144,14 +145,6 @@ fsal_status_t VFSFSAL_opendir(fsal_handle_t * p_dir_handle,  /* IN */
  *        - ERR_FSAL_NO_ERROR     (no error)
  *        - Another error code if an error occured.
  */
-
-struct linux_dirent
-{
-  long d_ino;
-  long d_off;                   /* Be careful, SYS_getdents is a 32 bits call */
-  unsigned short d_reclen;
-  char d_name[];
-};
 
 #define BUF_SIZE 1024
 
@@ -166,15 +159,17 @@ fsal_status_t VFSFSAL_readdir(fsal_dir_t * dir_descriptor,      /* IN */
     )
 {
   vfsfsal_dir_t * p_dir_descriptor = (vfsfsal_dir_t * ) dir_descriptor;
-  vfsfsal_cookie_t start_position;
+  vfsfsal_cookie_t * p_start_position = (vfsfsal_cookie_t *) &startposition;
   vfsfsal_cookie_t * p_end_position = (vfsfsal_cookie_t *) end_position;
+  size_t dir_offset;
   fsal_status_t st;
   fsal_count_t max_dir_entries;
   fsal_name_t entry_name;
-  char buff[BUF_SIZE];
-  struct linux_dirent *dp = NULL;
+  vfsfsal_dirent_t my_dp, *dp = &my_dp;
   int bpos = 0;
   int tmpfd = 0;
+  int num_dirents = 0, skiprec = 0;;
+  char buff[BUF_SIZE];
 
   char d_type;
   struct stat buffstat;
@@ -196,10 +191,14 @@ fsal_status_t VFSFSAL_readdir(fsal_dir_t * dir_descriptor,      /* IN */
   /***************************/
   /* seek into the directory */
   /***************************/
-  start_position.data.cookie = *((off_t*) &startposition.data);
+
+  skiprec = p_start_position->data.skiprec;
   rc = errno = 0;
-  lseek(p_dir_descriptor->fd, start_position.data.cookie, SEEK_SET);
+  lseek(p_dir_descriptor->fd, p_start_position->data.seek_offset, SEEK_SET);
   rc = errno;
+
+  LogFullDebug(COMPONENT_NFS_V4, "startposition lseek %" PRId64 " skiprec %d",
+	     p_start_position->data.seek_offset, p_start_position->data.skiprec);
 
   if(rc)
     Return(posix2fsal_error(rc), rc, INDEX_FSAL_readdir);
@@ -212,8 +211,11 @@ fsal_status_t VFSFSAL_readdir(fsal_dir_t * dir_descriptor,      /* IN */
   while(*p_nb_entries < max_dir_entries)
     {
     /***********************/
-      /* read the next entry */
+      /* read the next batch of entries */
+      /* save seek pointer before getdents so we can restart correctly */
     /***********************/
+      dir_offset = lseek(p_dir_descriptor->fd, 0, SEEK_CUR);
+      num_dirents = 0;
       TakeTokenFSCall();
       rc = syscall(SYS_getdents, p_dir_descriptor->fd, buff, BUF_SIZE);
       ReleaseTokenFSCall();
@@ -230,18 +232,23 @@ fsal_status_t VFSFSAL_readdir(fsal_dir_t * dir_descriptor,      /* IN */
         }
 
     /***********************************/
-      /* Get information about the entry */
+      /* Get information about each entry */
     /***********************************/
 
       for(bpos = 0; bpos < rc;)
         {
-          dp = (struct linux_dirent *)(buff + bpos);
-          d_type = *(buff + bpos + dp->d_reclen - 1);
-
+          bzero(&dp->d_name[0], sizeof(dp->d_name));	/* XXX should not be necessary */
+          vfsfsal_get_dirent(dir_offset + bpos, buff + bpos, dp);
+ 
           bpos += dp->d_reclen;
+          num_dirents++;
 
-          if(!(*p_nb_entries < max_dir_entries))
-            break;
+          if (skiprec > 0)
+            {
+              // Skip records we processed in the last call to VFSFSAL_readdir
+              skiprec--;
+              continue;
+            }
 
           /* skip . and .. */
           if(!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, ".."))
@@ -293,20 +300,43 @@ fsal_status_t VFSFSAL_readdir(fsal_dir_t * dir_descriptor,      /* IN */
 
           ReleaseTokenFSCall();
 
+          // Note that the per-record cookie at this level is not used.
+          // Instead, a logical cookie (1, 2, 3, ...) is created at the Cache_Inode layer
+          // The thing that is important here is the end_position cookie so that this
+          // procedure can use lseek to get to the next batch to read.
+
           //p_pdirent[*p_nb_entries].cookie.cookie = dp->d_off;
-          ((vfsfsal_cookie_t *) (&p_pdirent[*p_nb_entries].cookie))->data.cookie = dp->d_off;
+          ((vfsfsal_cookie_t *) (&p_pdirent[*p_nb_entries].cookie))->data.seek_offset = dp->d_off;
           p_pdirent[*p_nb_entries].nextentry = NULL;
           if(*p_nb_entries)
             p_pdirent[*p_nb_entries - 1].nextentry = &(p_pdirent[*p_nb_entries]);
 
-          //(*p_end_position) = p_pdirent[*p_nb_entries].cookie;
-          memcpy((char *)p_end_position, (char *)&p_pdirent[*p_nb_entries].cookie,
-                 sizeof(vfsfsal_cookie_t));
-
           (*p_nb_entries)++;
-
+          if(!(*p_nb_entries < max_dir_entries)) {
+            // This break may leave unprocessed records in the local dirent buffer
+            break;
+          }
         }                       /* for */
     }                           /* While */
+
+  // If there were unprocessed records, save the seek pointer from before getdents,
+  // along with the number of records we processed.  Otherwise, save the current
+  // seek pointer and zero records that need to be skipped.
+
+  memset(p_end_position, 0, sizeof(*p_end_position));
+  if (bpos < rc)
+   {
+     p_end_position->data.seek_offset = dir_offset;
+     p_end_position->data.skiprec = num_dirents;
+   }
+  else
+   {
+     p_end_position->data.seek_offset = lseek(p_dir_descriptor->fd, 0, SEEK_CUR);
+     p_end_position->data.skiprec = 0;
+   }
+
+  LogFullDebug(COMPONENT_NFS_V4, "end offset %" PRId64 " skiprec %d",
+		     p_end_position->data.seek_offset, p_end_position->data.skiprec);
 
   Return(ERR_FSAL_NO_ERROR, 0, INDEX_FSAL_readdir);
 
