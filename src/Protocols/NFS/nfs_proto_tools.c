@@ -819,6 +819,9 @@ int nfs4_FSALattr_To_Fattr(exportlist_t * pexport,
   fsal_staticfsinfo_t * pstaticinfo = NULL ;
   fsal_dynamicfsinfo_t dynamicinfo;
 
+  int print_offset;
+  char print_buf[128];
+
   if( data != NULL ) /* data can be NULL if called from FSAL_PROXY operating as a client */
     pstaticinfo = data->pcontext->export_context->fe_static_fs_info;
 
@@ -844,6 +847,8 @@ int nfs4_FSALattr_To_Fattr(exportlist_t * pexport,
   LastOffset = 0;
   j = 0;
 
+  print_offset = 0;
+  snprintf(&print_buf[print_offset], sizeof(print_buf)-print_offset, "Flags (Regular)");
   for(i = 0; i < attrmasklen; i++)
     {
       attribute_to_set = attrmasklist[i];
@@ -857,13 +862,15 @@ int nfs4_FSALattr_To_Fattr(exportlist_t * pexport,
           /* Erroneous value... skip */
           continue;
         }
-      LogFullDebug(COMPONENT_NFS_V4,
-                   "Flag for Operation (Regular) = %d|%d is ON,  name  = %s  reply_size = %d",
-                   attrmasklist[i],
-                   fattr4tab[attribute_to_set].val,
-                   fattr4tab[attribute_to_set].name,
-                   fattr4tab[attribute_to_set].size_fattr4);
-
+      print_offset = strlen(print_buf);
+      if (print_offset < sizeof(print_buf) - 20) {
+              snprintf(&print_buf[print_offset], sizeof(print_buf)-print_offset, " (%d|%d %s %d)",
+                           attrmasklist[i],
+                           fattr4tab[attribute_to_set].val,
+                           fattr4tab[attribute_to_set].name,
+                           fattr4tab[attribute_to_set].size_fattr4);
+      }
+                        
       op_attr_success = 0;
 
       /* compute the new size for the fattr4 reply */
@@ -1327,9 +1334,11 @@ int nfs4_FSALattr_To_Fattr(exportlist_t * pexport,
           break;
 
         case FATTR4_MODE:
-          /* file_mode = (fattr4_mode) htonl(fsal2unix_mode(pattr->mode)) ; */
-          file_mode = htonl((fattr4_mode) fsal2unix_mode(pattr->mode));
-          memcpy((char *)(attrvalsBuffer + LastOffset), &file_mode, sizeof(fattr4_mode));
+          /* Careful because sizeof(mode_t), which is returned from fsal2unix_mode,
+           * may not equal sizeof(fattr4_mode) */
+          file_mode = fsal2unix_mode(pattr->mode);
+          file_mode = htonl(file_mode);
+          *(fattr4_mode *)(attrvalsBuffer + LastOffset) = file_mode;
           LastOffset += fattr4tab[attribute_to_set].size_fattr4;
           op_attr_success = 1;
           break;
@@ -1714,6 +1723,7 @@ int nfs4_FSALattr_To_Fattr(exportlist_t * pexport,
         }
 
     }                           /* for i */
+  LogFullDebug(COMPONENT_NFS_V4, "%s", print_buf);
 
   /* Set the bitmap for result */
   if((Fattr->attrmask.bitmap4_val = (uint32_t *) Mem_Alloc_Label(3 * sizeof(uint32_t),
@@ -3225,7 +3235,7 @@ int nfs4_attrmap_to_FSAL_attrmask(bitmap4 attrmap, fsal_attrib_mask_t* attrmask)
         }
     }
   return NFS4_OK;
-}                               /* nfs4_Fattr_To_FSAL_attr */
+}                               /* nfs4_attrmap_to_FSAL_attrmask */
 
 
 /**
@@ -3407,20 +3417,24 @@ int nfs4_Fattr_To_FSAL_attr(fsal_attrib_list_t * pFSAL_attr, fattr4 * Fattr)
                        "      SATTR: size seen %zu", (size_t)pFSAL_attr->filesize);
           break;
 
-        case FATTR4_MODE:
-          memcpy((char *)&(pFSAL_attr->mode),
-                 (char *)(Fattr->attr_vals.attrlist4_val + LastOffset),
-                 sizeof(fattr4_mode));
+        case FATTR4_MODE: {
+          /*
+           * The original code did a memcpy and then an ntohl() conversion.
+           * However, when mode_t is a short, that ends up tossing the bits we want.
+           * So, we code it explicitly here and avoid memcpy that might overrun anyway.
+           */
+          fattr4_mode mode_nfs4;
 
-          /* Do not forget the XDR marshalling for the fattr4 stuff */
-          pFSAL_attr->mode = ntohl(pFSAL_attr->mode);
+          mode_nfs4 = *(fattr4_mode *)(Fattr->attr_vals.attrlist4_val + LastOffset);
+          mode_nfs4 = ntohl(mode_nfs4);
+          pFSAL_attr->mode = mode_nfs4;
 
           pFSAL_attr->asked_attributes |= FSAL_ATTR_MODE;
           LastOffset += fattr4tab[attribute_to_set].size_fattr4;
           LogFullDebug(COMPONENT_NFS_V4,
                        "      SATTR: On voit le mode 0%o", pFSAL_attr->mode);
           break;
-
+        }
         case FATTR4_OWNER:
           memcpy(&len, (char *)(Fattr->attr_vals.attrlist4_val + LastOffset),
                  sizeof(u_int));
