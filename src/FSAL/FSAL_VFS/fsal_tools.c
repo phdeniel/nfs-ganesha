@@ -44,6 +44,8 @@
 /* case unsensitivity */
 #define STRCMP   strcasecmp
 
+void VFSFSAL_handle_sprintf(fsal_handle_t * handle, int len, char *buf);
+
 char *VFSFSAL_GetFSName()
 {
   return "VFS";
@@ -211,8 +213,7 @@ fsal_status_t VFSFSAL_DigestHandle(fsal_export_context_t * p_expcontext,     /* 
                                    caddr_t out_buff     /* OUT */
     )
 {
- uint32_t ino32;
- uint64_t ino64;
+  uint64_t ino64;
   vfsfsal_handle_t * p_in_fsal_handle = (vfsfsal_handle_t *)in_fsal_handle;
 
   /* sanity checks */
@@ -255,7 +256,9 @@ fsal_status_t VFSFSAL_DigestHandle(fsal_export_context_t * p_expcontext,     /* 
       memcpy(out_buff, p_in_fsal_handle->data.vfs_handle.handle, FSAL_DIGEST_SIZE_FILEID2);
       break;
 
+      /* Assert FSAL_DIGEST_SIZE_FILEID3 == FSAL_DIGEST_SIZE_FILEID4 */
    case FSAL_DIGEST_FILEID3:
+   case FSAL_DIGEST_FILEID4:
       /* Extracting FileId from VFS handle requires internal knowledge on the handle's structure 
        * which is given by 'struct fid' in kernel's sources. For most FS, it looks like this:
        * struct fid {
@@ -288,19 +291,71 @@ fsal_status_t VFSFSAL_DigestHandle(fsal_export_context_t * p_expcontext,     /* 
 	u32 parent_gen;
 
 	u64 parent_root_objectid;
-      } __attribute__ ((packed));*/
+      } __attribute__ ((packed));
+
+      PanFS has the unique bits buried deeply
+
+        struct pan_kernel_fs_client_fid_s {
+          pan_uint8_t                            extended_fid_byte_1;
+          pan_uint8_t                            extended_fid_byte_2;
+          pan_uint8_t                            extended_fid_byte_3;
+          pan_uint8_t                            extended_fid_byte_4;
+          pan_stor_dev_id_t                      fid_devid;
+          pan_stor_obj_grp_id_t                  fid_grpid;
+          pan_stor_obj_uniq_t                    fid_objid;
+          union {
+            pan_sm_obj_map_hint_t                  fid_map_hint;
+            pan_uint32_t                           fid_uint32_a[4];
+          } u;
+        };
+
+      */
+
+      /*
+       * We'll use the following heursitic.  On Linux we'll take the
+       * first 64-bits and call it sufficient.  On BSD we'll assume
+       * it is a PanFS handle and dig for the unique bits.
+       */
       memset(out_buff, 0, FSAL_DIGEST_SIZE_FILEID3);
-      memcpy(&ino32, p_in_fsal_handle->data.vfs_handle.handle, sizeof(ino32));
-      ino64 = ino32;
-      memcpy(out_buff, &ino64, FSAL_DIGEST_SIZE_FILEID3);
-      break;
+#ifdef LINUX
+       /*
+        * Need all 64-bits to get a unique file ID
+        */
+       memcpy(&ino64, p_in_fsal_handle->data.vfs_handle.handle, sizeof(ino64));
+#endif /* LINUX */
+#ifdef FREEBSD
+        {
+           /*
+            * This is a pseudo-struct that mashes together the leading
+            * fsid (two ints) and the following PanFS handle.
+            */
+           struct pan_kernel_fs_client_fid_s {
+             uint32_t  fsid_1;
+             uint32_t  fsid_2;
+             uint32_t  fid_header;  /* struct fid starts here with two shorts */
+             uint32_t  pan_devid_a;
+             uint32_t  pan_devid_b; /* 2nd half of 64-bit device id */
+             uint32_t  pan_grpid;
+             uint64_t  pan_objid;
+             uint32_t  pan_map_hint[4];
+           };
+           struct pan_kernel_fs_client_fid_s *p_pan_fid;
+           p_pan_fid = (struct pan_kernel_fs_client_fid_s *)&p_in_fsal_handle->data.vfs_handle.handle[0];
+           ino64 = p_pan_fid->pan_grpid ^ p_pan_fid->pan_objid;
+           LogFullDebug(COMPONENT_STATE, "DIGEST PANFS pan_grpid 0x%" PRIx32 " pan_objid 0x%" PRIx64,
+                     p_pan_fid->pan_grpid, p_pan_fid->pan_objid);
+        }
+#endif /* FreeBSD */
+        memcpy(out_buff, &ino64, FSAL_DIGEST_SIZE_FILEID3);
+        if (isFullDebug(COMPONENT_STATE))
+          {
+            char buf[256];
+            VFSFSAL_handle_sprintf(p_in_fsal_handle, sizeof(buf), buf);
+            LogFullDebug(COMPONENT_STATE, "DIGEST_FILEID34 digest 0x%" PRIx64 
+                                          " handle_bytes %d handle %s",
+                   ino64, p_in_fsal_handle->data.vfs_handle.handle_bytes, buf);
+          }
 
-
-   case FSAL_DIGEST_FILEID4:
-      memset(out_buff, 0, FSAL_DIGEST_SIZE_FILEID4);
-      memcpy(&ino32, p_in_fsal_handle->data.vfs_handle.handle, sizeof(ino32));
-      ino64 = ino32;
-      memcpy(out_buff, &ino64, FSAL_DIGEST_SIZE_FILEID4);
       break;
 
     default:
@@ -440,3 +495,35 @@ fsal_status_t VFSFSAL_load_FS_specific_parameter_from_conf(config_file_t in_conf
   ReturnCode(ERR_FSAL_NO_ERROR, 0);
 
 }                               /* FSAL_load_FS_specific_parameter_from_conf */
+
+/** 
+ * FSAL_handle_sprintf:
+ * Format a handle into a string buffer
+ *
+ * \param handle (input):
+ *        The handle to be formatted.
+ * \param len (input):
+ *        The size of the print buffer
+ * \param buf (input/output):
+ *        The buffer to format
+ *
+ * \return - void
+ */
+
+void VFSFSAL_handle_sprintf(fsal_handle_t * handle, int len, char *buf)
+{
+  vfsfsal_handle_t * myhandle = (vfsfsal_handle_t *)handle;
+  int i, offset, n;
+
+  offset = 0;
+
+  for (i=0 ; i<myhandle->data.vfs_handle.handle_bytes && offset<len-2; i++, offset += 2)
+    {
+      n = snprintf(&buf[offset], len-offset, "%02x", myhandle->data.vfs_handle.handle[i]) ;
+      if (n != 2 )
+        {
+          break;        /* Out of space */
+        }
+    }
+        
+}
