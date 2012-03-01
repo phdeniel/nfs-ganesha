@@ -354,12 +354,10 @@ cache_entry_t *cache_inode_get_located(cache_inode_fsal_data_t * pfsdata,
      if( plocation != pentry )
       {
         P_w(&pentry->lock);
-        if((*pstatus =
-           cache_inode_valid(pentry, CACHE_INODE_OP_GET, pclient)) != CACHE_INODE_SUCCESS)
-          {
-            pentry = NULL;
-          }
+        *pstatus = cache_inode_valid(pentry, CACHE_INODE_OP_GET, pclient);
         V_w(&pentry->lock);
+        if(pstatus != CACHE_INODE_SUCCESS)
+	  pentry = NULL;
       }
    }
 
