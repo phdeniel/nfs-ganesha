@@ -224,7 +224,7 @@ fsal_status_t XFSFSAL_DigestHandle(fsal_export_context_t * p_expcontext,     /* 
         ReturnCode(ERR_FSAL_TOOSMALL, 0);
 
       memset(out_buff, 0, FSAL_DIGEST_SIZE_HDLV2);
-      memcpy(out_buff, p_in_fsal_handle, FSAL_DIGEST_SIZE_HDLV2);
+      memcpy(out_buff, &p_in_fsal_handle->data, sizeof(p_in_fsal_handle->data));
       break;
 
     case FSAL_DIGEST_NFSV3:
@@ -233,7 +233,7 @@ fsal_status_t XFSFSAL_DigestHandle(fsal_export_context_t * p_expcontext,     /* 
         ReturnCode(ERR_FSAL_TOOSMALL, 0);
 
       memset(out_buff, 0, FSAL_DIGEST_SIZE_HDLV3);
-      memcpy(out_buff, p_in_fsal_handle, FSAL_DIGEST_SIZE_HDLV3);
+      memcpy(out_buff, &p_in_fsal_handle->data, sizeof(p_in_fsal_handle->data));
       break;
 
     case FSAL_DIGEST_NFSV4:
@@ -242,7 +242,7 @@ fsal_status_t XFSFSAL_DigestHandle(fsal_export_context_t * p_expcontext,     /* 
         ReturnCode(ERR_FSAL_TOOSMALL, 0);
 
       memset(out_buff, 0, FSAL_DIGEST_SIZE_HDLV4);
-      memcpy(out_buff, p_in_fsal_handle, FSAL_DIGEST_SIZE_HDLV4);
+      memcpy(out_buff, &p_in_fsal_handle->data, sizeof(p_in_fsal_handle->data));
       break;
 
       /* FileId digest for NFSv2 */
@@ -261,14 +261,16 @@ fsal_status_t XFSFSAL_DigestHandle(fsal_export_context_t * p_expcontext,     /* 
 
       /* sanity check about output size */
       memset(out_buff, 0, FSAL_DIGEST_SIZE_FILEID3);
-      memcpy(out_buff, &(p_in_fsal_handle->data.inode), sizeof(fsal_u64_t));
+      memcpy(out_buff, &(p_in_fsal_handle->data.inode),
+	     sizeof(p_in_fsal_handle->data.inode));
       break;
 
       /* FileId digest for NFSv4 */
     case FSAL_DIGEST_FILEID4:
 
       memset(out_buff, 0, FSAL_DIGEST_SIZE_FILEID4);
-      memcpy(out_buff, &(p_in_fsal_handle->data.inode), sizeof(fsal_u64_t));
+      memcpy(out_buff, &(p_in_fsal_handle->data.inode),
+	     sizeof(p_in_fsal_handle->data.inode));
       break;
 
     default:
