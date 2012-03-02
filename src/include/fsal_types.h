@@ -1003,7 +1003,7 @@ typedef struct fsal_quota__
 #ifdef _USE_PROXY
 #define FSAL_DIGEST_SIZE_HDLV4 108 
 #else
-#define FSAL_DIGEST_SIZE_HDLV4 61 
+#define FSAL_DIGEST_SIZE_HDLV4 69 
 #endif /* _USE_FSAL_PROXY */
 
 
