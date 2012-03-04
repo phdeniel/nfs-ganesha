@@ -116,6 +116,7 @@ case $build in
 esac
 
 AM_CONDITIONAL(IS_LINUX, test "$MYOS" = "LINUX")
+AM_CONDITIONAL(IS_FREEBSD, test "$MYOS" = "FREEBSD")
 AM_CONDITIONAL(IS_SOLARIS, test "$MYOS" = "SOLARIS" )
 AC_SUBST(EXTRA_LIB)
 
@@ -168,6 +169,10 @@ AC_STRUCT_TM
 AC_C_VOLATILE
 AC_CHECK_TYPES([ptrdiff_t])
 AC_CHECK_SIZEOF([long])
+AC_CHECK_TYPE(struct stat64,
+  [AC_DEFINE(HAVE_STRUCT_STAT64, 1,
+             [define if struct stat64 is usable])],,
+  [[#include <sys/stat.h>]])
 
 # Ceck daemon() function
 AC_CHECK_FUNC([daemon],[has_daemon=yes],[has_daemon=no])
@@ -972,6 +977,9 @@ AC_CONFIG_FILES([include/Makefile
                  RPCAL/Makefile
                  RPCAL/ONCRPC/Makefile
                  RPCAL/TIRPC/Makefile
+                 OS/Makefile
+                 OS/freebsd/Makefile
+                 OS/linux/Makefile
                  MainNFSD/Makefile
                  test/Makefile
                  cmdline_tools/Makefile

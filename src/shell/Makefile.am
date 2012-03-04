@@ -26,6 +26,13 @@ endif
 
 SEC_LIB_FLAGS =
 
+if IS_LINUX
+GOS_LIB = ../OS/linux/libgos.la
+endif
+if IS_FREEBSD
+GOS_LIB = ../OS/freebsd/libgos.la
+endif
+
 if USE_FSAL_FUSE
 
  # no shell for FUSE, because we are called from the binded filesystem
@@ -102,6 +109,7 @@ shell_libs =      ../Protocols/NFS/libnfsproto.la                    \
                   ../Log/liblog.la                                   \
                   ../ConfigParsing/libConfigParsing.la               \
                   ../Protocols/XDR/libnfs_mnt_xdr.la                 \
+                  $(GOS_LIB)                                         \
 		  ../Common/libcommon_utils.la
 
 __FS_NAME__ganeshell_LDADD = $(shell_libs)                           \

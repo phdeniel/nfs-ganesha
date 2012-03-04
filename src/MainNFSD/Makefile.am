@@ -75,6 +75,13 @@ DISPATCH_9P_FILES =
 _9P_LIB = 
 endif
 
+if IS_LINUX
+GOS_LIB = ../OS/linux/libgos.la
+endif
+if IS_FREEBSD
+GOS_LIB = ../OS/freebsd/libgos.la
+endif
+
 if USE_FSAL_FUSE
 noinst_LTLIBRARIES           = libMainServices.la
 lib_LTLIBRARIES              = libganeshaNFS.la
@@ -176,6 +183,7 @@ libMainServices_la_LIBADD         =   ../Protocols/NFS/libnfsproto.la           
                                       ../Protocols/XDR/libnfs_mnt_xdr.la                \
                                       ../SemN/libSemN.la                                \
                                       ../RW_Lock/librwlock.la                           \
+                                      $(GOS_LIB)                                        \
                                       $(FSAL_UP_LIB_FLAGS)                              \
                                       ../Common/libcommon_utils.la
 
