@@ -45,7 +45,7 @@
 #include "fsal.h"
 
 #include "LRU_List.h"
-#include "log_macros.h"
+#include "log.h"
 #include "HashData.h"
 #include "HashTable.h"
 #include "cache_inode.h"
@@ -312,7 +312,7 @@ cache_inode_status_t cache_inode_rdwr(cache_entry_t * pentry,
                        io_size, *pio_size, *p_fsal_eof, seek_descriptor->whence,
                        seek_descriptor->offset);
 
-          LogFullDebug(COMPONENT_CACHE_INODE,
+          LogMidDebug(COMPONENT_CACHE_INODE,
                        "cache_inode_rdwr: INODE  AFTER : IO Size = %llu %llu",
                        io_size, *pio_size);
 
@@ -403,7 +403,7 @@ cache_inode_status_t cache_inode_rdwr(cache_entry_t * pentry,
                  && (pentry->object.file.open_fd.fileno != 0))
                 {
 
-                  LogFullDebug(COMPONENT_CACHE_INODE,
+                  LogDebug(COMPONENT_CACHE_INODE,
                                "cache_inode_rdwr: CLOSING pentry %p: fd=%d",
                                pentry, pentry->object.file.open_fd.fileno);
 

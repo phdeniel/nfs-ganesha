@@ -39,7 +39,7 @@
 
 #include "HashData.h"
 #include "HashTable.h"
-#include "log_macros.h"
+#include "log.h"
 #include "stuff_alloc.h"
 #include "nfs_core.h"
 #include "nfs_exports.h"
@@ -347,6 +347,7 @@ int nfs_client_id_add(clientid4 clientid,
     }
 
   pnfs_client_id->clientid_owner = client_owner;
+  pnfs_client_id->recov_dir = NULL;
 
   return CLIENT_ID_SUCCESS;
 }                               /* nfs_client_id_add */

@@ -52,7 +52,7 @@
 #include "HashTable.h"
 #include "fsal.h"
 #include "fsal_types.h"
-#include "log_macros.h"
+#include "log.h"
 #include "config_parsing.h"
 #include "nfs23.h"
 #include "nfs4.h"
@@ -503,5 +503,12 @@ struct state_async_queue_t
     } state_async_data;
 };
 #endif
+
+typedef struct nfs_grace_start
+{
+  int		event;
+  ushort	nodeid;
+  void		*ipaddr;
+} nfs_grace_start_t;
 
 #endif                          /*  _SAL_DATA_H */

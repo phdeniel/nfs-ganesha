@@ -43,7 +43,7 @@
 #endif                          /* _SOLARIS */
 
 #include "LRU_List.h"
-#include "log_macros.h"
+#include "log.h"
 #include "HashData.h"
 #include "HashTable.h"
 #include "fsal.h"
@@ -125,7 +125,7 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
           case SYMBOLIC_LINK:
             print = 0;
             cache_inode_expire_to_str(pclient->expire_type_link, pclient->grace_period_link, grace2);
-            LogDebug(COMPONENT_CACHE_INODE,
+            LogFullDebug(COMPONENT_CACHE_INODE,
                      "Renew Entry test of %p for SYMBOLIC_LINK elapsed time=%u, grace_period_attr=%s, grace_period_link=%s",
                      pentry, elapsed, grace, grace2);
             break;
@@ -138,7 +138,7 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
           case DIRECTORY:
             print = 0;
             cache_inode_expire_to_str(pclient->expire_type_dirent, pclient->grace_period_dirent, grace2);
-            LogDebug(COMPONENT_CACHE_INODE,
+            LogFullDebug(COMPONENT_CACHE_INODE,
                      "Renew Entry test of %p for DIRECTORY elapsed time=%u, grace_period_attr=%s, grace_period_dirent=%s, has_been_readdir=%u",
                      pentry, elapsed, grace, grace2,
                      pentry->object.dir.has_been_readdir);
@@ -155,7 +155,7 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
         }
       if(print)
         {
-          LogDebug(COMPONENT_CACHE_INODE,
+          LogFullDebug(COMPONENT_CACHE_INODE,
                    "Renew Entry test of %p for %s elapsed time=%u, grace_period_attr=%s",
                    pentry, type, elapsed, grace);
         }
@@ -178,7 +178,7 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
       return *pstatus;
     }
 
-  LogDebug(COMPONENT_CACHE_INODE,
+  LogMidDebug(COMPONENT_CACHE_INODE,
            "cache_inode_renew_entry use getattr/mtime checking %d, is dir "
 	   "beginning %d, has bit in mask %d, has been readdir %d state %d",
            pclient->getattr_dir_invalidation,
@@ -243,7 +243,7 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
           return *pstatus;
         }
 
-      LogDebug(COMPONENT_CACHE_INODE,
+      LogFullDebug(COMPONENT_CACHE_INODE,
                "cache_inode_renew_entry: Entry=%p, type=%d, Cached Time=%d, FSAL Time=%d",
                pentry, pentry->internal_md.type,
                pentry->attributes.mtime.seconds,
@@ -286,10 +286,10 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
 
   /* if( pclient->getattr_dir_invalidation && ... */
   /* Check for dir content expiration and/or staleness */
-  if(pentry->internal_md.type == DIRECTORY &&
-     pclient->expire_type_dirent != CACHE_INODE_EXPIRE_NEVER &&
+  if(pentry->internal_md.type == DIRECTORY &&     
      pentry->object.dir.has_been_readdir == CACHE_INODE_YES &&
-     ((current_time - entry_time >= pclient->grace_period_dirent)
+     ((pclient->expire_type_dirent != CACHE_INODE_EXPIRE_NEVER &&
+       (current_time - entry_time) >= pclient->grace_period_dirent)
       || (pentry->internal_md.valid_state == STALE)))
     {
       /* stats */
@@ -400,9 +400,10 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
   /* if( pentry->internal_md.type == DIRECTORY && ... */
   /* if the directory has not been readdir, only update its attributes */
   else if(pentry->internal_md.type == DIRECTORY &&
-          pclient->expire_type_attr != CACHE_INODE_EXPIRE_NEVER &&
           pentry->object.dir.has_been_readdir != CACHE_INODE_YES &&
-	  ((current_time - entry_time >= pclient->grace_period_attr) || (pentry->internal_md.valid_state == STALE)))
+          ((pclient->expire_type_attr != CACHE_INODE_EXPIRE_NEVER &&
+            (current_time - entry_time) >= pclient->grace_period_attr)
+           || (pentry->internal_md.valid_state == STALE)))
     {
       /* stats */
       (pclient->stat.func_stats.nb_call[CACHE_INODE_RENEW_ENTRY])++;
@@ -504,8 +505,8 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
   /* else if( pentry->internal_md.type == DIRECTORY && ... */
   /* Check for attributes expiration in other cases */
   else if(pentry->internal_md.type != DIRECTORY &&
-          pclient->expire_type_attr != CACHE_INODE_EXPIRE_NEVER &&
-	  ((current_time - entry_time >= pclient->grace_period_attr)
+          ((pclient->expire_type_attr != CACHE_INODE_EXPIRE_NEVER &&
+            (current_time - entry_time) >= pclient->grace_period_attr)
 	   || (pentry->internal_md.valid_state == STALE)))
     {
        if((pentry->internal_md.type == FS_JUNCTION) || /* ??? isn't this 'like' a dir? */
@@ -605,8 +606,8 @@ cache_inode_status_t cache_inode_renew_entry(cache_entry_t * pentry,
   /* if(  pentry->internal_md.type   != DIR_CONTINUE && ... */
   /* Check for link content expiration */
   if(pentry->internal_md.type == SYMBOLIC_LINK &&
-     pclient->expire_type_link != CACHE_INODE_EXPIRE_NEVER &&
-     ((current_time - entry_time >= pclient->grace_period_link)
+     ((pclient->expire_type_link != CACHE_INODE_EXPIRE_NEVER &&
+       (current_time - entry_time) >= pclient->grace_period_link)
       || (pentry->internal_md.valid_state == STALE)))
     {
       assert(pentry->object.symlink);

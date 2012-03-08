@@ -48,7 +48,7 @@
 #include "HashData.h"
 #include "HashTable.h"
 #include "rpc.h"
-#include "log_macros.h"
+#include "log.h"
 #include "stuff_alloc.h"
 #include "nfs4.h"
 #include "nfs_core.h"
@@ -282,6 +282,19 @@ int nfs4_op_lock(struct nfs_argop4 *op, compound_data_t * data, struct nfs_resop
           res_LOCK4.status = rc;
           LogDebug(COMPONENT_NFS_V4_LOCK,
                    "LOCK failed nfs4_Check_Stateid for existing lock owner");
+          return res_LOCK4.status;
+        }
+
+      /* Check if lock state belongs to same export */
+      if(plock_state->state_pexport != data->pexport)
+        {
+          LogEvent(COMPONENT_STATE,
+                   "Lock Owner Export Conflict, Lock held for export %d (%s), request for export %d (%s)",
+                   plock_state->state_pexport->id,
+                   plock_state->state_pexport->fullpath,
+                   data->pexport->id,
+                   data->pexport->fullpath);
+          res_LOCK4.status = STATE_INVALID_ARGUMENT;
           return res_LOCK4.status;
         }
 

@@ -42,7 +42,7 @@
 #include "rpc.h"
 #include "nfs_init.h"
 #include "stuff_alloc.h"
-#include "log_macros.h"
+#include "log.h"
 #include "fsal.h"
 #include "nfs23.h"
 #include "nfs4.h"
@@ -84,6 +84,9 @@ time_t ServerBootTime = 0;
 nfs_worker_data_t *workers_data = NULL;
 verifier4 NFS4_write_verifier;  /* NFS V4 write verifier */
 writeverf3 NFS3_write_verifier; /* NFS V3 write verifier */
+
+/* node ID used to identify an individual node in a cluster */
+ushort g_nodeid = 0;
 
 hash_table_t *ht_ip_stats[NB_MAX_WORKER_THREAD];
 nfs_start_info_t nfs_start_info;
@@ -337,6 +340,8 @@ void nfs_set_param_default()
 #ifdef _USE_NLM
   nfs_param.core_param.nsm_use_caller_name = FALSE;
 #endif
+
+  nfs_param.core_param.clustered = FALSE;
 
   /* Worker parameters : LRU */
   nfs_param.worker_param.lru_param.nb_entry_prealloc = NB_PREALLOC_LRU_WORKER;
@@ -1305,11 +1310,8 @@ int nfs_set_param_from_conf(nfs_start_info_t * p_start_info)
     }
   else if(rc == 0)
     {
-      LogCrit(COMPONENT_INIT,
+      LogWarn(COMPONENT_INIT,
               "No export entries found in configuration file !!!");
-#ifndef _USE_FUSE
-      return -1;
-#endif
     }
 
   LogEvent(COMPONENT_INIT, "Configuration file successfully parsed");
@@ -1319,7 +1321,6 @@ int nfs_set_param_from_conf(nfs_start_info_t * p_start_info)
   config_Free(config_struct);
 
   return 0;
-
 }
 
 /**
@@ -2135,20 +2136,22 @@ static void nfs_Init(const nfs_start_info_t * p_start_info)
 
   /* initialize grace and read in the client IDs */
   nfs4_init_grace();
-  nfs4_load_recov_clids();
+  nfs4_load_recov_clids(0);
 
   /* Start grace period */
-  nfs4_start_grace();
+  nfs4_start_grace(NULL);
 
   LogInfo(COMPONENT_INIT,
           "Cache Inode root entries successfully created");
 
   /* Set accesscheck_support value to FSAL context object. */
 #ifdef _USE_NFS4_ACL
-  nfs_param.pexportlist->FS_export_context.fe_static_fs_info->accesscheck_support =
-  !nfs_param.cache_layers_param.cache_inode_client_param.use_test_access;
-  LogDebug(COMPONENT_INIT, "accesscheck_support is set to %d",
+  if (nfs_param.pexportlist)
+    {
+      nfs_param.pexportlist->FS_export_context.fe_static_fs_info->accesscheck_support = !nfs_param.cache_layers_param.cache_inode_client_param.use_test_access;
+      LogDebug(COMPONENT_INIT, "accesscheck_support is set to %d",
            nfs_param.pexportlist->FS_export_context.fe_static_fs_info->accesscheck_support);
+    }
 #endif
 
 }                               /* nfs_Init */

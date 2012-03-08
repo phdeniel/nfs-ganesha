@@ -43,7 +43,7 @@
 #endif                          /* _SOLARIS */
 
 #include "LRU_List.h"
-#include "log_macros.h"
+#include "log.h"
 #include "HashData.h"
 #include "HashTable.h"
 #include "fsal.h"
@@ -176,7 +176,7 @@ cache_entry_t *cache_inode_get_located(cache_inode_fsal_data_t * pfsdata,
       if(pfsdata->cookie != DIR_START)
         {
           /* added for sanity check */
-          LogFullDebug(COMPONENT_CACHE_INODE,
+          LogDebug(COMPONENT_CACHE_INODE,
                        "cache_inode_get: pfsdata->cookie != DIR_START (=%"PRIu64") on object whose type is %u",
                        pfsdata->cookie,
                        cache_inode_fsal_type_convert(fsal_attributes.type));

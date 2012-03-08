@@ -86,7 +86,7 @@
 #include <netdb.h>
 #include <ctype.h>
 #include "rpc.h"
-#include "log_functions.h"
+#include "log.h"
 #include "stuff_alloc.h"
 #include "fsal.h"
 #include "nfs23.h"
@@ -464,6 +464,10 @@ int nfs_read_core_conf(config_file_t in_config, nfs_core_parameter_t * pparam)
           pparam->nsm_use_caller_name = StrToBoolean(key_value);
         }
 #endif
+      else if(!strcasecmp(key_name, "Clustered"))
+        {
+          pparam->clustered = StrToBoolean(key_value);
+        }
       else
         {
           LogCrit(COMPONENT_CONFIG,

@@ -289,6 +289,7 @@ typedef struct nfs_core_param__
 #ifdef _USE_NLM
   bool_t nsm_use_caller_name;
 #endif
+  bool_t clustered;
 } nfs_core_parameter_t;
 
 typedef struct nfs_ip_name_param__
@@ -399,22 +400,6 @@ typedef struct nfs_param__
 #endif
 
 } nfs_parameter_t;
-
-typedef struct nfs_worker_stat__
-{
-  unsigned int nb_total_req;
-  unsigned int nb_udp_req;
-  unsigned int nb_tcp_req;
-  nfs_request_stat_t stat_req;
-
-  /* the last time stat have been retrieved from buddy and FSAL layers */
-  time_t last_stat_update;
-  fsal_statistics_t fsal_stats;
-#ifndef _NO_BUDDY_SYSTEM
-  buddy_stats_t buddy_stats;
-#endif
-
-} nfs_worker_stat_t;
 
 typedef struct nfs_dupreq_stat__
 {
@@ -594,6 +579,7 @@ extern time_t ServerBootTime;
 extern nfs_worker_data_t *workers_data;
 extern char config_path[MAXPATHLEN];
 extern char pidfile_path[MAXPATHLEN] ;
+extern ushort g_nodeid;
 
 typedef enum process_status
 {
@@ -729,6 +715,7 @@ int export_client_matchv6(struct in6_addr *paddrv6,
 void admin_replace_exports();
 int CleanUpExportContext(fsal_export_context_t * p_export_context);
 exportlist_t *RemoveExportEntry(exportlist_t * exportEntry);
+exportlist_t *GetExportEntry(char *exportPath);
 
 /* Tools */
 unsigned int get_rpc_xid(struct svc_req *reqp);

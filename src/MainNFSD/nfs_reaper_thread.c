@@ -32,12 +32,13 @@
 
 #include <pthread.h>
 #include <unistd.h>
-#include "log_macros.h"
+#include "log.h"
 #include "stuff_alloc.h"
 #include "nfs4.h"
 #include "sal_functions.h"
 #include "nfs_proto_functions.h"
 #include "nfs_core.h"
+#include "log.h"
 
 unsigned int reaper_delay = 10;
 
@@ -46,7 +47,7 @@ void *reaper_thread(void *unused)
         hash_table_t *ht = ht_client_id;
         struct rbt_head *head_rbt;
         hash_data_t *pdata = NULL;
-        int i;
+        int i, v4;
         struct rbt_node *pn;
         nfs_client_id_t *clientp;
 
@@ -83,8 +84,13 @@ restart:
 
                                 clientp =
                                     (nfs_client_id_t *)pdata->buffval.pdata;
+                                /*
+                                 * little hack: only want to reap v4 clients
+                                 * 4.1 initializess this field to '1'
+                                 */
+                                v4 = (clientp->create_session_sequence == 0);
                                 if (clientp->confirmed != EXPIRED_CLIENT_ID &&
-                                    nfs4_is_lease_expired(clientp)) {
+                                    nfs4_is_lease_expired(clientp) && v4) {
                                         V_w(&(ht->array_lock[i]));
                                         LogDebug(COMPONENT_MAIN,
                                             "NFS reaper: expire client %s",

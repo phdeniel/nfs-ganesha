@@ -46,7 +46,7 @@
 
 #include "cidr.h"
 #include "rpc.h"
-#include "log_macros.h"
+#include "log.h"
 #include "stuff_alloc.h"
 #include "fsal.h"
 #include "nfs23.h"
@@ -623,6 +623,30 @@ int parseAccessParam(char *var_name, char *var_value,
   return rc;
 }
 
+bool_t fsal_specific_checks(exportlist_t *p_entry)
+{
+  #ifdef _USE_GPFS
+  p_entry->use_fsal_up = TRUE;
+
+  if (strncmp(p_entry->fsal_up_type, "DUMB", 4) != 0)
+    {
+      LogWarn(COMPONENT_CONFIG,
+              "NFS READ_EXPORT: ERROR: %s must be \"DUMB\" when using GPFS."
+              " Setting it to \"DUMB\"", CONF_EXPORT_FSAL_UP_TYPE);
+      strncpy(p_entry->fsal_up_type,"DUMB", 4);
+    }
+  if (p_entry->use_ganesha_write_buffer != FALSE)
+    {
+      LogWarn(COMPONENT_CONFIG,
+              "NFS READ_EXPORT: ERROR: %s must be FALSE when using GPFS. "
+              "Setting it to FALSE.", CONF_EXPORT_USE_GANESHA_WRITE_BUFFER);
+      p_entry->use_ganesha_write_buffer = FALSE;
+    }
+  #endif
+
+  return TRUE;
+}
+
 /**
  * BuildExportEntry : builds an export entry from configutation file.
  * Don't stop immediately on error,
@@ -664,6 +688,7 @@ static int BuildExportEntry(config_item_t block, exportlist_t ** pp_export)
   p_entry->anonymous_uid = (uid_t) ANON_UID;
   p_entry->anonymous_gid = (gid_t) ANON_GID;
   p_entry->use_commit = TRUE;
+  p_entry->use_ganesha_write_buffer = FALSE;
 
   /* Defaults for FSAL_UP. It is ok to leave the filter list NULL
    * even if we enable the FSAL_UP. */
@@ -676,6 +701,12 @@ static int BuildExportEntry(config_item_t block, exportlist_t ** pp_export)
   /* We don't create the thread until all exports are parsed. */
   memset(&p_entry->fsal_up_thr, 0, sizeof(pthread_t));
 #endif /* _USE_FSAL_UP */
+
+  p_entry->worker_stats = (nfs_worker_stat_t *)
+                          Mem_Alloc(sizeof(nfs_worker_stat_t) *
+                                    sizeof(nfs_param.core_param.nb_worker));
+  memset(p_entry->worker_stats, 0,
+         sizeof(nfs_worker_stat_t) * sizeof(nfs_param.core_param.nb_worker));
 
   /* by default, we support auth_none and auth_sys */
   p_entry->options |= EXPORT_OPTION_AUTH_NONE | EXPORT_OPTION_AUTH_UNIX;
@@ -2134,6 +2165,13 @@ static int BuildExportEntry(config_item_t block, exportlist_t ** pp_export)
    }
 #endif
 
+  /* Here we can make sure certain options are turned on for specific FSALs */
+  if (!fsal_specific_checks(p_entry))
+    {
+      LogCrit(COMPONENT_CONFIG,
+               "NFS READ_EXPORT: ERROR: Found conflicts in export entry.");
+      return -1;
+    }
 
   *pp_export = p_entry;
 
@@ -3094,6 +3132,60 @@ exportlist_t *RemoveExportEntry(exportlist_t * exportEntry)
   if (exportEntry->proot_handle != NULL)
     Mem_Free(exportEntry->proot_handle);
 
+  if (exportEntry->worker_stats != NULL)
+    Mem_Free(exportEntry->worker_stats);
+
   Mem_Free(exportEntry);
   return next;
+}
+
+exportlist_t *GetExportEntry(char *exportPath)
+{
+  exportlist_t *pexport = NULL;
+  exportlist_t *p_current_item = NULL;
+  char tmplist_path[MAXPATHLEN];
+  char tmpexport_path[MAXPATHLEN];
+  int found = 0;
+
+  pexport = nfs_param.pexportlist;
+
+  /*
+   * Find the export for the dirname (using as well Path or Tag )
+   */
+  for(p_current_item = pexport; p_current_item != NULL;
+      p_current_item = p_current_item->next)
+  {
+    LogDebug(COMPONENT_CONFIG, "full path %s, export path %s",
+             p_current_item->fullpath, exportPath);
+
+    /* Make sure the path in export entry ends with a '/', if not adds one */
+    if(p_current_item->fullpath[strlen(p_current_item->fullpath) - 1] == '/')
+      strncpy(tmplist_path, p_current_item->fullpath, MAXPATHLEN);
+    else
+      snprintf(tmplist_path, MAXPATHLEN, "%s/", p_current_item->fullpath);
+
+    /* Make sure that the argument from MNT ends with a '/', if not adds one */
+    if(exportPath[strlen(exportPath) - 1] == '/')
+      strncpy(tmpexport_path, exportPath, MAXPATHLEN);
+    else
+      snprintf(tmpexport_path, MAXPATHLEN, "%s/", exportPath);
+
+    /* Is tmplist_path a subdirectory of tmpexport_path ? */
+    if(!strncmp(tmplist_path, tmpexport_path, strlen(tmplist_path)))
+    {
+      found = 1;
+      break;
+    }
+  }
+
+  if(found)
+    {
+      LogDebug(COMPONENT_CONFIG, "returning export %s", p_current_item->fullpath);
+      return p_current_item;
+    }
+  else
+    {
+      LogDebug(COMPONENT_CONFIG, "returning export NULL");
+      return NULL;
+    }
 }
