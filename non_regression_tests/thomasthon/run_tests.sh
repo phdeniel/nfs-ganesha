@@ -4,6 +4,18 @@ CURDIR=`dirname $0`
 # include test framework
 . $CURDIR/test_framework.inc
 
+if [[ -r ./$CURDIR/test_variables.rc ]]  ; then
+   .  ./$CURDIR/test_variables.rc
+else
+  echo "  /!\\ Please make test's configuration in  $CURDIR/test_variables.rc"
+  exit 1 
+fi
+
+# The script uses "su", it has to be run as root
+if [[ `id -u` != 0 ]] ; then
+  echo "  /!\\ This script must be run as root"
+  exit 1 
+fi
 
 ########################## TEST HELPERS ##################
 
@@ -50,6 +62,24 @@ function do_as_user
     su - $user_arg -c "$action_arg"
 }
 
+function do_ssh_root
+{
+    remote=$1
+    action_arg=$2
+    ssh root@$remote $action_arg 
+}
+
+function do_mount
+{
+  # example : do_mount vers=3,lock server:/tmp /mnt
+  mount_opt=$1
+  server_url=$2
+  mntpath=$3
+
+  mount -o $mount_opt $server_url $mntpath || error "ERROR mounting $server_url on $mntpath with option $mount_opt"
+}
+
+
 function empty_client_cache
 {
     [ "$DEBUG" = "1" ] && echo "emptying client cache (data+metadata)"
@@ -88,21 +118,20 @@ function create_tree
 function test1
 {
     # create user directory
-    user=$(get_test_user)
-    dir="$TEST_DIR/dir.$user.$$"
+    dir="$TEST_DIR/dir.$USER.$$"
     file="$dir/test_file"
 
     mkdir $dir || error "error mkdir $dir"
-    chown $user $dir
+    chown $USER $dir
 
     # create a file as user in this dir
-    do_as_user $user "dd if=/dev/zero of=$file bs=1M count=1" || "error writing $file"
+    do_as_user $USER "dd if=/dev/zero of=$file bs=1M count=1" || "error writing $file"
 
     # set file 444
     chmod 444 "$file" || error "error chmod 444 $file"
 
     # copy the file as user
-    do_as_user $user "cp $file $file.copy" || "error copying $file to $file.copy"
+    do_as_user $USER "cp $file $file.copy" || "error copying $file to $file.copy"
 
     ls -l $file.copy || error "target file $file.copy not found"
     
@@ -127,12 +156,65 @@ function test2
     rm -r $dir || error "couldn't remove $dir"
 }
 
+### test3b : cthon04's basic tests
+function test3b
+{
+   dir="$TEST_DIR/dir.$$"
+   mkdir -p $dir
+
+   cd $CTHON04_DIR/basic
+   export NFSTESTDIR=$dir   
+
+   ./runtests || error "ERROR while running cthon04's basic tests"
+}
+
+### test3g : cthon04's general tests
+function test3g
+{
+   dir="$TEST_DIR/dir.$$"
+   mkdir -p $dir
+
+   cd $CTHON04_DIR/general
+   export NFSTESTDIR=$dir   
+
+   ./runtests || error "ERROR while running cthon04's general tests"
+}
+
+### test3s : cthon04's special tests
+function test3s
+{
+   dir="$TEST_DIR/dir.$$"
+   mkdir -p $dir
+
+   cd $CTHON04_DIR/special
+   export NFSTESTDIR=$dir   
+
+   ./runtests || error "ERROR while running cthon04's special tests"
+}
+
+### test3l : cthon04's lock tests
+function test3l
+{
+   dir="$TEST_DIR/dir.$$"
+   mkdir -p $dir
+
+   cd $CTHON04_DIR/lock
+   export NFSTESTDIR=$dir   
+
+   ./runtests || error "ERROR while running cthon04's lock tests"
+}
+
+
 # syntax: ONLY=2,3 ./run_test.sh [-j] <test_dir>
 
 ######################## DEFINE TEST LIST HERE ####################
 
-run_test test1  "copy file with 444 mode"
-run_test test2  "rm -rf of wide namespace"
+run_test test1   "copy file with 444 mode"
+run_test test2   "rm -rf of wide namespace"
+run_test test3b  "cthon04's basic tests"
+run_test test3g  "cthon04's general tests"
+run_test test3s  "cthon04's special tests"
+run_test test3l  "cthon04's lock tests"
 
 # display test summary / generate outputs
 test_finalize
