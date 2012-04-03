@@ -68,7 +68,7 @@
  * 
  * @param parg    [IN]    pointer to nfs arguments union
  * @param pexport [IN]    pointer to nfs export list 
- * @param pcontext   [IN]    credentials to be used for this request
+ * @param creds   [IN]    credentials to be used for this request
  * @param pclient [INOUT] client resource to be used
  * @param preq    [IN]    pointer to SVC request related to this call 
  * @param ht      [INOUT] cache inode hash table
@@ -80,7 +80,7 @@
 
 int nfs2_Writecache(nfs_arg_t * parg,
                     exportlist_t * pexport,
-                    fsal_op_context_t * pcontext,
+                    struct user_cred *creds,
                     cache_inode_client_t * pclient,
                     hash_table_t * ht, struct svc_req *preq, nfs_res_t * pres)
 {
