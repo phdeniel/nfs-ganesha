@@ -73,7 +73,7 @@
  *
  * @param parg    [IN]    pointer to nfs arguments union
  * @param pexport [IN]    pointer to nfs export list 
- * @param pcontext   [IN]    credentials to be used for this request
+ * @param creds   [IN]    credentials to be used for this request
  * @param pclient [INOUT] client resource to be used
  * @param ht      [INOUT] cache inode hash table
  * @param preq    [IN]    pointer to SVC request related to this call 
@@ -87,7 +87,7 @@
 
 int nfs_Symlink(nfs_arg_t * parg /* IN  */ ,
                 exportlist_t * pexport /* IN  */ ,
-                fsal_op_context_t * pcontext /* IN  */ ,
+                struct user_cred *creds /* IN  */ ,
                 cache_inode_client_t * pclient /* IN  */ ,
                 hash_table_t * ht /* INOUT */ ,
                 struct svc_req *preq /* IN  */ ,
@@ -111,7 +111,7 @@ int nfs_Symlink(nfs_arg_t * parg /* IN  */ ,
   int rc;
   cache_inode_status_t cache_status;
   cache_inode_status_t cache_status_parent;
-  fsal_handle_t *pfsal_handle;
+  struct fsal_obj_handle *pfsal_handle;
 #ifdef _USE_QUOTA
   fsal_status_t fsal_status ;
 #endif
@@ -161,7 +161,7 @@ int nfs_Symlink(nfs_arg_t * parg /* IN  */ ,
                                          &(pres->res_symlink3.status),
                                          NULL,
                                          &parent_attr,
-                                         pcontext, pclient, ht, &rc)) == NULL)
+                                         pexport, pclient, ht, &rc)) == NULL)
     {
       /* Stale NFS FH ? */
       return rc;
@@ -195,9 +195,10 @@ int nfs_Symlink(nfs_arg_t * parg /* IN  */ ,
 
 #ifdef _USE_QUOTA
     /* if quota support is active, then we should check is the FSAL allows inode creation or not */
-    fsal_status = FSAL_check_quota( pexport->fullpath, 
-                                    FSAL_QUOTA_INODES,
-                                    FSAL_OP_CONTEXT_TO_UID( pcontext ) ) ;
+  fsal_status = pexport->export_hdl->ops->check_quota(pexport->export_hdl,
+						      pexport->fullpath, 
+						      FSAL_QUOTA_INODES,
+						      creds) ;
     if( FSAL_IS_ERROR( fsal_status ) )
      {
 
@@ -253,7 +254,7 @@ int nfs_Symlink(nfs_arg_t * parg /* IN  */ ,
                                               &create_arg,
                                               &attr_symlink,
                                               ht,
-                                              pclient, pcontext, &cache_status)) != NULL)
+                                              pclient, creds, &cache_status)) != NULL)
         {
           switch (preq->rq_vers)
             {
@@ -301,10 +302,10 @@ int nfs_Symlink(nfs_arg_t * parg /* IN  */ ,
                                          &attributes_symlink,
                                          ht,
                                          pclient,
-                                         pcontext, &cache_status) != CACHE_INODE_SUCCESS)
+                                         creds, &cache_status) != CACHE_INODE_SUCCESS)
                     {
                       /* If we are here, there was an error */
-                      nfs_SetFailedStatus(pcontext, pexport,
+                      nfs_SetFailedStatus(pexport,
                                           preq->rq_vers,
                                           cache_status,
                                           &pres->res_dirop2.status,
@@ -343,7 +344,6 @@ int nfs_Symlink(nfs_arg_t * parg /* IN  */ ,
                                      &attr_parent_after,
                                      ht,
                                      pclient,
-                                     pcontext,
                                      &cache_status_parent) != CACHE_INODE_SUCCESS)
                 {
                   Mem_Free((char *)pres->res_symlink3.SYMLINK3res_u.resok.obj.
@@ -357,13 +357,13 @@ int nfs_Symlink(nfs_arg_t * parg /* IN  */ ,
               pres->res_symlink3.SYMLINK3res_u.resok.obj.handle_follows = TRUE;
 
               /* Build entry attributes */
-              nfs_SetPostOpAttr(pcontext, pexport,
+              nfs_SetPostOpAttr(pexport,
                                 symlink_pentry,
                                 &attr_symlink,
                                 &(pres->res_symlink3.SYMLINK3res_u.resok.obj_attributes));
 
               /* Build Weak Cache Coherency data */
-              nfs_SetWccData(pcontext, pexport,
+              nfs_SetWccData(pexport,
                              parent_pentry,
                              ppre_attr,
                              &attr_parent_after,
@@ -383,7 +383,7 @@ int nfs_Symlink(nfs_arg_t * parg /* IN  */ ,
       return NFS_REQ_DROP;
     }
 
-  nfs_SetFailedStatus(pcontext, pexport,
+  nfs_SetFailedStatus(pexport,
                       preq->rq_vers,
                       cache_status,
                       &pres->res_stat2,

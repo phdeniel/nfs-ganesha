@@ -72,7 +72,7 @@
  *
  * @param parg    [IN]    pointer to nfs arguments union
  * @param pexport [IN]    pointer to nfs export list 
- * @param pcontext   [IN]    credentials to be used for this request
+ * @param creds   [IN]    credentials to be used for this request
  * @param pclient [INOUT] client resource to be used
  * @param ht      [INOUT] cache inode hash table
  * @param preq    [IN]    pointer to SVC request related to this call 
@@ -86,7 +86,7 @@
 
 int nfs_Read(nfs_arg_t * parg,
              exportlist_t * pexport,
-             fsal_op_context_t * pcontext,
+             struct user_cred *creds,
              cache_inode_client_t * pclient,
              hash_table_t * ht, struct svc_req *preq, nfs_res_t * pres)
 {
@@ -147,20 +147,20 @@ int nfs_Read(nfs_arg_t * parg,
                                   NULL,
                                   &(pres->res_read2.status),
                                   &(pres->res_read3.status),
-                                  NULL, &pre_attr, pcontext, pclient, ht, &rc)) == NULL)
+                                  NULL, &pre_attr, pexport, pclient, ht, &rc)) == NULL)
     {
       /* Stale NFS FH ? */
       return rc;
     }
 
   if((preq->rq_vers == NFS_V3) && (nfs3_Is_Fh_Xattr(&(parg->arg_read3.file))))
-    return nfs3_Read_Xattr(parg, pexport, pcontext, pclient, ht, preq, pres);
+    return nfs3_Read_Xattr(parg, pexport, creds, pclient, ht, preq, pres);
 
   if(cache_inode_access(pentry,
                         FSAL_READ_ACCESS,
                         ht,
                         pclient,
-                        pcontext,
+                        creds,
                         &cache_status) != CACHE_INODE_SUCCESS)
     {
       switch (preq->rq_vers)
@@ -220,7 +220,7 @@ int nfs_Read(nfs_arg_t * parg,
           break;
         }
 
-      nfs_SetFailedStatus(pcontext, pexport,
+      nfs_SetFailedStatus(pexport,
                           preq->rq_vers,
                           cache_status,
                           &pres->res_read2.status,
@@ -274,7 +274,7 @@ int nfs_Read(nfs_arg_t * parg,
               break;
             }
 
-          nfs_SetFailedStatus(pcontext, pexport,
+          nfs_SetFailedStatus(pexport,
                               preq->rq_vers,
                               cache_status,
                               &pres->res_read2.status,
@@ -334,7 +334,7 @@ int nfs_Read(nfs_arg_t * parg,
          && (pentry->object.file.pentry_content == NULL))
         {
           /* Entry is not in datacache, but should be in, cache it */
-          cache_inode_add_data_cache(pentry, ht, pclient, pcontext, &cache_status);
+          cache_inode_add_data_cache(pentry, ht, pclient, &cache_status);
           if((cache_status != CACHE_INODE_SUCCESS) &&
              (cache_status != CACHE_INODE_CACHE_CONTENT_EXISTS))
             {
@@ -350,7 +350,7 @@ int nfs_Read(nfs_arg_t * parg,
                   return NFS_REQ_DROP;
                 }
 
-              nfs_SetFailedStatus(pcontext, pexport,
+              nfs_SetFailedStatus(pexport,
                                   preq->rq_vers,
                                   cache_status,
                                   &pres->res_read2.status,
@@ -372,7 +372,7 @@ int nfs_Read(nfs_arg_t * parg,
                           data,
                           &eof_met,
                           ht,
-                          pclient, pcontext, TRUE, &cache_status) == CACHE_INODE_SUCCESS)
+                          pclient, creds, TRUE, &cache_status) == CACHE_INODE_SUCCESS)
 
         {
           switch (preq->rq_vers)
@@ -397,7 +397,7 @@ int nfs_Read(nfs_arg_t * parg,
                 pres->res_read3.READ3res_u.resok.eof = TRUE;
 
               /* Build Post Op Attributes */
-              nfs_SetPostOpAttr(pcontext, pexport,
+              nfs_SetPostOpAttr(pexport,
                                 pentry,
                                 &attr,
                                 &(pres->res_read3.READ3res_u.resok.file_attributes));
@@ -422,7 +422,7 @@ int nfs_Read(nfs_arg_t * parg,
       return NFS_REQ_DROP;
     }
 
-  nfs_SetFailedStatus(pcontext, pexport,
+  nfs_SetFailedStatus(pexport,
                       preq->rq_vers,
                       cache_status,
                       &pres->res_read2.status,

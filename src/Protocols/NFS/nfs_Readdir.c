@@ -70,7 +70,7 @@
  *
  * @param parg    [IN]    pointer to nfs arguments union
  * @param pexport [IN]    pointer to nfs export list
- * @param pcontext   [IN]    credentials to be used for this request
+ * @param creds   [IN]    credentials to be used for this request
  * @param pclient [INOUT] client resource to be used
  * @param ht      [INOUT] cache inode hash table
  * @param preq    [IN]    pointer to SVC request related to this call
@@ -84,7 +84,7 @@
 
 int nfs_Readdir(nfs_arg_t * parg,
                 exportlist_t * pexport,
-                fsal_op_context_t * pcontext,
+                struct user_cred *creds,
                 cache_inode_client_t * pclient,
                 hash_table_t * ht, struct svc_req *preq, nfs_res_t * pres)
 {
@@ -108,7 +108,7 @@ int nfs_Readdir(nfs_arg_t * parg,
   cache_inode_endofdir_t eod_met;
   cache_inode_status_t cache_status;
   cache_inode_status_t cache_status_gethandle;
-  fsal_handle_t *pfsal_handle;
+  struct fsal_obj_handle *pfsal_handle;
   struct fsal_handle_desc fh_desc;
   int dir_pentry_unlock = FALSE;
   unsigned int delta = 0;
@@ -146,14 +146,14 @@ int nfs_Readdir(nfs_arg_t * parg,
                                       &(pres->res_readdir2.status),
                                       &(pres->res_readdir3.status),
                                       NULL,
-                                      &dir_attr, pcontext, pclient, ht, &rc)) == NULL)
+                                      &dir_attr, pexport, pclient, ht, &rc)) == NULL)
     {
       /* Stale NFS FH ? */
       return rc;
     }
 
   if((preq->rq_vers == NFS_V3) && (nfs3_Is_Fh_Xattr(&(parg->arg_readdir3.dir))))
-    return nfs3_Readdir_Xattr(parg, pexport, pcontext, pclient, ht, preq, pres);
+    return nfs3_Readdir_Xattr(parg, pexport, creds, pclient, ht, preq, pres);
 
   switch (preq->rq_vers)
     {
@@ -333,7 +333,7 @@ int nfs_Readdir(nfs_arg_t * parg,
                          ht,
                          &dir_pentry_unlock,
                          pclient,
-                         pcontext,
+                         creds,
                          &cache_status) == CACHE_INODE_SUCCESS)
     {
 
@@ -363,7 +363,7 @@ int nfs_Readdir(nfs_arg_t * parg,
               pres->res_readdir3.status = NFS3_OK;
               RES_READDIR3_OK.reply.entries = NULL;
               RES_READDIR3_OK.reply.eof = TRUE;
-              nfs_SetPostOpAttr(pcontext, pexport,
+              nfs_SetPostOpAttr(pexport,
                                 dir_pentry, &dir_attr, &(RES_READDIR3_OK.dir_attributes));
               memcpy(RES_READDIR3_OK.cookieverf, cookie_verifier, sizeof(cookieverf3));
               break;
@@ -441,10 +441,9 @@ int nfs_Readdir(nfs_arg_t * parg,
                         }
 		      fh_desc.start = (caddr_t) & (RES_READDIR2_OK.entries[0].fileid);
 		      fh_desc.len = sizeof(RES_READDIR2_OK.entries[0].fileid);
-                      FSAL_DigestHandle(FSAL_GET_EXP_CTX(pcontext),
-                                        FSAL_DIGEST_FILEID2,
-                                        pfsal_handle,
-                                        &fh_desc);
+		      (void)pfsal_handle->ops->handle_digest(pfsal_handle,
+							     FSAL_DIGEST_FILEID2,
+							     &fh_desc);
 
                       RES_READDIR2_OK.entries[0].name = entry_name_array[0];
                       strcpy(RES_READDIR2_OK.entries[0].name, ".");
@@ -476,7 +475,7 @@ int nfs_Readdir(nfs_arg_t * parg,
                       if((pentry_dot_dot = cache_inode_lookupp_sw(dir_pentry,
                                                                   ht,
                                                                   pclient,
-                                                                  pcontext,
+                                                                  creds,
                                                                   &cache_status_gethandle, 
                                                                   !dir_pentry_unlock) )
                          == NULL)
@@ -517,10 +516,9 @@ int nfs_Readdir(nfs_arg_t * parg,
 
 		      fh_desc.start = (caddr_t) & (RES_READDIR2_OK.entries[delta].fileid);
 		      fh_desc.len = sizeof(RES_READDIR2_OK.entries[delta].fileid);
-                      FSAL_DigestHandle(FSAL_GET_EXP_CTX(pcontext),
-                                        FSAL_DIGEST_FILEID2,
-                                        pfsal_handle,
-                                        &fh_desc);
+		      (void)pfsal_handle->ops->handle_digest(pfsal_handle,
+							     FSAL_DIGEST_FILEID2,
+							     &fh_desc);
 
                       RES_READDIR2_OK.entries[delta].name = entry_name_array[delta];
                       strcpy(RES_READDIR2_OK.entries[delta].name, "..");
@@ -544,6 +542,7 @@ int nfs_Readdir(nfs_arg_t * parg,
               for(i = delta; i < num_entries + delta; i++)
                 {
                   unsigned long needed;
+		  struct fsal_obj_handle *entry_hdl;
 
                   needed =
                       sizeof(entry2) +
@@ -571,14 +570,13 @@ int nfs_Readdir(nfs_arg_t * parg,
                         }
                       break;
                     }
+		  entry_hdl = cache_inode_get_fsal_handle(dirent_array[i - delta]->pentry,
+							  &cache_status_gethandle);
 		  fh_desc.start = (caddr_t) & (RES_READDIR2_OK.entries[i].fileid);
 		  fh_desc.len = sizeof(RES_READDIR2_OK.entries[i].fileid);
-                  FSAL_DigestHandle(FSAL_GET_EXP_CTX(pcontext),
-                                    FSAL_DIGEST_FILEID2,
-                                    cache_inode_get_fsal_handle(
-                                        dirent_array[i - delta]->pentry,
-                                        &cache_status_gethandle),
-                                    &fh_desc);
+		  (void)entry_hdl->ops->handle_digest(entry_hdl,
+						      FSAL_DIGEST_FILEID2,
+						      &fh_desc);
 
                   FSAL_name2str(&dirent_array[i - delta]->name,
                                 entry_name_array[i],
@@ -658,12 +656,11 @@ int nfs_Readdir(nfs_arg_t * parg,
                           return NFS_REQ_OK;
                         }
 
-		      fh_desc.start = (caddr_t) & (RES_READDIR3_OK.reply.entries[0].fileid);
+		      fh_desc.start = (caddr_t) &(RES_READDIR3_OK.reply.entries[0].fileid);
 		      fh_desc.len = sizeof(RES_READDIR3_OK.reply.entries[0].fileid);
-                      FSAL_DigestHandle(FSAL_GET_EXP_CTX(pcontext),
-                                        FSAL_DIGEST_FILEID3,
-                                        pfsal_handle,
-                                        &fh_desc);
+		      (void)pfsal_handle->ops->handle_digest(pfsal_handle,
+							     FSAL_DIGEST_FILEID3,
+							     &fh_desc);
 
                       RES_READDIR3_OK.reply.entries[0].name = entry_name_array[0];
                       strcpy(RES_READDIR3_OK.reply.entries[0].name, ".");
@@ -695,7 +692,7 @@ int nfs_Readdir(nfs_arg_t * parg,
                       if((pentry_dot_dot = cache_inode_lookupp_sw(dir_pentry,
                                                                ht,
                                                                pclient,
-                                                               pcontext,
+                                                               creds,
                                                                &cache_status_gethandle,
                                                                !dir_pentry_unlock))
                          == NULL)
@@ -742,10 +739,9 @@ int nfs_Readdir(nfs_arg_t * parg,
 
 		      fh_desc.start = (caddr_t) & (RES_READDIR3_OK.reply.entries[delta].fileid);
 		      fh_desc.len = sizeof(RES_READDIR3_OK.reply.entries[delta].fileid);
-                      FSAL_DigestHandle(FSAL_GET_EXP_CTX(pcontext),
-                                        FSAL_DIGEST_FILEID3,
-                                        pfsal_handle,
-                                        &fh_desc);
+		      (void)pfsal_handle->ops->handle_digest(pfsal_handle,
+							     FSAL_DIGEST_FILEID3,
+							     &fh_desc);
 
                       RES_READDIR3_OK.reply.entries[delta].name = entry_name_array[delta];
                       strcpy(RES_READDIR3_OK.reply.entries[delta].name, "..");
@@ -767,6 +763,8 @@ int nfs_Readdir(nfs_arg_t * parg,
               for(i = delta; i < num_entries + delta; i++)
                 {
                   unsigned long needed;
+		  struct fsal_obj_handle *entry_hdl;
+
                   needed =
                       sizeof(entry3) +
                       ((strlen(dirent_array[i - delta]->name.name) + 3) & ~3);
@@ -793,14 +791,13 @@ int nfs_Readdir(nfs_arg_t * parg,
                         }
                       break;
                     }
+		  entry_hdl = cache_inode_get_fsal_handle(dirent_array[i - delta]->pentry,
+							  &cache_status_gethandle);
 		  fh_desc.start = (caddr_t) & (RES_READDIR3_OK.reply.entries[i].fileid);
 		  fh_desc.len = sizeof(RES_READDIR3_OK.reply.entries[i].fileid);
-                  FSAL_DigestHandle(FSAL_GET_EXP_CTX(pcontext),
-                                    FSAL_DIGEST_FILEID3,
-                                    cache_inode_get_fsal_handle(
-                                        dirent_array[i - delta]->pentry,
-                                        &cache_status_gethandle),
-                                    &fh_desc);
+		  (void)entry_hdl->ops->handle_digest(entry_hdl,
+						      FSAL_DIGEST_FILEID3,
+						      &fh_desc);
 
                   FSAL_name2str(&dirent_array[i - delta]->name,
                                 entry_name_array[i],
@@ -829,7 +826,7 @@ int nfs_Readdir(nfs_arg_t * parg,
 
               RES_READDIR3_OK.reply.eof = FALSE;        /* the actual value will be set in post treatments */
 
-              nfs_SetPostOpAttr(pcontext, pexport,
+              nfs_SetPostOpAttr(pexport,
                                 dir_pentry, &dir_attr, &(RES_READDIR3_OK.dir_attributes));
 
               memcpy(RES_READDIR3_OK.cookieverf, cookie_verifier, sizeof(cookieverf3));
@@ -861,7 +858,7 @@ int nfs_Readdir(nfs_arg_t * parg,
                 case NFS_V3:
                   pres->res_readdir3.status = NFS3_OK;
                   RES_READDIR3_OK.reply.eof = TRUE;
-                  nfs_SetPostOpAttr(pcontext, pexport,
+                  nfs_SetPostOpAttr(pexport,
                                     dir_pentry,
                                     &dir_attr, &(RES_READDIR3_OK.dir_attributes));
                   memcpy(RES_READDIR3_OK.cookieverf, cookie_verifier,
@@ -892,7 +889,7 @@ int nfs_Readdir(nfs_arg_t * parg,
       return NFS_REQ_DROP;
     }
 
-  nfs_SetFailedStatus(pcontext, pexport,
+  nfs_SetFailedStatus(pexport,
                       preq->rq_vers,
                       cache_status,
                       &pres->res_readdir2.status,

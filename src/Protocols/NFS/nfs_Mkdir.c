@@ -72,7 +72,7 @@
  *
  * @param parg    [IN]    pointer to nfs arguments union
  * @param pexport [IN]    pointer to nfs export list 
- * @param pcontext   [IN]    credentials to be used for this request
+ * @param creds   [IN]    credentials to be used for this request
  * @param pclient [INOUT] client resource to be used
  * @param ht      [INOUT] cache inode hash table
  * @param preq    [IN]    pointer to SVC request related to this call 
@@ -86,7 +86,7 @@
 
 int nfs_Mkdir(nfs_arg_t * parg,
               exportlist_t * pexport,
-              fsal_op_context_t * pcontext,
+              struct user_cred *creds,
               cache_inode_client_t * pclient,
               hash_table_t * ht, struct svc_req *preq, nfs_res_t * pres)
 {
@@ -102,7 +102,7 @@ int nfs_Mkdir(nfs_arg_t * parg,
   fsal_attrib_list_t *ppre_attr;
   fsal_attrib_list_t attr_parent_after;
   cache_inode_file_type_t parent_filetype;
-  fsal_handle_t *pfsal_handle;
+  struct fsal_obj_handle *pfsal_handle;
   fsal_name_t dir_name;
   cache_inode_status_t cache_status = CACHE_INODE_SUCCESS;
   cache_inode_status_t cache_status_lookup;
@@ -153,7 +153,7 @@ int nfs_Mkdir(nfs_arg_t * parg,
                                          &(pres->res_mkdir3.status),
                                          NULL,
                                          &parent_attr,
-                                         pcontext, pclient, ht, &rc)) == NULL)
+                                         pexport, pclient, ht, &rc)) == NULL)
     {
       /* Stale NFS FH ? */
       return rc;
@@ -187,9 +187,10 @@ int nfs_Mkdir(nfs_arg_t * parg,
 
 #ifdef _USE_QUOTA
     /* if quota support is active, then we should check is the FSAL allows inode creation or not */
-    fsal_status = FSAL_check_quota( pexport->fullpath, 
-                                    FSAL_QUOTA_INODES,
-                                    FSAL_OP_CONTEXT_TO_UID( pcontext ) ) ;
+  fsal_status = pexport->export_hdl->ops->check_quota(pexport->export_hdl,
+						      pexport->fullpath, 
+						      FSAL_QUOTA_INODES,
+						      creds) ;
     if( FSAL_IS_ERROR( fsal_status ) )
      {
 
@@ -260,7 +261,7 @@ int nfs_Mkdir(nfs_arg_t * parg,
                                            &attr,
                                            ht, 
                                            pclient, 
-                                           pcontext, 
+                                           creds, 
                                            &cache_status_lookup);
 
           if(cache_status_lookup == CACHE_INODE_NOT_FOUND)
@@ -279,7 +280,7 @@ int nfs_Mkdir(nfs_arg_t * parg,
                                                   &attr,
                                                   ht,
                                                   pclient,
-                                                  pcontext, &cache_status)) != NULL)
+                                                  creds, &cache_status)) != NULL)
                 {
                   /*
                    * Get the FSAL handle for this entry 
@@ -338,20 +339,20 @@ int nfs_Mkdir(nfs_arg_t * parg,
                                * Build entry
                                * attributes 
                                */
-                              nfs_SetPostOpAttr(pcontext, pexport,
+                              nfs_SetPostOpAttr(pexport,
                                                 dir_pentry,
                                                 &attr,
                                                 &(pres->res_mkdir3.MKDIR3res_u.resok.
                                                   obj_attributes));
 
                               /* Get the attributes of the parent after the operation */
-			      attr_parent_after = parent_pentry->attributes;
+			      attr_parent_after = parent_pentry->obj_handle->attributes;
 
                               /*
                                * Build Weak Cache
                                * Coherency data 
                                */
-                              nfs_SetWccData(pcontext, pexport,
+                              nfs_SetWccData(pexport,
                                              parent_pentry,
                                              ppre_attr,
                                              &attr_parent_after,
@@ -403,7 +404,7 @@ int nfs_Mkdir(nfs_arg_t * parg,
                     }
                 }
 
-              nfs_SetFailedStatus(pcontext, pexport,
+              nfs_SetFailedStatus(pexport,
                                   preq->rq_vers,
                                   cache_status,
                                   &pres->res_dirop2.status,
@@ -425,7 +426,7 @@ int nfs_Mkdir(nfs_arg_t * parg,
       return NFS_REQ_DROP;
 
     }
-  nfs_SetFailedStatus(pcontext, pexport,
+  nfs_SetFailedStatus(pexport,
                       preq->rq_vers,
                       cache_status,
                       &pres->res_dirop2.status,

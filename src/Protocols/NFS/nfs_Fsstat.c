@@ -72,7 +72,7 @@
  * 
  * @param parg    [IN]    pointer to nfs arguments union
  * @param pexport [IN]    pointer to nfs export list 
- * @param pcontext   [IN]    credentials to be used for this request
+ * @param creds   [IN]    credentials to be used for this request
  * @param pclient [INOUT] client resource to be used
  * @param ht      [INOUT] cache inode hash table
  * @param preq    [IN]    pointer to SVC request related to this call 
@@ -84,7 +84,7 @@
 
 int nfs_Fsstat(nfs_arg_t * parg,
                exportlist_t * pexport,
-               fsal_op_context_t * pcontext,
+               struct user_cred *creds,
                cache_inode_client_t * pclient,
                hash_table_t * ht, struct svc_req *preq, nfs_res_t * pres)
 {
@@ -121,7 +121,7 @@ int nfs_Fsstat(nfs_arg_t * parg,
                                   NULL,
                                   &(pres->res_statfs2.status),
                                   &(pres->res_fsstat3.status),
-                                  NULL, NULL, pcontext, pclient, ht, &rc)) == NULL)
+                                  NULL, NULL, pexport, pclient, ht, &rc)) == NULL)
     {
       /* Stale NFS FH ? */
       /* return NFS_REQ_DROP ; */
@@ -131,14 +131,13 @@ int nfs_Fsstat(nfs_arg_t * parg,
   /* Get statistics and convert from cache */
 
   if((cache_status = cache_inode_statfs(pentry,
-                                        &dynamicinfo,
-                                        pcontext, &cache_status)) == CACHE_INODE_SUCCESS)
+                                        &dynamicinfo)) == CACHE_INODE_SUCCESS)
     {
       /* This call is costless, the pentry was cached during call to nfs_FhandleToCache */
       if((cache_status = cache_inode_getattr(pentry,
                                              &attr,
                                              ht,
-                                             pclient, pcontext,
+                                             pclient,
                                              &cache_status)) == CACHE_INODE_SUCCESS)
         {
 
@@ -168,7 +167,7 @@ int nfs_Fsstat(nfs_arg_t * parg,
               break;
 
             case NFS_V3:
-              nfs_SetPostOpAttr(pcontext, pexport,
+              nfs_SetPostOpAttr(pexport,
                                 pentry,
                                 &attr,
                                 &(pres->res_fsstat3.FSSTAT3res_u.resok.obj_attributes));
@@ -205,7 +204,7 @@ int nfs_Fsstat(nfs_arg_t * parg,
   if(nfs_RetryableError(cache_status))
     return NFS_REQ_DROP;
 
-  nfs_SetFailedStatus(pcontext, pexport,
+  nfs_SetFailedStatus(pexport,
                       preq->rq_vers,
                       cache_status,
                       &pres->res_statfs2.status,

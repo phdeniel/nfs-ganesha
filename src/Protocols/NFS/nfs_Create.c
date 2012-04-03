@@ -73,7 +73,7 @@
  *
  * @param parg    [IN]    pointer to nfs arguments union
  * @param pexport [IN]    pointer to nfs export list 
- * @param pcontext   [IN]    credentials to be used for this request
+ * @param creds   [IN]    credentials to be used for this request
  * @param pclient [INOUT] client resource to be used
  * @param ht      [INOUT] cache inode hash table
  * @param preq    [IN]    pointer to SVC request related to this call 
@@ -87,7 +87,7 @@
 
 int nfs_Create(nfs_arg_t * parg,
                exportlist_t * pexport,
-               fsal_op_context_t * pcontext,
+               struct user_cred *creds,
                cache_inode_client_t * pclient,
                hash_table_t * ht, struct svc_req *preq, nfs_res_t * pres)
 {
@@ -108,7 +108,7 @@ int nfs_Create(nfs_arg_t * parg,
   cache_inode_status_t cache_status = CACHE_INODE_SUCCESS;
   cache_inode_status_t cache_status_lookup;
   cache_inode_file_type_t parent_filetype;
-  fsal_handle_t *pfsal_handle;
+  struct fsal_obj_handle *pfsal_handle;
 #ifdef _USE_QUOTA
   fsal_status_t fsal_status ;
 #endif
@@ -139,7 +139,7 @@ int nfs_Create(nfs_arg_t * parg,
 
   if((preq->rq_vers == NFS_V3) && (nfs3_Is_Fh_Xattr(&(parg->arg_create3.where.dir))))
     {
-      return nfs3_Create_Xattr(parg, pexport, pcontext, pclient, ht, preq, pres);
+      return nfs3_Create_Xattr(parg, pexport, creds, pclient, ht, preq, pres);
     }
 
   if(preq->rq_vers == NFS_V3)
@@ -158,7 +158,7 @@ int nfs_Create(nfs_arg_t * parg,
                                          &(pres->res_create3.status),
                                          NULL,
                                          &parent_attr,
-                                         pcontext, pclient, ht, &rc)) == NULL)
+                                         pexport, pclient, ht, &rc)) == NULL)
     {
       /* Stale NFS FH ? */
       return rc;
@@ -230,9 +230,10 @@ int nfs_Create(nfs_arg_t * parg,
 
 #ifdef _USE_QUOTA
     /* if quota support is active, then we should check is the FSAL allows inode creation or not */
-    fsal_status = FSAL_check_quota( pexport->fullpath, 
-                                    FSAL_QUOTA_INODES,
-                                    FSAL_OP_CONTEXT_TO_UID( pcontext ) ) ;
+  fsal_status = pexport->export_hdl->ops->check_quota(pexport->export_hdl,
+						      pexport->fullpath, 
+						      FSAL_QUOTA_INODES,
+						      creds) ;
     if( FSAL_IS_ERROR( fsal_status ) )
      {
 
@@ -274,7 +275,7 @@ int nfs_Create(nfs_arg_t * parg,
                                            &file_name,
                                            pexport->cache_inode_policy,
                                            &attr,
-                                           ht, pclient, pcontext, &cache_status_lookup);
+                                           ht, pclient, creds, &cache_status_lookup);
 
           if((cache_status_lookup == CACHE_INODE_NOT_FOUND) ||
              ((cache_status_lookup == CACHE_INODE_SUCCESS)
@@ -296,7 +297,7 @@ int nfs_Create(nfs_arg_t * parg,
                                                  mode,
                                                  NULL,
                                                  &attr_newfile,
-                                                 ht, pclient, pcontext, &cache_status);
+                                                 ht, pclient, creds, &cache_status);
 
               if(file_pentry != NULL)
                 {
@@ -352,11 +353,11 @@ int nfs_Create(nfs_arg_t * parg,
                                              &attributes_create,
                                              ht,
                                              pclient,
-                                             pcontext,
+                                             creds,
                                              &cache_status) != CACHE_INODE_SUCCESS)
                         {
                           /* If we are here, there was an error */
-                          nfs_SetFailedStatus(pcontext, pexport,
+                          nfs_SetFailedStatus(pexport,
                                               preq->rq_vers,
                                               cache_status,
                                               &pres->res_dirop2.status,
@@ -378,12 +379,11 @@ int nfs_Create(nfs_arg_t * parg,
                                              &attr_newfile,
                                              ht,
                                              pclient,
-                                             pcontext,
                                              &cache_status) != CACHE_INODE_SUCCESS)
                         {
                           /* If we are here, there was an error */
 
-                          nfs_SetFailedStatus(pcontext, pexport,
+                          nfs_SetFailedStatus(pexport,
                                               preq->rq_vers,
                                               cache_status,
                                               &pres->res_dirop2.status,
@@ -452,10 +452,10 @@ int nfs_Create(nfs_arg_t * parg,
                           pres->res_create3.CREATE3res_u.resok.obj.handle_follows = TRUE;
 
                           /* Get the attributes of the parent after the operation */
-			  attr_parent_after = parent_pentry->attributes;
+			  attr_parent_after = parent_pentry->obj_handle->attributes;
 
                           /* Build entry attributes */
-                          nfs_SetPostOpAttr(pcontext, pexport,
+                          nfs_SetPostOpAttr(pexport,
                                             file_pentry,
                                             &attr_newfile,
                                             &(pres->res_create3.CREATE3res_u.resok.
@@ -465,7 +465,7 @@ int nfs_Create(nfs_arg_t * parg,
                            * Build Weak Cache Coherency
                            * data 
                            */
-                          nfs_SetWccData(pcontext, pexport,
+                          nfs_SetWccData(pexport,
                                          parent_pentry,
                                          ppre_attr,
                                          &attr_parent_after,
@@ -513,7 +513,7 @@ int nfs_Create(nfs_arg_t * parg,
                     }
                 }
 
-              nfs_SetFailedStatus(pcontext, pexport,
+              nfs_SetFailedStatus(pexport,
                                   preq->rq_vers,
                                   cache_status,
                                   &pres->res_dirop2.status,
@@ -530,7 +530,7 @@ int nfs_Create(nfs_arg_t * parg,
     }
 
   /* Set the exit status */
-  nfs_SetFailedStatus(pcontext, pexport,
+  nfs_SetFailedStatus(pexport,
                       preq->rq_vers,
                       cache_status,
                       &pres->res_dirop2.status,

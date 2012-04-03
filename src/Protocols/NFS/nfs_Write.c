@@ -74,7 +74,7 @@
  *
  * @param parg    [IN]    pointer to nfs arguments union
  * @param pexport [IN]    pointer to nfs export list 
- * @param pcontext   [IN]    credentials to be used for this request
+ * @param creds   [IN]    credentials to be used for this request
  * @param pclient [INOUT] client resource to be used
  * @param ht      [INOUT] cache inode hash table
  * @param preq    [IN]    pointer to SVC request related to this call 
@@ -89,7 +89,7 @@ extern writeverf3 NFS3_write_verifier;  /* NFS V3 write verifier      */
 
 int nfs_Write(nfs_arg_t * parg,
               exportlist_t * pexport,
-              fsal_op_context_t * pcontext,
+              struct user_cred *creds,
               cache_inode_client_t * pclient,
               hash_table_t * ht, struct svc_req *preq, nfs_res_t * pres)
 {
@@ -168,31 +168,31 @@ int nfs_Write(nfs_arg_t * parg,
                                   NULL,
                                   &(pres->res_attr2.status),
                                   &(pres->res_write3.status),
-                                  NULL, &pre_attr, pcontext, pclient, ht, &rc)) == NULL)
+                                  NULL, &pre_attr, pexport, pclient, ht, &rc)) == NULL)
     {
       /* Stale NFS FH ? */
       return rc;
     }
 
   if((preq->rq_vers == NFS_V3) && (nfs3_Is_Fh_Xattr(&(parg->arg_write3.file))))
-    return nfs3_Write_Xattr(parg, pexport, pcontext, pclient, ht, preq, pres);
+    return nfs3_Write_Xattr(parg, pexport, creds, pclient, ht, preq, pres);
 
   if(cache_inode_access(pentry,
                         FSAL_WRITE_ACCESS,
                         ht,
                         pclient,
-                        pcontext,
+                        creds,
                         &cache_status) != CACHE_INODE_SUCCESS)
     {
       /* NFSv3 exception : if user wants to write to a file that is readonly 
        * but belongs to him, then allow it to do it, push the permission check
        * to the client side */
       if( ( cache_status == CACHE_INODE_FSAL_EACCESS  ) &&
-          ( pentry->attributes.owner ==  FSAL_OP_CONTEXT_TO_UID( pcontext ) ) )
+          ( pentry->obj_handle->attributes.owner ==  creds->caller_uid) )
        {
           LogDebug( COMPONENT_NFSPROTO, 
                     "Exception management: allowed user %u to write to read-only file belonging to him",
-                    pentry->attributes.owner ) ;
+                    pentry->obj_handle->attributes.owner ) ;
        }
       else
        {
@@ -284,7 +284,7 @@ int nfs_Write(nfs_arg_t * parg,
           break;
         } /* switch (preq->rq_vers) */
 
-      nfs_SetFailedStatus(pcontext, pexport,
+      nfs_SetFailedStatus(pexport,
                           preq->rq_vers,
                           cache_status,
                           &pres->res_attr2.status,
@@ -300,9 +300,10 @@ int nfs_Write(nfs_arg_t * parg,
 
 #ifdef _USE_QUOTA
     /* if quota support is active, then we should check is the FSAL allows inode creation or not */
-    fsal_status = FSAL_check_quota( pexport->fullpath, 
-                                    FSAL_QUOTA_BLOCKS,
-                                    FSAL_OP_CONTEXT_TO_UID( pcontext ) ) ;
+    fsal_status = pexport->export_hdl->ops->check_quota(pexport->export_hdl,
+							pexport->fullpath, 
+							FSAL_QUOTA_BLOCKS,
+							creds) ;
     if( FSAL_IS_ERROR( fsal_status ) )
      {
 
@@ -403,7 +404,7 @@ int nfs_Write(nfs_arg_t * parg,
               break;
             }
 
-          nfs_SetFailedStatus(pcontext, pexport,
+          nfs_SetFailedStatus(pexport,
                               preq->rq_vers,
                               cache_status,
                               &pres->res_attr2.status,
@@ -460,7 +461,7 @@ int nfs_Write(nfs_arg_t * parg,
            * with error CACHE_INODE_CACHE_CONTENT_EXISTS which is not a pathological thing here */
 
           /* Status is set in last argument */
-          cache_inode_add_data_cache(pentry, ht, pclient, pcontext, &cache_status);
+          cache_inode_add_data_cache(pentry, ht, pclient, &cache_status);
           if((cache_status != CACHE_INODE_SUCCESS) &&
              (cache_status != CACHE_INODE_CACHE_CONTENT_EXISTS))
             {
@@ -470,7 +471,7 @@ int nfs_Write(nfs_arg_t * parg,
                   return NFS_REQ_DROP;
                 }
 
-              nfs_SetFailedStatus(pcontext, pexport,
+              nfs_SetFailedStatus(pexport,
                                   preq->rq_vers,
                                   cache_status,
                                   &pres->res_attr2.status,
@@ -500,7 +501,7 @@ int nfs_Write(nfs_arg_t * parg,
                           &eof_met,
                           ht,
                           pclient,
-                          pcontext, stable_flag, &cache_status) == CACHE_INODE_SUCCESS)
+                          creds, stable_flag, &cache_status) == CACHE_INODE_SUCCESS)
         {
 
 
@@ -516,8 +517,7 @@ int nfs_Write(nfs_arg_t * parg,
             case NFS_V3:
 
               /* Build Weak Cache Coherency data */
-              nfs_SetWccData(pcontext,
-                             pexport,
+              nfs_SetWccData(pexport,
                              pentry,
                              ppre_attr,
                              &attr, &(pres->res_write3.WRITE3res_u.resok.file_wcc));
@@ -556,7 +556,7 @@ int nfs_Write(nfs_arg_t * parg,
       return NFS_REQ_DROP;
     }
 
-  nfs_SetFailedStatus(pcontext, pexport,
+  nfs_SetFailedStatus(pexport,
                       preq->rq_vers,
                       cache_status,
                       &pres->res_attr2.status,

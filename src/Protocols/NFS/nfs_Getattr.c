@@ -73,7 +73,7 @@
  *
  * @param parg    [IN]    pointer to nfs arguments union
  * @param pexport [IN]    pointer to nfs export list 
- * @param pcontext   [IN]    credentials to be used for this request
+ * @param creds   [IN]    credentials to be used for this request
  * @param pclient [INOUT] client resource to be used
  * @param ht      [INOUT] cache inode hash table
  * @param preq    [IN]    pointer to SVC request related to this call 
@@ -87,7 +87,7 @@
 
 int nfs_Getattr(nfs_arg_t * parg,
                 exportlist_t * pexport,
-                fsal_op_context_t * pcontext,
+                struct user_cred *creds,
                 cache_inode_client_t * pclient,
                 hash_table_t * ht, struct svc_req *preq, nfs_res_t * pres)
 {
@@ -116,7 +116,7 @@ int nfs_Getattr(nfs_arg_t * parg,
                                   NULL,
                                   &(pres->res_attr2.status),
                                   &(pres->res_getattr3.status),
-                                  NULL, &attr, pcontext, pclient, ht, &rc)) == NULL)
+                                  NULL, &attr, pexport, pclient, ht, &rc)) == NULL)
     {
       /* Stale NFS FH ? */
       LogFullDebug(COMPONENT_NFSPROTO,
@@ -126,7 +126,7 @@ int nfs_Getattr(nfs_arg_t * parg,
 
   if((preq->rq_vers == NFS_V3) && (nfs3_Is_Fh_Xattr(&(parg->arg_getattr3.object))))
     {
-      rc = nfs3_Getattr_Xattr(parg, pexport, pcontext, pclient, ht, preq, pres);
+      rc = nfs3_Getattr_Xattr(parg, pexport, creds, pclient, ht, preq, pres);
       LogFullDebug(COMPONENT_NFSPROTO,
                    "nfs_Getattr returning %d from nfs3_Getattr_Xattr", rc);
       return rc;
@@ -138,7 +138,7 @@ int nfs_Getattr(nfs_arg_t * parg,
    */
   if(cache_inode_getattr(pentry,
                          &attr,
-                         ht, pclient, pcontext, &cache_status) == CACHE_INODE_SUCCESS)
+                         ht, pclient, &cache_status) == CACHE_INODE_SUCCESS)
     {
       /*
        * Client API should be keeping us from crossing junctions,
@@ -153,7 +153,7 @@ int nfs_Getattr(nfs_arg_t * parg,
           if(nfs2_FSALattr_To_Fattr(pexport, &attr,
                                     &(pres->res_attr2.ATTR2res_u.attributes)) == 0)
             {
-              nfs_SetFailedStatus(pcontext, pexport,
+              nfs_SetFailedStatus(pexport,
                                   preq->rq_vers,
                                   CACHE_INODE_INVALID_ARGUMENT,
                                   &pres->res_attr2.status,
@@ -171,7 +171,7 @@ int nfs_Getattr(nfs_arg_t * parg,
                                     &(pres->res_getattr3.GETATTR3res_u.resok.
                                       obj_attributes)) == 0)
             {
-              nfs_SetFailedStatus(pcontext, pexport,
+              nfs_SetFailedStatus(pexport,
                                   preq->rq_vers,
                                   CACHE_INODE_INVALID_ARGUMENT,
                                   &pres->res_attr2.status,
@@ -197,7 +197,7 @@ int nfs_Getattr(nfs_arg_t * parg,
   if (cache_status != CACHE_INODE_FSAL_ESTALE)
     cache_status = CACHE_INODE_INVALID_ARGUMENT;
 
-  nfs_SetFailedStatus(pcontext, pexport,
+  nfs_SetFailedStatus(pexport,
                       preq->rq_vers,
                       cache_status,
                       &pres->res_attr2.status,

@@ -72,7 +72,7 @@
  *
  * @param parg    [IN]    pointer to nfs arguments union
  * @param pexport [IN]    pointer to nfs export list 
- * @param pcontext   [IN]    credentials to be used for this request
+ * @param creds   [IN]    credentials to be used for this request
  * @param pclient [INOUT] client resource to be used
  * @param ht      [INOUT] cache inode hash table
  * @param preq    [IN]    pointer to SVC request related to this call 
@@ -86,7 +86,7 @@
 
 int nfs_Rename(nfs_arg_t * parg /* IN  */ ,
                exportlist_t * pexport /* IN  */ ,
-               fsal_op_context_t * pcontext /* IN  */ ,
+               struct user_cred *creds /* IN  */ ,
                cache_inode_client_t * pclient /* IN  */ ,
                hash_table_t * ht /* INOUT */ ,
                struct svc_req *preq /* IN  */ ,
@@ -166,7 +166,7 @@ int nfs_Rename(nfs_arg_t * parg /* IN  */ ,
                                          &(pres->res_dirop2.status),
                                          &(pres->res_create3.status),
                                          NULL,
-                                         &pre_attr, pcontext, pclient, ht, &rc)) == NULL)
+                                         &pre_attr, pexport, pclient, ht, &rc)) == NULL)
     {
       /* Stale NFS FH ? */
       return rc;
@@ -181,7 +181,7 @@ int nfs_Rename(nfs_arg_t * parg /* IN  */ ,
                                              &(pres->res_create3.status),
                                              NULL,
                                              &new_parent_attr,
-                                             pcontext, pclient, ht, &rc)) == NULL)
+                                             pexport, pclient, ht, &rc)) == NULL)
     {
       /* Stale NFS FH ? */
       return rc;
@@ -247,7 +247,7 @@ int nfs_Rename(nfs_arg_t * parg /* IN  */ ,
                                              &new_entry_name,
                                              pexport->cache_inode_policy,
                                              &tst_attr,
-                                             ht, pclient, pcontext, &cache_status);
+                                             ht, pclient, creds, &cache_status);
 
       if(cache_status == CACHE_INODE_NOT_FOUND)
         {
@@ -256,7 +256,7 @@ int nfs_Rename(nfs_arg_t * parg /* IN  */ ,
                                              &entry_name,
                                              pexport->cache_inode_policy,
                                              &tst_attr,
-                                             ht, pclient, pcontext, &cache_status);
+                                             ht, pclient, creds, &cache_status);
 
           /* Rename entry */
           if(cache_status == CACHE_INODE_SUCCESS)
@@ -264,7 +264,7 @@ int nfs_Rename(nfs_arg_t * parg /* IN  */ ,
                                &entry_name,
                                new_parent_pentry,
                                &new_entry_name,
-                               &attr, &new_attr, ht, pclient, pcontext, &cache_status);
+                               &attr, &new_attr, ht, pclient, creds, &cache_status);
 
           if(cache_status == CACHE_INODE_SUCCESS)
             {
@@ -279,13 +279,13 @@ int nfs_Rename(nfs_arg_t * parg /* IN  */ ,
                    * Build Weak Cache Coherency
                    * data 
                    */
-                  nfs_SetWccData(pcontext, pexport,
+                  nfs_SetWccData(pexport,
                                  parent_pentry,
                                  ppre_attr,
                                  &attr,
                                  &(pres->res_rename3.RENAME3res_u.resok.fromdir_wcc));
 
-                  nfs_SetWccData(pcontext, pexport,
+                  nfs_SetWccData(pexport,
                                  new_parent_pentry,
                                  pnew_pre_attr,
                                  &new_attr,
@@ -319,13 +319,13 @@ int nfs_Rename(nfs_arg_t * parg /* IN  */ ,
                        * Build Weak Cache Coherency
                        * data 
                        */
-                      nfs_SetWccData(pcontext, pexport,
+                      nfs_SetWccData(pexport,
                                      parent_pentry,
                                      ppre_attr,
                                      &attr,
                                      &(pres->res_rename3.RENAME3res_u.resok.fromdir_wcc));
 
-                      nfs_SetWccData(pcontext, pexport,
+                      nfs_SetWccData(pexport,
                                      parent_pentry,
                                      ppre_attr,
                                      &attr,
@@ -352,7 +352,7 @@ int nfs_Rename(nfs_arg_t * parg /* IN  */ ,
                                                      &tst_attr,
                                                      ht,
                                                      pclient,
-                                                     pcontext, &cache_status)) != NULL)
+                                                     creds, &cache_status)) != NULL)
                 {
                   /* If pentry is the same for source and target, then we are trying to rename
                    * a hard link to another hard link with the same inode. This is a noop. */
@@ -369,14 +369,14 @@ int nfs_Rename(nfs_arg_t * parg /* IN  */ ,
                            * Build Weak Cache Coherency
                            * data 
                            */
-                          nfs_SetWccData(pcontext, pexport,
+                          nfs_SetWccData(pexport,
                                          parent_pentry,
                                          ppre_attr,
                                          ppre_attr, /* Attributes before and after will be unchanged. */
                                          &(pres->res_rename3.RENAME3res_u.resok.
                                            fromdir_wcc));
                           
-                          nfs_SetWccData(pcontext, pexport,
+                          nfs_SetWccData(pexport,
                                          parent_pentry,
                                          ppre_attr,
                                          ppre_attr, /* Attributes before and after will be unchanged. */
@@ -400,7 +400,7 @@ int nfs_Rename(nfs_arg_t * parg /* IN  */ ,
                                             &tst_attr,
                                             ht,
                                             pclient,
-                                            pcontext,
+                                            creds,
                                             &cache_status) == CACHE_INODE_SUCCESS)
                         {
                           if(cache_inode_rename(parent_pentry,
@@ -411,7 +411,7 @@ int nfs_Rename(nfs_arg_t * parg /* IN  */ ,
                                                 &new_attr,
                                                 ht,
                                                 pclient,
-                                                pcontext,
+                                                creds,
                                                 &cache_status) == CACHE_INODE_SUCCESS)
                             {
                               switch (preq->rq_vers)
@@ -425,14 +425,14 @@ int nfs_Rename(nfs_arg_t * parg /* IN  */ ,
                                    * Build Weak Cache Coherency
                                    * data 
                                    */
-                                  nfs_SetWccData(pcontext, pexport,
+                                  nfs_SetWccData(pexport,
                                                  parent_pentry,
                                                  ppre_attr,
                                                  &attr,
                                                  &(pres->res_rename3.RENAME3res_u.resok.
                                                    fromdir_wcc));
 
-                                  nfs_SetWccData(pcontext, pexport,
+                                  nfs_SetWccData(pexport,
                                                  parent_pentry,
                                                  ppre_attr,
                                                  &attr,
@@ -465,7 +465,7 @@ int nfs_Rename(nfs_arg_t * parg /* IN  */ ,
       return NFS_REQ_DROP;
     }
 
-  nfs_SetFailedStatus(pcontext, pexport,
+  nfs_SetFailedStatus(pexport,
                       preq->rq_vers,
                       cache_status,
                       &pres->res_stat2,
