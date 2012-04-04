@@ -72,7 +72,7 @@
  *
  * @param parg    [IN]    pointer to nfs arguments union
  * @param pexport [IN]    pointer to nfs export list
- * @param pcontext   [IN]    credentials to be used for this request
+ * @param creds   [IN]    credentials to be used for this request
  * @param pclient [INOUT] client resource to be used
  * @param ht      [INOUT] cache inode hash table
  * @param preq    [IN]    pointer to SVC request related to this call
@@ -86,7 +86,7 @@
 
 int nfs3_Readdirplus(nfs_arg_t * parg,
                      exportlist_t * pexport,
-                     fsal_op_context_t * pcontext,
+                     struct user_cred *creds,
                      cache_inode_client_t * pclient,
                      hash_table_t * ht, struct svc_req *preq, nfs_res_t * pres)
 {
@@ -117,7 +117,7 @@ int nfs3_Readdirplus(nfs_arg_t * parg,
   cache_inode_endofdir_t eod_met = UNASSIGNED_EOD;
   cache_inode_status_t cache_status;
   cache_inode_status_t cache_status_gethandle;
-  fsal_handle_t *pfsal_handle = NULL;
+  struct fsal_obj_handle *pfsal_handle = NULL;
   struct fsal_handle_desc fh_desc;
   entry_name_array_item_t *entry_name_array = NULL;
   fh3_buffer_item_t *fh3_array = NULL;
@@ -164,7 +164,7 @@ int nfs3_Readdirplus(nfs_arg_t * parg,
 
   /* Is this a xattr FH ? */
   if(nfs3_Is_Fh_Xattr(&(parg->arg_readdirplus3.dir)))
-    return nfs3_Readdirplus_Xattr(parg, pexport, pcontext, pclient, ht, preq, pres);
+    return nfs3_Readdirplus_Xattr(parg, pexport, creds, pclient, ht, preq, pres);
 
   /* Convert file handle into a vnode */
   if((dir_pentry = nfs_FhandleToCache(preq->rq_vers,
@@ -174,7 +174,7 @@ int nfs3_Readdirplus(nfs_arg_t * parg,
                                       NULL,
                                       &(pres->res_readdirplus3.status),
                                       NULL,
-                                      &dir_attr, pcontext, pclient, ht, &rc)) == NULL)
+                                      &dir_attr, pexport, pclient, ht, &rc)) == NULL)
     {
       /* return NFS_REQ_DROP ; */
       return rc;
@@ -275,7 +275,7 @@ int nfs3_Readdirplus(nfs_arg_t * parg,
                          ht,
                          &dir_pentry_unlock,
                          pclient,
-                         pcontext,
+                         creds,
                          &cache_status) == CACHE_INODE_SUCCESS)
     {
       LogFullDebug(COMPONENT_NFS_READDIR,
@@ -296,7 +296,7 @@ int nfs3_Readdirplus(nfs_arg_t * parg,
           pres->res_readdirplus3.READDIRPLUS3res_u.resok.reply.entries = NULL;
           pres->res_readdirplus3.READDIRPLUS3res_u.resok.reply.eof = TRUE;
 
-          nfs_SetPostOpAttr(pcontext, pexport,
+          nfs_SetPostOpAttr(pexport,
                             dir_pentry,
                             NULL,
                             &(pres->res_readdirplus3.READDIRPLUS3res_u.resok.
@@ -393,10 +393,9 @@ int nfs3_Readdirplus(nfs_arg_t * parg,
 
 		  fh_desc.start = (caddr_t)&(RES_READDIRPLUS_REPLY.entries[0].fileid);
 		  fh_desc.len = sizeof(RES_READDIRPLUS_REPLY.entries[0].fileid);
-                  FSAL_DigestHandle(FSAL_GET_EXP_CTX(pcontext),
-                                    FSAL_DIGEST_FILEID3,
-                                    pfsal_handle,
-                                    &fh_desc);
+		  (void)pfsal_handle->ops->handle_digest(pfsal_handle,
+							 FSAL_DIGEST_FILEID3,
+							 &fh_desc);
 
                   RES_READDIRPLUS_REPLY.entries[0].name = entry_name_array[0];
                   strcpy(RES_READDIRPLUS_REPLY.entries[0].name, ".");
@@ -430,13 +429,13 @@ int nfs3_Readdirplus(nfs_arg_t * parg,
                       FALSE;
                   RES_READDIRPLUS_REPLY.entries[0].name_handle.handle_follows = FALSE;
 
-		  entry_attr = dir_pentry->attributes;
+		  entry_attr = dir_pentry->obj_handle->attributes;
 
                   /* Set PostPoFh3 structure */
                   pres->res_readdirplus3.READDIRPLUS3res_u.resok.reply.entries[0].
                       name_handle.handle_follows = TRUE;
 
-                  nfs_SetPostOpAttr(pcontext, pexport,
+                  nfs_SetPostOpAttr(pexport,
                                     dir_pentry,
                                     &entry_attr,
                                     &(pres->res_readdirplus3.READDIRPLUS3res_u.resok.
@@ -461,7 +460,7 @@ int nfs3_Readdirplus(nfs_arg_t * parg,
                   if((pentry_dot_dot = cache_inode_lookupp_sw(dir_pentry,
 							      ht,
 							      pclient,
-							      pcontext,
+							      creds,
 							      &cache_status_gethandle,
 							      !dir_pentry_unlock)) ==
                      NULL)
@@ -502,10 +501,9 @@ int nfs3_Readdirplus(nfs_arg_t * parg,
 
 		  fh_desc.start = (caddr_t)&(RES_READDIRPLUS_REPLY.entries[delta].fileid);
 		  fh_desc.len = sizeof(RES_READDIRPLUS_REPLY.entries[delta].fileid);
-                  FSAL_DigestHandle(FSAL_GET_EXP_CTX(pcontext),
-                                    FSAL_DIGEST_FILEID3,
-                                    pfsal_handle,
-                                    &fh_desc);
+		  (void)pfsal_handle->ops->handle_digest(pfsal_handle,
+							 FSAL_DIGEST_FILEID3,
+							 &fh_desc);
 
                   RES_READDIRPLUS_REPLY.entries[delta].name = entry_name_array[delta];
                   strcpy(RES_READDIRPLUS_REPLY.entries[delta].name, "..");
@@ -540,13 +538,13 @@ int nfs3_Readdirplus(nfs_arg_t * parg,
                       FALSE;
                   RES_READDIRPLUS_REPLY.entries[delta].name_handle.handle_follows = FALSE;
 
-		  entry_attr = pentry_dot_dot->attributes;
+		  entry_attr = pentry_dot_dot->obj_handle->attributes;
 
                   /* Set PostPoFh3 structure */
                   pres->res_readdirplus3.READDIRPLUS3res_u.resok.reply.entries[delta].
                       name_handle.handle_follows = TRUE;
 
-                  nfs_SetPostOpAttr(pcontext, pexport,
+                  nfs_SetPostOpAttr(pexport,
                                     pentry_dot_dot,
                                     &entry_attr,
                                     &(pres->res_readdirplus3.READDIRPLUS3res_u.resok.
@@ -646,10 +644,9 @@ int nfs3_Readdirplus(nfs_arg_t * parg,
 	      fh_desc.start = (caddr_t)&(RES_READDIRPLUS_REPLY.entries[i].fileid);
 	      fh_desc.len = sizeof(RES_READDIRPLUS_REPLY.entries[i].fileid);
               /* Now fill in the replyed entryplus3 list */
-              FSAL_DigestHandle(FSAL_GET_EXP_CTX(pcontext),
-                                FSAL_DIGEST_FILEID3,
-                                pfsal_handle,
-                                &fh_desc);
+	      (void)pfsal_handle->ops->handle_digest(pfsal_handle,
+						     FSAL_DIGEST_FILEID3,
+						     &fh_desc);
 
               FSAL_name2str(&dirent_array[i - delta]->name, entry_name_array[i],
                             FSAL_MAX_NAME_LEN);
@@ -669,7 +666,7 @@ int nfs3_Readdirplus(nfs_arg_t * parg,
               RES_READDIRPLUS_REPLY.entries[i].name_attributes.attributes_follow = FALSE;
               RES_READDIRPLUS_REPLY.entries[i].name_handle.handle_follows = FALSE;
 
-	      entry_attr = dirent_array[i - delta]->pentry->attributes;
+	      entry_attr = dirent_array[i - delta]->pentry->obj_handle->attributes;
 
               pres->res_readdirplus3.READDIRPLUS3res_u.resok.reply.entries[i].name_handle.post_op_fh3_u.handle.data.data_val = (char *)fh3_array[i];
 
@@ -696,7 +693,7 @@ int nfs3_Readdirplus(nfs_arg_t * parg,
               /* Set PostPoFh3 structure */
               pres->res_readdirplus3.READDIRPLUS3res_u.resok.reply.entries[i].name_handle.handle_follows = TRUE;
 
-              nfs_SetPostOpAttr(pcontext, pexport,
+              nfs_SetPostOpAttr(pexport,
                                 dirent_array[i - delta]->pentry,
                                 &entry_attr,
                                 &(pres->res_readdirplus3.READDIRPLUS3res_u.resok.reply.entries[i].name_attributes));
@@ -718,8 +715,7 @@ int nfs3_Readdirplus(nfs_arg_t * parg,
           pres->res_readdirplus3.READDIRPLUS3res_u.resok.reply.eof = FALSE;
         }
        
-      nfs_SetPostOpAttr(pcontext,
-                        pexport,
+      nfs_SetPostOpAttr(pexport,
                         dir_pentry,
                         &dir_attr,
                         &(pres->res_readdirplus3.READDIRPLUS3res_u.resok.dir_attributes));
@@ -739,7 +735,7 @@ int nfs3_Readdirplus(nfs_arg_t * parg,
       else
         pres->res_readdirplus3.READDIRPLUS3res_u.resok.reply.eof = FALSE;
 
-      nfs_SetPostOpAttr(pcontext, pexport,
+      nfs_SetPostOpAttr(pexport,
                         dir_pentry,
                         &dir_attr,
                         &(pres->res_readdirplus3.READDIRPLUS3res_u.resok.dir_attributes));
@@ -781,7 +777,7 @@ int nfs3_Readdirplus(nfs_arg_t * parg,
     return NFS_REQ_DROP;
 
   /* Set failed status */
-  nfs_SetFailedStatus(pcontext, pexport,
+  nfs_SetFailedStatus(pexport,
                       NFS_V3,
                       cache_status,
                       NULL,

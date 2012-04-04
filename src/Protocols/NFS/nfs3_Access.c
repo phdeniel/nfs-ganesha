@@ -70,7 +70,7 @@
  * 
  * @param parg    [IN]    pointer to nfs arguments union
  * @param pexport [IN]    pointer to nfs export list 
- * @param pcontext   [IN]    credentials to be used for this request
+ * @param creds   [IN]    credentials to be used for this request
  * @param pclient [INOUT] client resource to be used
  * @param ht      [INOUT] cache inode hash table
  * @param preq    [IN]    pointer to SVC request related to this call 
@@ -82,7 +82,7 @@
 
 int nfs3_Access(nfs_arg_t * parg,
                 exportlist_t * pexport,
-                fsal_op_context_t * pcontext,
+                struct user_cred *creds,
                 cache_inode_client_t * pclient,
                 hash_table_t * ht, struct svc_req *preq, nfs_res_t * pres)
 {
@@ -105,13 +105,13 @@ int nfs3_Access(nfs_arg_t * parg,
 
   /* Is this a xattr FH ? */
   if(nfs3_Is_Fh_Xattr(&(parg->arg_access3.object)))
-    return nfs3_Access_Xattr(parg, pexport, pcontext, pclient, ht, preq, pres);
+    return nfs3_Access_Xattr(parg, pexport,creds, pclient, ht, preq, pres);
 
   /* to avoid setting it on each error case */
   pres->res_access3.ACCESS3res_u.resfail.obj_attributes.attributes_follow = FALSE;
 
   /* Convert file handle into a fsal_handle */
-  if(nfs3_FhandleToFSAL(&(parg->arg_access3.object), &fsal_data.fh_desc, pcontext) == 0)
+  if(nfs3_FhandleToFSAL(&(parg->arg_access3.object), &fsal_data.fh_desc, pexport) == 0)
     return NFS_REQ_DROP;
 
   /* Get the entry in the cache_inode */
@@ -120,7 +120,6 @@ int nfs3_Access(nfs_arg_t * parg,
                                 &attr, 
                                 ht, 
                                 pclient, 
-                                pcontext, 
                                 &cache_status)) == NULL)
     {
       if(nfs_RetryableError(cache_status))
@@ -167,7 +166,7 @@ int nfs3_Access(nfs_arg_t * parg,
   /* Perform the 'access' call */
   if(cache_inode_access(pentry,
                         access_mode,
-                        ht, pclient, pcontext, &cache_status) == CACHE_INODE_SUCCESS)
+                        ht, pclient, creds, &cache_status) == CACHE_INODE_SUCCESS)
     {
       nfs3_access_debug("granted access", parg->arg_access3.access);
 
@@ -180,8 +179,7 @@ int nfs3_Access(nfs_arg_t * parg,
             (parg->arg_access3.access & ~ACCESS3_DELETE);
 
       /* Build Post Op Attributes */
-      nfs_SetPostOpAttr(pcontext,
-                        pexport,
+      nfs_SetPostOpAttr(pexport,
                         pentry,
                         &attr, &(pres->res_access3.ACCESS3res_u.resok.obj_attributes));
 
@@ -199,19 +197,19 @@ int nfs3_Access(nfs_arg_t * parg,
       access_mode = nfs_get_access_mask(ACCESS3_READ, &attr);
       if(cache_inode_access(pentry,
                             access_mode,
-                            ht, pclient, pcontext, &cache_status) == CACHE_INODE_SUCCESS)
+                            ht, pclient, creds, &cache_status) == CACHE_INODE_SUCCESS)
         pres->res_access3.ACCESS3res_u.resok.access |= ACCESS3_READ;
 
       access_mode = nfs_get_access_mask(ACCESS3_MODIFY, &attr);
       if(cache_inode_access(pentry,
                             access_mode,
-                            ht, pclient, pcontext, &cache_status) == CACHE_INODE_SUCCESS)
+                            ht, pclient, creds, &cache_status) == CACHE_INODE_SUCCESS)
         pres->res_access3.ACCESS3res_u.resok.access |= ACCESS3_MODIFY;
 
       access_mode = nfs_get_access_mask(ACCESS3_EXTEND, &attr);
       if(cache_inode_access(pentry,
                             access_mode,
-                            ht, pclient, pcontext, &cache_status) == CACHE_INODE_SUCCESS)
+                            ht, pclient, creds, &cache_status) == CACHE_INODE_SUCCESS)
         pres->res_access3.ACCESS3res_u.resok.access |= ACCESS3_EXTEND;
 
       if(filetype == REGULAR_FILE)
@@ -220,7 +218,7 @@ int nfs3_Access(nfs_arg_t * parg,
           if(cache_inode_access(pentry,
                                 access_mode,
                                 ht,
-                                pclient, pcontext, &cache_status) == CACHE_INODE_SUCCESS)
+                                pclient, creds, &cache_status) == CACHE_INODE_SUCCESS)
             pres->res_access3.ACCESS3res_u.resok.access |= ACCESS3_EXECUTE;
         }
       else
@@ -229,7 +227,7 @@ int nfs3_Access(nfs_arg_t * parg,
           if(cache_inode_access(pentry,
                                 access_mode,
                                 ht,
-                                pclient, pcontext, &cache_status) == CACHE_INODE_SUCCESS)
+                                pclient, creds, &cache_status) == CACHE_INODE_SUCCESS)
             pres->res_access3.ACCESS3res_u.resok.access |= ACCESS3_LOOKUP;
         }
 
@@ -239,7 +237,7 @@ int nfs3_Access(nfs_arg_t * parg,
           if(cache_inode_access(pentry,
                                 access_mode,
                                 ht,
-                                pclient, pcontext, &cache_status) == CACHE_INODE_SUCCESS)
+                                pclient, creds, &cache_status) == CACHE_INODE_SUCCESS)
             pres->res_access3.ACCESS3res_u.resok.access |= ACCESS3_DELETE;
         }
 
@@ -255,7 +253,7 @@ int nfs3_Access(nfs_arg_t * parg,
       return NFS_REQ_DROP;
     }
 
-  nfs_SetFailedStatus(pcontext, pexport,
+  nfs_SetFailedStatus(pexport,
                       NFS_V3,
                       cache_status,
                       NULL,

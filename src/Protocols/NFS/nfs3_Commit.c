@@ -69,7 +69,7 @@
  * 
  * @param parg    [IN]    pointer to nfs arguments union
  * @param pexport [IN]    pointer to nfs export list 
- * @param pcontext   [IN]    credentials to be used for this request
+ * @param creds   [IN]    credentials to be used for this request
  * @param pclient [INOUT] client resource to be used
  * @param ht      [INOUT] cache inode hash table
  * @param preq    [IN]    pointer to SVC request related to this call 
@@ -83,7 +83,7 @@ extern writeverf3 NFS3_write_verifier;  /* NFS V3 write verifier      */
 
 int nfs3_Commit(nfs_arg_t * parg,
                 exportlist_t * pexport,
-                fsal_op_context_t * pcontext,
+                struct user_cred *creds,
                 cache_inode_client_t * pclient,
                 hash_table_t * ht, struct svc_req *preq, nfs_res_t * pres)
 {
@@ -110,7 +110,9 @@ int nfs3_Commit(nfs_arg_t * parg,
   ppre_attr = NULL;
 
   /* Convert file handle into a fsal_handle */
-  if(nfs3_FhandleToFSAL(&(parg->arg_commit3.file), &fsal_data.fh_desc, pcontext) == 0)
+  if(nfs3_FhandleToFSAL(&(parg->arg_commit3.file),
+			&fsal_data.fh_desc, 
+			pexport->export_hdl) == 0)
     return NFS_REQ_DROP;
 
   /* Get the entry in the cache_inode */
@@ -119,7 +121,6 @@ int nfs3_Commit(nfs_arg_t * parg,
                                 &pre_attr, 
                                 ht, 
                                 pclient, 
-                                pcontext, 
                                 &cache_status)) == NULL)
     {
       /* Stale NFS FH ? */
@@ -142,12 +143,12 @@ int nfs3_Commit(nfs_arg_t * parg,
                         parg->arg_commit3.offset,
                         parg->arg_commit3.count,
                         &pre_attr,
-                        ht, pclient, pcontext, typeofcommit, &cache_status) != CACHE_INODE_SUCCESS)
+                        ht, pclient, creds,
+			typeofcommit, &cache_status) != CACHE_INODE_SUCCESS)
     {
       pres->res_commit3.status = NFS3ERR_IO;;
 
-      nfs_SetWccData(pcontext,
-                     pexport,
+      nfs_SetWccData(pexport,
                      pentry,
                      ppre_attr,
                      ppre_attr, &(pres->res_commit3.COMMIT3res_u.resfail.file_wcc));
@@ -158,8 +159,7 @@ int nfs3_Commit(nfs_arg_t * parg,
   /* Set the pre_attr */
   ppre_attr = &pre_attr;
 
-  nfs_SetWccData(pcontext,
-                 pexport,
+  nfs_SetWccData(pexport,
                  pentry,
                  ppre_attr, ppre_attr, &(pres->res_commit3.COMMIT3res_u.resok.file_wcc));
 

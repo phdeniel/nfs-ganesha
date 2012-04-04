@@ -80,7 +80,7 @@
 
 int nfs3_Fsinfo(nfs_arg_t * parg,
                 exportlist_t * pexport,
-                fsal_op_context_t * pcontext,
+                struct user_cred *creds,
                 cache_inode_client_t * pclient,
                 hash_table_t * ht, struct svc_req *preq, nfs_res_t * pres)
 {
@@ -103,7 +103,7 @@ int nfs3_Fsinfo(nfs_arg_t * parg,
   pres->res_fsinfo3.FSINFO3res_u.resfail.obj_attributes.attributes_follow = FALSE;
 
   /* Convert file handle into a fsal_handle */
-  if(nfs3_FhandleToFSAL(&(parg->arg_fsinfo3.fsroot), &fsal_data.fh_desc, pcontext) == 0)
+  if(nfs3_FhandleToFSAL(&(parg->arg_fsinfo3.fsroot), &fsal_data.fh_desc, pexport) == 0)
     return NFS_REQ_DROP;
 
   /* Get the entry in the cache_inode */
@@ -112,7 +112,6 @@ int nfs3_Fsinfo(nfs_arg_t * parg,
                                 &attr, 
                                 ht, 
                                 pclient, 
-                                pcontext, 
                                 &cache_status)) == NULL)
     {
       /* Stale NFS FH ? */
@@ -165,7 +164,7 @@ int nfs3_Fsinfo(nfs_arg_t * parg,
    */
   FSINFO_FIELD.properties = FSF3_LINK | FSF3_SYMLINK | FSF3_HOMOGENEOUS | FSF3_CANSETTIME;
 
-  nfs_SetPostOpAttr(pcontext, pexport,
+  nfs_SetPostOpAttr(pexport,
                     pentry,
                     &attr, &(pres->res_fsinfo3.FSINFO3res_u.resok.obj_attributes));
   pres->res_fsinfo3.status = NFS3_OK;

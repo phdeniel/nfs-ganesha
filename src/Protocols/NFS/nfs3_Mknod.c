@@ -70,7 +70,7 @@
  * 
  * @param parg    [IN]    pointer to nfs arguments union
  * @param pexport [IN]    pointer to nfs export list 
- * @param pcontext   [IN]    credentials to be used for this request
+ * @param creds   [IN]    credentials to be used for this request
  * @param pclient [INOUT] client resource to be used
  * @param ht      [INOUT] cache inode hash table
  * @param preq    [IN]    pointer to SVC request related to this call 
@@ -82,7 +82,7 @@
 
 int nfs3_Mknod(nfs_arg_t * parg,
                exportlist_t * pexport,
-               fsal_op_context_t * pcontext,
+               struct user_cred *creds,
                cache_inode_client_t * pclient,
                hash_table_t * ht, struct svc_req *preq, nfs_res_t * pres)
 {
@@ -101,7 +101,7 @@ int nfs3_Mknod(nfs_arg_t * parg,
   cache_entry_t *node_pentry = NULL;
   fsal_attrib_list_t attr;
   cache_inode_create_arg_t create_arg;
-  fsal_handle_t *pfsal_handle;
+  struct fsal_obj_handle *pfsal_handle;
 #ifdef _USE_QUOTA
   fsal_status_t fsal_status ;
 #endif
@@ -133,7 +133,7 @@ int nfs3_Mknod(nfs_arg_t * parg,
                                          &(pres->res_mknod3.status),
                                          NULL,
                                          &parent_attr,
-                                         pcontext, pclient, ht, &rc)) == NULL)
+                                         pexport, pclient, ht, &rc)) == NULL)
     {
       /* Stale NFS FH ? */
       return rc;
@@ -143,7 +143,7 @@ int nfs3_Mknod(nfs_arg_t * parg,
   ppre_attr = &parent_attr;
 
   /* Extract the filetype */
-  parent_filetype = cache_inode_fsal_type_convert(parent_attr.type);
+  parent_filetype = cache_inode_fsal_type_convert(parent_attr.type);			       
 
   /*
    * Sanity checks: new node name must be non-null; parent must be a
@@ -224,9 +224,10 @@ int nfs3_Mknod(nfs_arg_t * parg,
 
 #ifdef _USE_QUOTA
     /* if quota support is active, then we should check is the FSAL allows inode creation or not */
-    fsal_status = FSAL_check_quota( pexport->fullpath, 
-                                    FSAL_QUOTA_INODES,
-                                    FSAL_OP_CONTEXT_TO_UID( pcontext ) ) ;
+  fsal_status = pexport->export_hdl->ops->check_quota(pexport->export_hdl,
+						      pexport->fullpath, 
+						      FSAL_QUOTA_INODES,
+						      creds) ;
     if( FSAL_IS_ERROR( fsal_status ) )
      {
         pres->res_mknod3.status = NFS3ERR_DQUOT;
@@ -252,7 +253,7 @@ int nfs3_Mknod(nfs_arg_t * parg,
                                         &attr,
                                         ht, 
                                         pclient, 
-                                        pcontext, 
+                                        creds, 
                                         &cache_status_lookup);
 
       if(cache_status_lookup == CACHE_INODE_NOT_FOUND)
@@ -268,7 +269,7 @@ int nfs3_Mknod(nfs_arg_t * parg,
                                                &create_arg,
                                                &attr,
                                                ht,
-                                               pclient, pcontext, &cache_status)) != NULL)
+                                               pclient, creds, &cache_status)) != NULL)
             {
 
               /*
@@ -302,20 +303,20 @@ int nfs3_Mknod(nfs_arg_t * parg,
                        * Build entry
                        * attributes 
                        */
-                      nfs_SetPostOpAttr(pcontext, pexport,
+                      nfs_SetPostOpAttr(pexport,
                                         node_pentry,
                                         &attr,
                                         &(pres->res_mknod3.MKNOD3res_u.resok.
                                           obj_attributes));
 
                       /* Get the attributes of the parent after the operation */
-		      attr_parent_after = parent_pentry->attributes;
+		      attr_parent_after = parent_pentry->obj_handle->attributes;
 
                       /*
                        * Build Weak Cache
                        * Coherency data 
                        */
-                      nfs_SetWccData(pcontext, pexport,
+                      nfs_SetWccData(pexport,
                                      parent_pentry,
                                      ppre_attr,
                                      &attr_parent_after,
@@ -347,7 +348,7 @@ int nfs3_Mknod(nfs_arg_t * parg,
               pres->res_mknod3.status = NFS3ERR_INVAL;
             }
 
-          nfs_SetFailedStatus(pcontext, pexport,
+          nfs_SetFailedStatus(pexport,
                               preq->rq_vers,
                               cache_status,
                               NULL,
@@ -370,7 +371,7 @@ int nfs3_Mknod(nfs_arg_t * parg,
       return NFS_REQ_DROP;
 
     }
-  nfs_SetFailedStatus(pcontext, pexport,
+  nfs_SetFailedStatus(pexport,
                       preq->rq_vers,
                       cache_status,
                       NULL,
