@@ -57,7 +57,7 @@ fsal_status_t dumb_fsal_up_invalidate(fsal_up_event_data_t * pevdata)
   memset(&attr, 0, sizeof(fsal_attrib_list_t));
 
   pentry = cache_inode_get(&pevdata->event_context.fsal_data, cachepol,
-                           &attr, pevdata->event_context.ht, NULL, NULL,
+                           &attr, pevdata->event_context.ht, NULL,
                            &cache_status);
   if(pentry == NULL)
     {
@@ -132,7 +132,7 @@ fsal_status_t dumb_fsal_up_lock_grant(fsal_up_event_data_t * pevdata)
       LogDebug(COMPONENT_FSAL_UP,
                "FSAL_UP_DUMB: calling cache_inode_get()");
   pentry = cache_inode_get(&pevdata->event_context.fsal_data, cachepol,
-                           &attr, pevdata->event_context.ht, NULL, NULL,
+                           &attr, pevdata->event_context.ht, NULL,
                            &cache_status);
   if(pentry == NULL)
     {
@@ -169,7 +169,7 @@ fsal_status_t dumb_fsal_up_lock_avail(fsal_up_event_data_t * pevdata)
       LogDebug(COMPONENT_FSAL_UP,
                "FSAL_UP_DUMB: calling cache_inode_get()");
   pentry = cache_inode_get(&pevdata->event_context.fsal_data, cachepol,
-                           &attr, pevdata->event_context.ht, NULL, NULL,
+                           &attr, pevdata->event_context.ht, NULL,
                            &cache_status);
   if(pentry == NULL)
     {
