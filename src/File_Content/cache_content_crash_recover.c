@@ -164,9 +164,10 @@ cache_content_status_t cache_content_crash_recover(unsigned short exportid,
                     LogMajor(COMPONENT_CACHE_CONTENT,
                                       "File Content Cache record for File ID %"PRIx64" : READ OK",
                                       inum);
-
-                  /* Populating the cache_inode... */
-                  fsal_data.fh_desc = inode_entry.fh_desc;
+/** @TODO need export and cache_inode_reload_content may need fixing
+ */
+/*                   /\* Populating the cache_inode... *\/ */
+/*                   fsal_data.fh_desc = inode_entry.fh_desc; */
 
                   if((pentry = cache_inode_get(&fsal_data,
                                                CACHE_INODE_JOKER_POLICY,
@@ -193,7 +194,7 @@ cache_content_status_t cache_content_crash_recover(unsigned short exportid,
                                    "Error when recovering size for file ID %"PRIx64, inum);
                     }
                   else
-                    pentry->attributes.filesize = (fsal_size_t) size_in_cache;
+                    pentry->obj_handle->attributes.filesize = (fsal_size_t) size_in_cache;
 
                   /* Adding the cached entry to the data cache */
                   if((pentry_content = cache_content_new_entry(pentry,

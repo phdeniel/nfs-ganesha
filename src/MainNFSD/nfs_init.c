@@ -165,12 +165,6 @@ void *sigmgr_thread( void * arg )
 
   LogEvent(COMPONENT_MAIN, "NFS EXIT: synchonizing FSAL");
 
-  st = FSAL_terminate();
-
-  if(FSAL_IS_ERROR(st))
-    LogCrit(COMPONENT_MAIN, "NFS EXIT: ERROR %d.%d while synchonizing FSAL",
-            st.major, st.minor);
-
   LogDebug(COMPONENT_THREAD, "sigmgr thread exiting");
 
   /* Remove pid file. I do not check for status (best effort, 
@@ -2160,7 +2154,7 @@ void nfs_start(nfs_start_info_t * p_start_info)
 
       LogEvent(COMPONENT_INIT, "Starting Data Cache emergency flush");
 
-      fsal_status = FSAL_InitClientContext(&fsal_context);
+/*       fsal_status = FSAL_InitClientContext(&fsal_context); */
 
       if(FSAL_IS_ERROR(fsal_status))
         {
