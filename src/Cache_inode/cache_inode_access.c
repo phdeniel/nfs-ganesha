@@ -125,6 +125,8 @@ cache_inode_access_sw(cache_entry_t * pentry,
  * at the fsal level anyway because we have the access method but the fsal
  * writer makes the decision on how it is to be handled (locally in the fsal
  * or using the supplied common. This is also another struct copy...
+ * NOTE: below, we use test_access method that uses the handle object's attrs
+ * anyway.
  */
             if(pclient->use_test_access == 1)
                 {
@@ -142,14 +144,13 @@ cache_inode_access_sw(cache_entry_t * pentry,
                             return *pstatus;
                         }
                     fsal_status = pfsal_handle->ops->getattrs(pfsal_handle, &attr);
-                }
-            if(FSAL_IS_ERROR(fsal_status))
-                {
-                    *pstatus = cache_inode_error_convert(fsal_status);
-                    inc_func_err_retryable(pclient, CACHE_INODE_ACCESS);
+		    if(FSAL_IS_ERROR(fsal_status))
+		      {
+			*pstatus = cache_inode_error_convert(fsal_status);
+			inc_func_err_retryable(pclient, CACHE_INODE_ACCESS);
 
-                    if(fsal_status.major == ERR_FSAL_STALE)
-                        {
+			if(fsal_status.major == ERR_FSAL_STALE)
+                          {
                             cache_inode_status_t kill_status;
 
                             LogEvent(COMPONENT_CACHE_INODE,
@@ -170,7 +171,8 @@ cache_inode_access_sw(cache_entry_t * pentry,
 
                             *pstatus = CACHE_INODE_FSAL_ESTALE;
                             return *pstatus;
-                        }
+			  }
+		      }
                 }
 	    fsal_status = pfsal_handle->ops->test_access(pfsal_handle,
 							 creds,
