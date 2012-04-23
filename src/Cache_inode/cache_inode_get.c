@@ -112,7 +112,6 @@ cache_entry_t *cache_inode_get_located(cache_inode_fsal_data_t * pfsdata,
   hash_buffer_t key, value;
   cache_entry_t *pentry = NULL;
   fsal_status_t fsal_status;
-  cache_inode_file_type_t type;
   int hrc = 0;
   struct fsal_export *exp_hdl = NULL;  /** @TODO find one */
   struct fsal_obj_handle *new_hdl;
@@ -166,9 +165,6 @@ cache_entry_t *cache_inode_get_located(cache_inode_fsal_data_t * pfsdata,
 	}
 
       /* Add the entry to the cache */
-      if ( type == 1)
-	LogCrit(COMPONENT_CACHE_INODE,"inode get");
-
       if((pentry = cache_inode_new_entry(new_hdl,
 					 policy, 
 					 ht, 
