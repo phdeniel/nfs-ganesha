@@ -210,7 +210,7 @@ cache_content_status_t cache_content_rdwr(cache_content_entry_t * pentry,
                                           cache_content_client_t * pclient,
                                           cache_content_status_t * pstatus)
 {
-  fsal_handle_t *pfsal_handle = NULL;
+  struct fsal_obj_handle *pfsal_handle = NULL;
   fsal_status_t fsal_status;
   cache_inode_status_t cache_inode_status;
   cache_content_status_t cache_content_status;

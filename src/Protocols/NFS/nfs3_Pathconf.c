@@ -106,7 +106,9 @@ int nfs3_Pathconf(nfs_arg_t * parg,
   pres->res_pathconf3.PATHCONF3res_u.resfail.obj_attributes.attributes_follow = FALSE;
 
   /* Convert file handle into a fsal_handle */
-  if(nfs3_FhandleToFSAL(&(parg->arg_pathconf3.object), &fsal_data.fh_desc, pexport) == 0)
+  if(nfs3_FhandleToFSAL(&(parg->arg_pathconf3.object),
+			&fsal_data.fh_desc,
+			pexport->export_hdl) == 0)
     return NFS_REQ_DROP;
 
   /* Get the entry in the cache_inode */

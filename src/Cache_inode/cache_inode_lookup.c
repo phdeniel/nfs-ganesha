@@ -100,7 +100,6 @@ cache_entry_t *cache_inode_lookup_sw(cache_entry_t        * pentry_parent,
   fsal_status_t fsal_status;
   struct fsal_obj_handle *object_handle;
   struct fsal_obj_handle *dir_handle;
-  fsal_attrib_list_t object_attributes;
   cache_inode_status_t cache_status;
   fsal_accessflags_t access_mask = 0;
 
@@ -199,7 +198,6 @@ cache_entry_t *cache_inode_lookup_sw(cache_entry_t        * pentry_parent,
           LogDebug(COMPONENT_CACHE_INODE, "Cache Miss detected");
 
           dir_handle = pentry_parent->obj_handle;
-          object_attributes.asked_attributes = pclient->attrmask;
           fsal_status = dir_handle->ops->lookup(dir_handle,
 						pname->name,
 						&object_handle);

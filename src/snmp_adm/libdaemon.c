@@ -451,7 +451,7 @@ int snmp_adm_config_daemon(char *agent_x_socket, char *filelog, int prod_id)
         {
           offset += write;
           len -= write;
-          write = snprintf(buf + offset, len, ".%ld", root_oid[i]);
+          write = snprintf(buf + offset, len, ".%ld", (long int)root_oid[i]); /* make strict happy */
         }
       snmp_adm_log("ROOT_OID=%s", buf);
     }

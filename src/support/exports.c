@@ -2937,16 +2937,7 @@ int nfs_export_create_root_entry(exportlist_t * pexportlist, hash_table_t * ht)
       cache_content_status_t cache_content_status;
 #endif
       fsal_status_t fsal_status;
-      cache_inode_fsal_data_t fsdata;
-/*       fsal_handle_t fsal_handle; */
-      struct fsal_obj_handle *root_hdl;
-      fsal_path_t exportpath_fsal;
-      fsal_mdsize_t strsize = MNTPATHLEN + 1;
       cache_entry_t *pentry = NULL;
-
-/* this gets replaced by ???.  perhaps a transaction object */
-
-      fsal_op_context_t context;
 
       /* setting the 'small_client' structure */
       small_client_param.lru_param.nb_entry_prealloc = 10;

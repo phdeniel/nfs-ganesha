@@ -90,8 +90,6 @@ int nfs4_op_rename(struct nfs_argop4 *op, compound_data_t * data, struct nfs_res
 
   cache_inode_status_t cache_status;
 
-  fsal_status_t fsal_status;
-
   struct fsal_obj_handle *handlenew;
   struct fsal_obj_handle *handleold;
 
