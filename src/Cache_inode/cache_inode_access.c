@@ -80,7 +80,6 @@ cache_inode_access_sw(cache_entry_t * pentry,
                       struct user_cred *creds,
                       cache_inode_status_t * pstatus, int use_mutex)
 {
-    fsal_attrib_list_t attr;
     fsal_status_t fsal_status;
     cache_inode_status_t cache_status;
     fsal_accessflags_t used_access_type;
@@ -110,14 +109,13 @@ cache_inode_access_sw(cache_entry_t * pentry,
             /* We get ride of F_OK */
             used_access_type = access_type & ~FSAL_F_OK;
 
-            /* We get the attributes */
-            attr = pentry->obj_handle->attributes;
-            /*
-             * Function FSAL_test_access is used instead of FSAL_access.
-             * This allow to take benefit of the previously cached
-             * attributes. This behavior is configurable via the
-             * configuration file.
-             */
+	    pfsal_handle = cache_inode_get_fsal_handle(pentry, pstatus);
+	    if(pfsal_handle == NULL)
+	      {
+		 if(use_mutex)
+		    V_r(&pentry->lock);
+		 return *pstatus;
+	      }
 /** @TODO There is something way too clever with this use_test_access
  * flag.  If the flag is set, the FSAL_IS_ERROR is testing an uninitialized
  * fsal_status.  Also, the 'then' part is a NOP given the line above.
@@ -128,22 +126,11 @@ cache_inode_access_sw(cache_entry_t * pentry,
  * NOTE: below, we use test_access method that uses the handle object's attrs
  * anyway.
  */
-            if(pclient->use_test_access == 1)
+            if(pclient->use_test_access != 1)
                 {
                     /* We get the attributes */
-		    attr = pentry->obj_handle->attributes;
-
-                }
-            else
-                {
-                    pfsal_handle = cache_inode_get_fsal_handle(pentry, pstatus);
-                    if(pfsal_handle == NULL)
-                        {
-                            if(use_mutex)
-                                V_r(&pentry->lock);
-                            return *pstatus;
-                        }
-                    fsal_status = pfsal_handle->ops->getattrs(pfsal_handle, &attr);
+                    fsal_status = pfsal_handle->ops->getattrs(pfsal_handle,
+							      &pfsal_handle->attributes);
 		    if(FSAL_IS_ERROR(fsal_status))
 		      {
 			*pstatus = cache_inode_error_convert(fsal_status);
