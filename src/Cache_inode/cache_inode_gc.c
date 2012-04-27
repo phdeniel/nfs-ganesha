@@ -188,8 +188,14 @@ static int cache_inode_gc_clean_entry(cache_entry_t * pentry,
   /* Free and Destroy the mutex associated with the pentry */
   V_w(&pentry->lock);
 
-  /* return the obj handle. figure out get/put.  I'd rather a better deref here */
-  pfsal_handle->ops->release(pfsal_handle);
+  /* return the obj handle. */
+  fsal_status = pfsal_handle->ops->release(pfsal_handle);
+  if(FSAL_IS_ERROR(fsal_status))
+    {
+      LogCrit(COMPONENT_CACHE_INODE_GC,
+	      "Failed to release object handle 0x%p",
+	      pfsal_handle);
+    }
 
   cache_inode_mutex_destroy(pentry);
 
@@ -603,7 +609,6 @@ int cache_inode_gc_fd_func(LRU_entry_t * plru_entry, void *addparam)
 {
   cache_entry_t *pentry = NULL;
   cache_inode_param_gc_t *pgcparam = (cache_inode_param_gc_t *) addparam;
-  cache_inode_status_t status;
 
   /* Get the entry */
   pentry = (cache_entry_t *) (plru_entry->buffdata.pdata);
