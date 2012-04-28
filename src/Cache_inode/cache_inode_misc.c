@@ -256,7 +256,7 @@ cache_entry_t *cache_inode_new_entry(struct fsal_obj_handle    * new_obj,
  * the root dir of the mount.  What we do here is substitute that
  * root's handle for the junction we found in the path walk.
  */
-  if(new_obj->ops->handle_is(new_obj, FSAL_TYPE_JUNCTION))
+  if(new_obj->ops->handle_is(new_obj, FS_JUNCTION))
     {
       struct fsal_obj_handle *jctn_hdl;
 
@@ -281,7 +281,7 @@ cache_entry_t *cache_inode_new_entry(struct fsal_obj_handle    * new_obj,
 	      return NULL;
 	    }
 	  new_obj = jctn_hdl;
-	  assert(new_obj->ops->handle_is(new_obj, FSAL_TYPE_DIR)); /* this is what the old code assumed... */
+	  assert(new_obj->ops->handle_is(new_obj, DIRECTORY)); /* this is what the old code assumed... */
 	}
     }
   GetFromPool(pentry, &pclient->pool_entry, cache_entry_t);
@@ -335,7 +335,7 @@ cache_entry_t *cache_inode_new_entry(struct fsal_obj_handle    * new_obj,
 
   switch (new_obj->type)
     {
-    case FSAL_TYPE_FILE:
+    case REGULAR_FILE:
       type_name = "REGULAR_FILE";
       init_glist(&pentry->object.file.state_list);  /* No associated states yet */
       init_glist(&pentry->object.file.lock_list);   /* No associated locks yet */
@@ -356,7 +356,7 @@ cache_entry_t *cache_inode_new_entry(struct fsal_obj_handle    * new_obj,
 
       break;
 
-    case FSAL_TYPE_DIR:
+    case DIRECTORY:
       type_name = "DIRECTORY";
 
       /* If directory is newly created, it is empty
@@ -370,23 +370,23 @@ cache_entry_t *cache_inode_new_entry(struct fsal_obj_handle    * new_obj,
       cache_inode_avl_init(pentry);
       break;
 
-    case FSAL_TYPE_LNK:
+    case SYMBOLIC_LINK:
       type_name = "SYMBOLIC_LINK";
       break;
 
-    case FSAL_TYPE_SOCK:
+    case SOCKET_FILE:
       type_name = "SOCKET_FILE";
       break;
 
-    case FSAL_TYPE_FIFO:
+    case FIFO_FILE:
       type_name = "FIFO_FILE";
       break;
 
-    case FSAL_TYPE_BLK:
+    case BLOCK_FILE:
       type_name = "BLOCK_FILE";
       break;
 
-    case FSAL_TYPE_CHR:
+    case CHARACTER_FILE:
       type_name = "CHARACTER_FILE";
       break;
 
@@ -487,7 +487,7 @@ cache_entry_t *cache_inode_new_entry(struct fsal_obj_handle    * new_obj,
    * This is done only when this is not a creation (when creating a new file,
    * it is impossible to have it cached)
    * this will eventually be a stacked caching fsal */
-  if(new_obj->ops->handle_is(new_obj, FSAL_TYPE_FILE) && create_flag == FALSE)
+  if(new_obj->ops->handle_is(new_obj, REGULAR_FILE) && create_flag == FALSE)
     {
       cache_content_test_cached(pentry,
                                 (cache_content_client_t *) pclient->pcontent_client,
@@ -897,63 +897,6 @@ void cache_inode_set_attributes(cache_entry_t * pentry, fsal_attrib_list_t * pat
     }
 #endif                          /* _USE_NFS4_ACL */
 }                               /* cache_inode_set_attributes */
-
-/**
- *
- * cache_inode_fsal_type_convert: converts an FSAL type to the cache_inode type to be used.
- *
- * Converts an FSAL type to the cache_inode type to be used.
- *
- * @param type [IN] the input FSAL type.
- *
- * @return the result of the conversion.
- *
- */
-cache_inode_file_type_t cache_inode_fsal_type_convert(fsal_nodetype_t type)
-{
-  cache_inode_file_type_t rctype;
-
-  switch (type)
-    {
-    case FSAL_TYPE_DIR:
-      rctype = DIRECTORY;
-      break;
-
-    case FSAL_TYPE_FILE:
-      rctype = REGULAR_FILE;
-      break;
-
-    case FSAL_TYPE_LNK:
-      rctype = SYMBOLIC_LINK;
-      break;
-
-    case FSAL_TYPE_BLK:
-      rctype = BLOCK_FILE;
-      break;
-
-    case FSAL_TYPE_FIFO:
-      rctype = FIFO_FILE;
-      break;
-
-    case FSAL_TYPE_CHR:
-      rctype = CHARACTER_FILE;
-      break;
-
-    case FSAL_TYPE_SOCK:
-      rctype = SOCKET_FILE;
-      break;
-
-    case FSAL_TYPE_JUNCTION:
-      rctype = FS_JUNCTION ;
-      break ;
-
-    default:
-      rctype = UNASSIGNED;
-      break;
-    }
-
-  return rctype;
-}                               /* cache_inode_fsal_type_convert */
 
 /**
  *

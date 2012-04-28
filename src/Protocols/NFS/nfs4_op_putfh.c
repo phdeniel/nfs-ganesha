@@ -199,7 +199,7 @@ int nfs4_op_putfh(struct nfs_argop4 *op, compound_data_t * data, struct nfs_reso
             }
 
           /* Extract the filetype */
-          data->current_filetype = cache_inode_fsal_type_convert(attr.type);
+          data->current_filetype = attr.type;
         }
     }
 

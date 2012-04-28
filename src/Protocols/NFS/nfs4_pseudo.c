@@ -1686,7 +1686,7 @@ int nfs4_op_lookup_pseudo(struct nfs_argop4 *op,
 
       /* Keep the pentry within the compound data */
       data->current_entry = pentry;
-      data->current_filetype = cache_inode_fsal_type_convert(attr.type);
+      data->current_filetype = attr.type;
 
     }                           /* else */
 
@@ -1943,7 +1943,7 @@ int nfs4_op_readdir_pseudo(struct nfs_argop4 *op,
 
       /* Keep the pentry within the compound data */
       data->current_entry = pentry;
-      data->current_filetype = cache_inode_fsal_type_convert(attr.type);
+      data->current_filetype = attr.type;
 
       /* redo the call on the other side of the junction */
       return nfs4_op_readdir(op, data, resp);

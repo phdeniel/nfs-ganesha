@@ -104,7 +104,6 @@ int nfs_Readdir(nfs_arg_t * parg,
   unsigned long space_used = 0;
   unsigned long estimated_num_entries = 0;
   unsigned long asked_num_entries;
-  cache_inode_file_type_t dir_filetype;
   cache_inode_endofdir_t eod_met;
   cache_inode_status_t cache_status;
   cache_inode_status_t cache_status_gethandle;
@@ -245,12 +244,9 @@ int nfs_Readdir(nfs_arg_t * parg,
       break;
     }                           /* switch(preq->pq_vers ) */
 
-  /* Extract the filetype */
-  dir_filetype = cache_inode_fsal_type_convert(dir_attr.type);
-
   /* Sanity checks -- must be a directory */
 
-  if(dir_filetype != DIRECTORY)
+  if(dir_attr.type != DIRECTORY)
     {
       switch (preq->rq_vers)
         {

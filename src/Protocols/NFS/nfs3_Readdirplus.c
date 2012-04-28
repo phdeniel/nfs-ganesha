@@ -113,7 +113,6 @@ int nfs3_Readdirplus(nfs_arg_t * parg,
   unsigned long space_used;
   unsigned long estimated_num_entries;
   unsigned long asked_num_entries;
-  cache_inode_file_type_t dir_filetype;
   cache_inode_endofdir_t eod_met = UNASSIGNED_EOD;
   cache_inode_status_t cache_status;
   cache_inode_status_t cache_status_gethandle;
@@ -180,12 +179,9 @@ int nfs3_Readdirplus(nfs_arg_t * parg,
       return rc;
     }
 
-  /* Extract the filetype */
-  dir_filetype = cache_inode_fsal_type_convert(dir_attr.type);
-
   /* Sanity checks -- must be a directory */
 
-  if(dir_filetype != DIRECTORY)
+  if(dir_attr.type != DIRECTORY)
     {
       pres->res_readdirplus3.status = NFS3ERR_NOTDIR;
       return NFS_REQ_OK;

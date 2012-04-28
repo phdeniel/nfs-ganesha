@@ -83,7 +83,7 @@ cache_inode_status_t cache_inode_readlink(cache_entry_t * pentry,
       return *pstatus;
     }
   if( !pentry->obj_handle->ops->handle_is(pentry->obj_handle,
-					  FSAL_TYPE_LNK))
+					  SYMBOLIC_LINK))
     {
       V_w(&pentry->lock);
       *pstatus = CACHE_INODE_BAD_TYPE;

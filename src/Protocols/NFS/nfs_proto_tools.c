@@ -50,6 +50,7 @@
 #include <pwd.h>
 #include <grp.h>
 #include <stdint.h>
+#include <assert.h>
 #include "HashData.h"
 #include "HashTable.h"
 #include "rpc.h"
@@ -974,40 +975,44 @@ int nfs4_FSALattr_To_Fattr(exportlist_t * pexport,
         case FATTR4_TYPE:
           switch (pattr->type)
             {
-            case FSAL_TYPE_FILE:
-            case FSAL_TYPE_XATTR:
+            case REGULAR_FILE:
+            case EXTENDED_ATTR:
               file_type = htonl(NF4REG);        /* Regular file */
               break;
 
-            case FSAL_TYPE_DIR:
+            case DIRECTORY:
               file_type = htonl(NF4DIR);        /* Directory */
               break;
 
-            case FSAL_TYPE_BLK:
+            case BLOCK_FILE:
               file_type = htonl(NF4BLK);        /* Special File - block device */
               break;
 
-            case FSAL_TYPE_CHR:
+            case CHARACTER_FILE:
               file_type = htonl(NF4CHR);        /* Special File - character device */
               break;
 
-            case FSAL_TYPE_LNK:
+            case SYMBOLIC_LINK:
               file_type = htonl(NF4LNK);        /* Symbolic Link */
               break;
 
-            case FSAL_TYPE_SOCK:
+            case SOCKET_FILE:
               file_type = htonl(NF4SOCK);       /* Special File - socket */
               break;
 
-            case FSAL_TYPE_FIFO:
+            case FIFO_FILE:
               file_type = htonl(NF4FIFO);       /* Special File - fifo */
               break;
 
-            case FSAL_TYPE_JUNCTION:
+            case FS_JUNCTION:
               /* For wanting of a better solution */
               file_type = 0;
               op_attr_success = 0;      /* This was no success */
               break;
+	    case UNASSIGNED: /** @TODO this and junction are a bit bogus */
+	    case RECYCLED:   /* these are both file types and cache entry states */
+	      assert(0);     /* this is bad, so die. This needs to be fixed. */
+	      break;
             }                   /* switch( pattr->type ) */
 
           memcpy((char *)(attrvalsBuffer + LastOffset), &file_type, sizeof(fattr4_type));
@@ -1872,43 +1877,45 @@ int nfs2_FSALattr_To_Fattr(exportlist_t * pexport,      /* In: the related expor
 
   switch (pFSAL_attr->type)
     {
-    case FSAL_TYPE_FILE:
+    case REGULAR_FILE:
       pFattr->type = NFREG;
       pFattr->mode = NFS2_MODE_NFREG;
       break;
 
-    case FSAL_TYPE_DIR:
+    case DIRECTORY:
       pFattr->type = NFDIR;
       pFattr->mode = NFS2_MODE_NFDIR;
       break;
 
-    case FSAL_TYPE_BLK:
+    case BLOCK_FILE:
       pFattr->type = NFBLK;
       pFattr->mode = NFS2_MODE_NFBLK;
       break;
 
-    case FSAL_TYPE_CHR:
+    case CHARACTER_FILE:
       pFattr->type = NFCHR;
       pFattr->mode = NFS2_MODE_NFCHR;
       break;
 
-    case FSAL_TYPE_FIFO:
+    case FIFO_FILE:
       pFattr->type = NFFIFO;
       /** @todo mode mask ? */
       break;
 
-    case FSAL_TYPE_LNK:
+    case SYMBOLIC_LINK:
       pFattr->type = NFLNK;
       pFattr->mode = NFS2_MODE_NFLNK;
       break;
 
-    case FSAL_TYPE_SOCK:
+    case SOCKET_FILE:
       pFattr->type = NFSOCK;
       /** @todo mode mask ? */
       break;
 
-    case FSAL_TYPE_XATTR:
-    case FSAL_TYPE_JUNCTION:
+    case EXTENDED_ATTR:
+    case FS_JUNCTION:
+    case UNASSIGNED:
+    case RECYCLED:
       pFattr->type = NFBAD;
     }
 
@@ -1937,7 +1944,7 @@ int nfs2_FSALattr_To_Fattr(exportlist_t * pexport,      /* In: the related expor
   if(pFattr->size % DEV_BSIZE != 0)
     pFattr->blocks += 1;
 
-  if(pFSAL_attr->type == FSAL_TYPE_CHR || pFSAL_attr->type == FSAL_TYPE_BLK)
+  if(pFSAL_attr->type == CHARACTER_FILE || pFSAL_attr->type == BLOCK_FILE)
     pFattr->rdev = pFSAL_attr->rawdev.major;
   else
     pFattr->rdev = 0;
@@ -2387,36 +2394,38 @@ int nfs3_FSALattr_To_Fattr(exportlist_t * pexport,      /* In: the related expor
 
   switch (FSAL_attr->type)
     {
-    case FSAL_TYPE_FIFO:
+    case FIFO_FILE:
       Fattr->type = NF3FIFO;
       break;
 
-    case FSAL_TYPE_CHR:
+    case CHARACTER_FILE:
       Fattr->type = NF3CHR;
       break;
 
-    case FSAL_TYPE_DIR:
+    case DIRECTORY:
       Fattr->type = NF3DIR;
       break;
 
-    case FSAL_TYPE_BLK:
+    case BLOCK_FILE:
       Fattr->type = NF3BLK;
       break;
 
-    case FSAL_TYPE_FILE:
-    case FSAL_TYPE_XATTR:
+    case REGULAR_FILE:
+    case EXTENDED_ATTR:
       Fattr->type = NF3REG;
       break;
 
-    case FSAL_TYPE_LNK:
+    case SYMBOLIC_LINK:
       Fattr->type = NF3LNK;
       break;
 
-    case FSAL_TYPE_SOCK:
+    case SOCKET_FILE:
       Fattr->type = NF3SOCK;
       break;
 
-    case FSAL_TYPE_JUNCTION:
+    case FS_JUNCTION:
+    case UNASSIGNED:
+    case RECYCLED:
       /* Should not occur */
       LogFullDebug(COMPONENT_NFSPROTO,
                    "nfs3_FSALattr_To_Fattr: FSAL_attr->type = %d",
@@ -2432,7 +2441,7 @@ int nfs3_FSALattr_To_Fattr(exportlist_t * pexport,      /* In: the related expor
   Fattr->size = FSAL_attr->filesize;
   Fattr->used = FSAL_attr->spaceused;
 
-  if(FSAL_attr->type == FSAL_TYPE_CHR || FSAL_attr->type == FSAL_TYPE_BLK)
+  if(FSAL_attr->type == CHARACTER_FILE || FSAL_attr->type == BLOCK_FILE)
     {
       Fattr->rdev.specdata1 = FSAL_attr->rawdev.major;
       Fattr->rdev.specdata2 = FSAL_attr->rawdev.minor;
@@ -3327,34 +3336,34 @@ int nfs4_Fattr_To_FSAL_attr(fsal_attrib_list_t * pFSAL_attr, fattr4 * Fattr)
           switch (ntohl(attr_type))
             {
             case NF4REG:
-              pFSAL_attr->type = FSAL_TYPE_FILE;
+              pFSAL_attr->type = REGULAR_FILE;
               break;
 
             case NF4DIR:
-              pFSAL_attr->type = FSAL_TYPE_DIR;
+              pFSAL_attr->type = DIRECTORY;
               break;
 
             case NF4BLK:
-              pFSAL_attr->type = FSAL_TYPE_BLK;
+              pFSAL_attr->type = BLOCK_FILE;
               break;
 
             case NF4CHR:
-              pFSAL_attr->type = FSAL_TYPE_CHR;
+              pFSAL_attr->type = CHARACTER_FILE;
               break;
 
             case NF4LNK:
-              pFSAL_attr->type = FSAL_TYPE_LNK;
+              pFSAL_attr->type = SYMBOLIC_LINK;
               break;
 
             case NF4SOCK:
-              pFSAL_attr->type = FSAL_TYPE_SOCK;
+              pFSAL_attr->type = SOCKET_FILE;
               break;
 
             case NF4FIFO:
-              pFSAL_attr->type = FSAL_TYPE_FIFO;
+              pFSAL_attr->type = FIFO_FILE;
               break;
 
-            case FSAL_TYPE_JUNCTION:
+            case FS_JUNCTION:
               /* For wanting of a better solution */
               pFSAL_attr->type = 0;
               break;

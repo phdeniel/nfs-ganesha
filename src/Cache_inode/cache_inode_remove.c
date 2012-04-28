@@ -370,7 +370,7 @@ cache_inode_status_t cache_inode_remove_sw(cache_entry_t * pentry,             /
 	  to_remove_entry->obj_handle->attributes.numlinks = 0;
   }
   if( !to_remove_entry->obj_handle->ops->handle_is(to_remove_entry->obj_handle,
-						   FSAL_TYPE_DIR))
+						   DIRECTORY))
     {
       if(remove_attr.numlinks > 1)
         {

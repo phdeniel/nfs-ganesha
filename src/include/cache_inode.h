@@ -196,19 +196,6 @@ typedef struct cache_inode_opened_file__
   time_t last_op;
 } cache_inode_opened_file_t;
 
-typedef enum cache_inode_file_type__
-{ UNASSIGNED = 1,
-  REGULAR_FILE = 2,
-  CHARACTER_FILE = 3,
-  BLOCK_FILE = 4,
-  SYMBOLIC_LINK = 5,
-  SOCKET_FILE = 6,
-  FIFO_FILE = 7,
-  DIRECTORY = 8,
-  FS_JUNCTION = 9,
-  RECYCLED = 10
-} cache_inode_file_type_t;
-
 typedef enum cache_inode_lock_how__
 {
   NO_LOCK = 0,
@@ -866,8 +853,6 @@ cache_inode_status_t cache_inode_invalidate_all_cached_dirent(cache_entry_t *
                                                               pstatus);
 
 void cache_inode_set_attributes(cache_entry_t * pentry, fsal_attrib_list_t * pattr);
-
-cache_inode_file_type_t cache_inode_fsal_type_convert(fsal_nodetype_t type);
 
 int cache_inode_type_are_rename_compatible(cache_entry_t * pentry_src,
                                            cache_entry_t * pentry2);
