@@ -142,7 +142,7 @@ cache_inode_status_t cache_inode_readlink(cache_entry_t * pentry,
           return *pstatus;
     }
 
-
+  plink_content->len = strlen(plink_content->path);  /* make fsal_path_t go away */
   /* Release the entry */
   *pstatus = cache_inode_valid(pentry, CACHE_INODE_OP_GET, pclient);
   V_r(&pentry->lock);

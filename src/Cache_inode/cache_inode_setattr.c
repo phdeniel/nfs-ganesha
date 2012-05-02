@@ -111,6 +111,7 @@ cache_inode_status_t cache_inode_setattr(cache_entry_t * pentry,
       return *pstatus;
     }
   obj_handle = pentry->obj_handle;
+  p_object_attributes = &obj_handle->attributes;
 
   /* Is it allowed to change times ? */
   if( !obj_handle->export->ops->fs_supports(obj_handle->export, cansettime) &&
