@@ -93,7 +93,7 @@ int nfs41_op_open(struct nfs_argop4 *op, compound_data_t * data, struct nfs_reso
   bool_t                    ReuseState = FALSE;
   fsal_accessmode_t         mode = 0600;
   nfs_fh4                   newfh4;
-  char                      newfh4_val[NFS4_FHSIZE];
+  struct alloc_file_handle_v4 new_handle;
   state_data_t              candidate_data;
   state_type_t              candidate_type;
   state_t                 * pfile_state = NULL;
@@ -111,7 +111,8 @@ int nfs41_op_open(struct nfs_argop4 *op, compound_data_t * data, struct nfs_reso
   LogDebug(COMPONENT_STATE,
            "Entering NFS v4.1 OPEN handler -----------------------------------------------------");
 
-  newfh4.nfs_fh4_val = newfh4_val;
+  newfh4.nfs_fh4_val = (caddr_t) &new_handle;
+  newfh4.nfs_fh4_len = sizeof(struct alloc_file_handle_v4);
 
   fsal_accessflags_t write_access = FSAL_WRITE_ACCESS;
   fsal_accessflags_t read_access = FSAL_READ_ACCESS;
@@ -510,8 +511,20 @@ int nfs41_op_open(struct nfs_argop4 *op, compound_data_t * data, struct nfs_reso
                       cause2 = " (state_add failed)";
                       goto out;
                     }
+                  /* Attach this open to an export */
+                  pfile_state->state_pexport = data->pexport;
+                  P(data->pexport->exp_state_mutex);
+                  glist_add_tail(&data->pexport->exp_state_list,
+                                 &pfile_state->state_export_list);
+                  V(data->pexport->exp_state_mutex);
 
                   init_glist(&pfile_state->state_data.share.share_lockstates);
+
+                  /* Attach this open to an export */
+                  pfile_state->state_pexport = data->pexport;
+                  P(data->pexport->exp_state_mutex);
+                  glist_add_tail(&data->pexport->exp_state_list, &pfile_state->state_export_list);
+                  V(data->pexport->exp_state_mutex);
 
                   /* Open the file */
                   if(cache_inode_open_by_name(pentry_parent,
@@ -725,7 +738,20 @@ int nfs41_op_open(struct nfs_argop4 *op, compound_data_t * data, struct nfs_reso
               goto out;
             }
 
+          /* Attach this open to an export */
+          pfile_state->state_pexport = data->pexport;
+          P(data->pexport->exp_state_mutex);
+          glist_add_tail(&data->pexport->exp_state_list,
+                         &pfile_state->state_export_list);
+          V(data->pexport->exp_state_mutex);
+
           init_glist(&pfile_state->state_data.share.share_lockstates);
+
+          /* Attach this open to an export */
+          pfile_state->state_pexport = data->pexport;
+          P(data->pexport->exp_state_mutex);
+          glist_add_tail(&data->pexport->exp_state_list, &pfile_state->state_export_list);
+          V(data->pexport->exp_state_mutex);
 
           cache_status = CACHE_INODE_SUCCESS;
 
@@ -949,7 +975,33 @@ int nfs41_op_open(struct nfs_argop4 *op, compound_data_t * data, struct nfs_reso
                   goto out;
                 }
 
+              /* Attach this open to an export */
+              pfile_state->state_pexport = data->pexport;
+              P(data->pexport->exp_state_mutex);
+              glist_add_tail(&data->pexport->exp_state_list,
+                             &pfile_state->state_export_list);
+              V(data->pexport->exp_state_mutex);
               init_glist(&pfile_state->state_data.share.share_lockstates);
+
+              /* Attach this open to an export */
+              pfile_state->state_pexport = data->pexport;
+              P(data->pexport->exp_state_mutex);
+              glist_add_tail(&data->pexport->exp_state_list, &pfile_state->state_export_list);
+              V(data->pexport->exp_state_mutex);
+            }
+          else 
+            {
+              /* Check if open from another export */
+              if(pfile_state->state_pexport != data->pexport)
+                {
+                  LogEvent(COMPONENT_STATE,
+                           "Lock Owner Export Conflict, Lock held for export %d (%s), request for export %d (%s)",
+                           pfile_state->state_pexport->id,
+                           pfile_state->state_pexport->fullpath,
+                           data->pexport->id,
+                           data->pexport->fullpath);
+                  return STATE_INVALID_ARGUMENT;
+                }
             }
 
           /* Open the file */

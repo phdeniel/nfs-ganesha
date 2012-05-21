@@ -35,6 +35,7 @@
 #include "config.h"
 #endif
 
+#include <assert.h>
 #include "fsal.h"
 #include "fsal_internal.h"
 #include "fsal_convert.h"
@@ -78,7 +79,9 @@ int XFSFSAL_handlecmp(fsal_handle_t * hdl1, fsal_handle_t * hdl2,
       return -1;
     }
 
-  if(handle1->data.handle_len != handle2->data.handle_len)
+  if((handle1->data.inode != handle2->data.inode) ||
+     (handle1->data.type != handle2->data.type) ||
+     (handle1->data.handle_len != handle2->data.handle_len))
     return 1;
 
   return memcmp(handle1->data.handle_val, handle2->data.handle_val, handle2->data.handle_len);
@@ -185,6 +188,18 @@ unsigned int XFSFSAL_Handle_to_RBTIndex(fsal_handle_t * handle, unsigned int coo
   return h;
 }
 
+static ssize_t xfs_sizeof_handle(const xfsfsal_handle_t *hdl)
+{
+	/* data.handle_len is unsigned */
+	if(hdl->data.handle_len >= FSAL_XFS_HANDLE_LEN)
+	  {
+		LogMajor(COMPONENT_FSAL, "Incorrect XFS handle length %d",
+			 hdl->data.handle_len);
+		return (size_t)-1;
+	  }
+	return offsetof(xfsfsal_handle_t, data.handle_val) + hdl->data.handle_len;
+}
+
 /**
  * FSAL_DigestHandle :
  *  Convert an xfsfsal_handle_t to a buffer
@@ -195,101 +210,75 @@ unsigned int XFSFSAL_Handle_to_RBTIndex(fsal_handle_t * handle, unsigned int coo
  *        Indicates the type of digest to do.
  * \param in_fsal_handle (input):
  *        The handle to be converted to digest.
- * \param out_buff (output):
+ * \param fh_desc (input/output):
  *        The buffer where the digest is to be stored.
+ *        On input fh_desc->len is set to the size of the buffer,
+ *        on return fh_desc->len is used to indicate how many bytes
+ *        have been copied into the buffer at fh_desc->start.
  *
  * \return The major code is ERR_FSAL_NO_ERROR is no error occured.
  *         Else, it is a non null value.
  */
 fsal_status_t XFSFSAL_DigestHandle(fsal_export_context_t * p_expcontext,     /* IN */
-                                   fsal_digesttype_t output_type,       /* IN */
+                                   fsal_digesttype_t output_type,      /* IN */
                                    fsal_handle_t * handle, /* IN */
-                                   caddr_t out_buff     /* OUT */
+                                   struct fsal_handle_desc * fh_desc  /* OUT */
     )
 {
-  xfsfsal_handle_t * p_in_fsal_handle = (xfsfsal_handle_t *)handle;
+  const xfsfsal_handle_t * xfs_handle = (const xfsfsal_handle_t *)handle;
+  const void *start;
+  ssize_t sz;
   unsigned int ino32;
 
   /* sanity checks */
-  if(!p_in_fsal_handle || !out_buff || !p_expcontext)
+  if(!handle || !fh_desc || !fh_desc->start || !p_expcontext)
     ReturnCode(ERR_FSAL_FAULT, 0);
 
   switch (output_type)
     {
-
-      /* NFS handle digest */
     case FSAL_DIGEST_NFSV2:
-
-      if(sizeof(p_in_fsal_handle->data) > FSAL_DIGEST_SIZE_HDLV2)
-        ReturnCode(ERR_FSAL_TOOSMALL, 0);
-
-      memset(out_buff, 0, FSAL_DIGEST_SIZE_HDLV2);
-      memcpy(out_buff, p_in_fsal_handle, FSAL_DIGEST_SIZE_HDLV2);
-      break;
-
     case FSAL_DIGEST_NFSV3:
-
-      if(sizeof(p_in_fsal_handle->data) > FSAL_DIGEST_SIZE_HDLV3)
-        ReturnCode(ERR_FSAL_TOOSMALL, 0);
-
-      memset(out_buff, 0, FSAL_DIGEST_SIZE_HDLV3);
-      memcpy(out_buff, p_in_fsal_handle, FSAL_DIGEST_SIZE_HDLV3);
-      break;
-
     case FSAL_DIGEST_NFSV4:
-
-      if(sizeof(p_in_fsal_handle->data) > FSAL_DIGEST_SIZE_HDLV4)
-        ReturnCode(ERR_FSAL_TOOSMALL, 0);
-
-      memset(out_buff, 0, FSAL_DIGEST_SIZE_HDLV4);
-      memcpy(out_buff, p_in_fsal_handle, FSAL_DIGEST_SIZE_HDLV4);
+      sz = xfs_sizeof_handle(xfs_handle);
+      start = xfs_handle;
       break;
 
-      /* FileId digest for NFSv2 */
     case FSAL_DIGEST_FILEID2:
-
-      ino32 = my_low32m(p_in_fsal_handle->data.inode);
-
-      /* sanity check about output size */
-      memset(out_buff, 0, FSAL_DIGEST_SIZE_FILEID2);
-      memcpy(out_buff, &ino32, sizeof(int));
-
+      ino32 = my_low32m(xfs_handle->data.inode);
+      if (ino32 != xfs_handle->data.inode)
+	  ReturnCode(ERR_FSAL_OVERFLOW, 0);
+      sz = sizeof(ino32);
+      start = &ino32;
       break;
 
-      /* FileId digest for NFSv3 */
     case FSAL_DIGEST_FILEID3:
-
-      /* sanity check about output size */
-      memset(out_buff, 0, FSAL_DIGEST_SIZE_FILEID3);
-      memcpy(out_buff, &(p_in_fsal_handle->data.inode), sizeof(fsal_u64_t));
-      break;
-
-      /* FileId digest for NFSv4 */
     case FSAL_DIGEST_FILEID4:
-
-      memset(out_buff, 0, FSAL_DIGEST_SIZE_FILEID4);
-      memcpy(out_buff, &(p_in_fsal_handle->data.inode), sizeof(fsal_u64_t));
+      sz = sizeof(xfs_handle->data.inode);
+      start = &xfs_handle->data.inode;  
       break;
 
     default:
       ReturnCode(ERR_FSAL_SERVERFAULT, 0);
-
     }
 
-  ReturnCode(ERR_FSAL_NO_ERROR, 0);
-
+    if(fh_desc->len < sz)
+      {
+	LogMajor(COMPONENT_FSAL,
+		 "buffer too small - need %zd, have %zd", sz, fh_desc->len);
+	ReturnCode(ERR_FSAL_TOOSMALL, 0);
+      }
+    memcpy(fh_desc->start, start, sz);
+    fh_desc->len = sz;
+    ReturnCode(ERR_FSAL_NO_ERROR, 0);
 }
 
 /**
  * FSAL_ExpandHandle :
- *  Convert a buffer extracted from NFS handles
- *  to an FSAL handle.
+ *  Verify handle - mostly used to check that the size matches.
  *
  * \param in_type (input):
  *        Indicates the type of digest to be expanded.
- * \param in_buff (input):
- *        Pointer to the digest to be expanded.
- * \param out_fsal_handle (output):
+ * \param fh_desc (input/output):
  *        The handle built from digest.
  *
  * \return The major code is ERR_FSAL_NO_ERROR is no error occured.
@@ -297,41 +286,65 @@ fsal_status_t XFSFSAL_DigestHandle(fsal_export_context_t * p_expcontext,     /* 
  */
 fsal_status_t XFSFSAL_ExpandHandle(fsal_export_context_t * p_expcontext,     /* IN */
                                    fsal_digesttype_t in_type,   /* IN */
-                                   caddr_t in_buff,     /* IN */
-                                   fsal_handle_t * p_out_fsal_handle /* OUT */
+                                   struct fsal_handle_desc *fh_desc /* IN/OUT */
     )
 {
+  ssize_t fh_size;
+  const xfsfsal_handle_t *xh = (const xfsfsal_handle_t *)fh_desc->start;
+
   /* sanity checks */
-  if(!p_out_fsal_handle || !in_buff || !p_expcontext)
+  if( !fh_desc || !fh_desc->start)
     ReturnCode(ERR_FSAL_FAULT, 0);
 
-  switch (in_type)
+  fh_size = xfs_sizeof_handle(xh);
+  if(fh_size < 0)
+    ReturnCode(ERR_FSAL_BADHANDLE, 0);
+
+  switch(xh->data.type)
     {
-
-      /* NFSV2 handle digest */
-    case FSAL_DIGEST_NFSV2:
-      memset(p_out_fsal_handle, 0, sizeof(xfsfsal_handle_t));
-      memcpy(p_out_fsal_handle, in_buff, sizeof(fsal_u64_t) + sizeof(int));
-      break;
-
-      /* NFSV3 handle digest */
-    case FSAL_DIGEST_NFSV3:
-      memset(p_out_fsal_handle, 0, sizeof(xfsfsal_handle_t));
-      memcpy(p_out_fsal_handle, in_buff, sizeof(xfsfsal_handle_t));
-      break;
-
-      /* NFSV4 handle digest */
-    case FSAL_DIGEST_NFSV4:
-      memset(p_out_fsal_handle, 0, sizeof(xfsfsal_handle_t));
-      memcpy(p_out_fsal_handle, in_buff, sizeof(xfsfsal_handle_t));
-      break;
-
+    case DT_LNK:
+    case DT_BLK:
+    case DT_SOCK:
+    case DT_CHR:
+    case DT_FIFO:
+    case DT_REG:
+    case DT_DIR:
+	break;
     default:
-      ReturnCode(ERR_FSAL_SERVERFAULT, 0);
+	LogMajor(COMPONENT_FSAL,
+		 "Corrupted filehandle - unexpected file type %d",
+		 xh->data.type);
+	ReturnCode(ERR_FSAL_BADHANDLE, EINVAL);
     }
 
+  switch(in_type)
+    {
+    case FSAL_DIGEST_NFSV2:
+      if(fh_desc->len < fh_size)
+        {
+          LogMajor(COMPONENT_FSAL,
+		   "buffer too small for handle.  should be %zd, got %zd",
+		   fh_size, fh_desc->len);
+	  ReturnCode(ERR_FSAL_SERVERFAULT, 0);
+	}
+      break;
+    case FSAL_DIGEST_NFSV3:
+    case FSAL_DIGEST_NFSV4:
+      if(fh_desc->len != fh_size)
+	{
+	  LogMajor(COMPONENT_FSAL,
+		   "size mismatch for handle.  should be %zd, got %zd",
+		   fh_size, fh_desc->len);
+	  ReturnCode(ERR_FSAL_BADHANDLE, 0);
+	}
+      break;
+    case FSAL_DIGEST_SIZEOF:
+      break;
+    default: /* Catch FILEID2, FILEID3, FILEID4 */
+      ReturnCode(ERR_FSAL_SERVERFAULT, 0);
+    }
+  fh_desc->len = fh_size;  /* pass back the actual size */
   ReturnCode(ERR_FSAL_NO_ERROR, 0);
-
 }
 
 /**

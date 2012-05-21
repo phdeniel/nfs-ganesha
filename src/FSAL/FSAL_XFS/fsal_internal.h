@@ -314,12 +314,11 @@ unsigned int XFSFSAL_Handle_to_RBTIndex(fsal_handle_t * p_handle, unsigned int c
 fsal_status_t XFSFSAL_DigestHandle(fsal_export_context_t * p_expcontext,     /* IN */
                                    fsal_digesttype_t output_type,       /* IN */
                                    fsal_handle_t * p_in_fsal_handle, /* IN */
-                                   caddr_t out_buff /* OUT */ );
+                                   struct fsal_handle_desc * fh_desc /* IN/OUT */ );
 
 fsal_status_t XFSFSAL_ExpandHandle(fsal_export_context_t * p_expcontext,     /* IN */
                                    fsal_digesttype_t in_type,   /* IN */
-                                   caddr_t in_buff,     /* IN */
-                                   fsal_handle_t * p_out_fsal_handle /* OUT */ );
+                                   struct fsal_handle_desc * fh_desc /* IN/OUT */);
 
 fsal_status_t XFSFSAL_SetDefault_FS_specific_parameter(fsal_parameter_t * out_parameter);
 
@@ -405,5 +404,11 @@ fsal_status_t XFSFSAL_commit( fsal_file_t * p_file_descriptor,
                             fsal_off_t    offset,
                             fsal_size_t   size ) ;
 
+
+fsal_status_t xfsfsal_stat_by_name(fsal_op_context_t * context,
+				   int atfd,
+				   const char *name,
+				   fsal_handle_t *handle,
+				   fsal_attrib_list_t * attributes);
 
 

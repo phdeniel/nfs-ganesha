@@ -60,7 +60,9 @@ fsal_status_t XFSFSAL_BuildExportContext(fsal_export_context_t *export_context, 
 
   char *handle;
   size_t handle_len = 0;
-  xfsfsal_export_context_t *p_export_context = export_context;
+  struct stat sb;
+  xfsfsal_export_context_t *p_export_context =
+    (xfsfsal_export_context_t *)export_context;
 
   /* sanity check */
   if(p_export_context == NULL)
@@ -137,6 +139,7 @@ fsal_status_t XFSFSAL_BuildExportContext(fsal_export_context_t *export_context, 
           Return(ERR_FSAL_NOENT, 0, INDEX_FSAL_BuildExportContext);
         }
     }
+  endmntent(fp);
 
   /* Save pointer to fsal_staticfsinfo_t in export context */
   p_export_context->fe_static_fs_info = &global_fs_info;
@@ -147,16 +150,30 @@ fsal_status_t XFSFSAL_BuildExportContext(fsal_export_context_t *export_context, 
   if((rc = path_to_fshandle(mntdir, (void **)(&handle), &handle_len)) < 0)
     Return(ERR_FSAL_FAULT, errno, INDEX_FSAL_BuildExportContext);
 
+  if (handle_len > sizeof(p_export_context->mnt_fshandle_val))
+    {
+      free_handle(handle, handle_len);
+      Return(ERR_FSAL_FAULT, E2BIG, INDEX_FSAL_BuildExportContext);
+    }
   memcpy(p_export_context->mnt_fshandle_val, handle, handle_len);
   p_export_context->mnt_fshandle_len = handle_len;
+  free_handle(handle, handle_len);
 
   if((rc = path_to_handle(mntdir, (void **)(&handle), &handle_len)) < 0)
     Return(ERR_FSAL_FAULT, errno, INDEX_FSAL_BuildExportContext);
 
+  if (handle_len > sizeof(p_export_context->mnt_handle_val))
+    {
+      free_handle(handle, handle_len);
+      Return(ERR_FSAL_FAULT, E2BIG, INDEX_FSAL_BuildExportContext);
+    }
   memcpy(p_export_context->mnt_handle_val, handle, handle_len);
   p_export_context->mnt_handle_len = handle_len;
+  free_handle(handle, handle_len);
 
-  p_export_context->dev_id = 1;  /** @todo BUGAZOMEU : put something smarter here, using setmntent */
+  if(stat(mntdir, &sb) < 0)
+    Return(ERR_FSAL_FAULT, errno, INDEX_FSAL_BuildExportContext);
 
+  p_export_context->dev_id = sb.st_dev;
   Return(ERR_FSAL_NO_ERROR, 0, INDEX_FSAL_BuildExportContext);
 }

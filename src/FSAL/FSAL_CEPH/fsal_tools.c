@@ -335,8 +335,8 @@ fsal_status_t CEPHFSAL_SetDefault_FS_specific_parameter(fsal_parameter_t * out_p
   if(out_parameter == NULL)
     ReturnCode(ERR_FSAL_FAULT, 0);
 
-  strcpy(((cephfs_specific_initinfo_t*)
-          out_parameter->fs_specific_info.data)->cephserver, "localhost");
+  strcpy(&((cephfs_specific_initinfo_t)
+           out_parameter->fs_specific_info).cephserver[0], "localhost");
 
   ReturnCode(ERR_FSAL_NO_ERROR, 0);
 }
@@ -474,9 +474,7 @@ fsal_status_t CEPHFSAL_load_FS_common_parameter_from_conf(config_file_t in_confi
      umask
      auth_exportpath_xdev
      xattr_access_rights
-#ifdef _USE_FSALMDS
      pnfs_supported
-#endif
    */
 
   var_max = config_GetNbItems(block);
@@ -633,7 +631,7 @@ fsal_status_t CEPHFSAL_load_FS_common_parameter_from_conf(config_file_t in_confi
                              FSAL_INIT_FORCE_VALUE, unix2fsal_mode(mode));
 
         }
-#ifdef _USE_FSALMDS
+#ifdef _PNFS_MDS
       else if(!STRCMP(key_name, "pnfs_supported"))
         {
           int pnfs_supported = StrToBoolean(key_value);
@@ -650,7 +648,7 @@ fsal_status_t CEPHFSAL_load_FS_common_parameter_from_conf(config_file_t in_confi
                              pnfs_supported,
                              FSAL_INIT_FORCE_VALUE, pnfs_supported);
         }
-#endif /* _USE_FSALMDS */
+#endif /* !_PNFS_MDS */
       else
         {
           LogCrit(COMPONENT_CONFIG,
@@ -705,8 +703,8 @@ fsal_status_t CEPHFSAL_load_FS_specific_parameter_from_conf(config_file_t in_con
 
       if(!STRCMP(key_name, "cephserver"))
         {
-          strncpy(((cephfs_specific_initinfo_t*)
-                   out_parameter->fs_specific_info.data)->cephserver,
+          strncpy(&((cephfs_specific_initinfo_t)
+                    out_parameter->fs_specific_info).cephserver[0],
                   key_value, FSAL_MAX_NAME_LEN);
         }
       else

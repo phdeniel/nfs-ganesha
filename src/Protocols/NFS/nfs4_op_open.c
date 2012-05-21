@@ -110,7 +110,7 @@ int nfs4_op_open(struct nfs_argop4 *op, compound_data_t *data,
   bool_t                    ReuseState = FALSE;
   fsal_accessmode_t         mode = 0600;
   nfs_client_id_t         * nfs_clientid;
-  nfs_worker_data_t       * pworker = NULL;
+  nfs_worker_data_t       * pworker __attribute__((unused)) = NULL;
   state_t                 * pfile_state = NULL;
   state_t                 * pstate_iterate;
   state_nfs4_owner_name_t   owner_name;
@@ -124,7 +124,7 @@ int nfs4_op_open(struct nfs_argop4 *op, compound_data_t *data,
   uint32_t                  tmp_attr[2];
   uint_t                    tmp_int = 2;
 #ifdef _USE_QUOTA
-  fsal_status_t            fsal_status ;
+  fsal_status_t            fsal_status;
 #endif
   char                    * text = "";
 
@@ -1224,10 +1224,11 @@ nfs4_create_fh(compound_data_t *data, cache_entry_t *pentry, char **cause2)
 {
         fsal_handle_t *pnewfsal_handle = NULL;
         nfs_fh4 newfh4;
-        char newfh4_val[NFS4_FHSIZE];
+        struct alloc_file_handle_v4 new_handle;
         cache_inode_status_t cache_status = CACHE_INODE_SUCCESS;
 
-        newfh4.nfs_fh4_val = newfh4_val;
+        newfh4.nfs_fh4_val = (caddr_t) &new_handle;
+	newfh4.nfs_fh4_len = sizeof(struct alloc_file_handle_v4);
 
         /* Now produce the filehandle to this file */
         if((pnewfsal_handle =

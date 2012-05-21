@@ -42,6 +42,48 @@
 #include <utime.h>
 #include <inttypes.h>
 
+#define MAX_2( x, y )    ( (x) > (y) ? (x) : (y) )
+
+static fsal_status_t
+bulkstat_by_inode(fsal_op_context_t * context, ino_t inum, fsal_attrib_list_t * p_fsalattr_out)
+{
+  xfsfsal_op_context_t * p_context = (xfsfsal_op_context_t *)context;
+  xfs_bstat_t stat;
+  struct stat sb;
+  int fd = 0;
+  int errsv, rc;
+
+  if((fd = open(p_context->export_context->mount_point, O_DIRECTORY)) == -1)
+    ReturnCode(posix2fsal_error(errno), errno);
+
+  rc = fsal_internal_get_bulkstat_by_inode(fd, &inum, &stat);
+  errsv = errno;
+  close(fd);
+
+  if(rc < 0)
+    ReturnCode(posix2fsal_error(errsv), errsv);
+
+  memset(&sb, 0, sizeof(sb));
+  sb.st_mode = stat.bs_mode;
+  sb.st_size = stat.bs_size;
+  sb.st_dev = context->export_context->dev_id;
+  sb.st_ino = stat.bs_ino;
+  sb.st_nlink = stat.bs_nlink;
+  sb.st_uid = stat.bs_uid;
+  sb.st_gid = stat.bs_gid;
+  sb.st_atim.tv_sec = stat.bs_atime.tv_sec;
+  sb.st_atim.tv_nsec = stat.bs_atime.tv_nsec;
+  sb.st_ctim.tv_sec = stat.bs_ctime.tv_sec;
+  sb.st_ctim.tv_nsec = stat.bs_ctime.tv_nsec;
+  sb.st_mtim.tv_sec = stat.bs_mtime.tv_sec;
+  sb.st_mtim.tv_nsec = stat.bs_mtime.tv_nsec;
+  sb.st_blocks = stat.bs_blocks;
+  sb.st_blksize = stat.bs_blksize;
+  sb.st_rdev = stat.bs_rdev;
+
+  return posix2fsal_attributes(&sb, p_fsalattr_out);
+}
+
 /**
  * FSAL_getattrs:
  * Get attributes for the object specified by its filehandle.
@@ -70,6 +112,7 @@ fsal_status_t XFSFSAL_getattrs(fsal_handle_t * p_filehandle, /* IN */
   fsal_status_t st;
   int fd;
   struct stat buffstat;
+  xfsfsal_handle_t *xh = (xfsfsal_handle_t *)p_filehandle;
 
   /* sanity checks.
    * note : object_attributes is mandatory in FSAL_getattrs.
@@ -77,31 +120,53 @@ fsal_status_t XFSFSAL_getattrs(fsal_handle_t * p_filehandle, /* IN */
   if(!p_filehandle || !p_context || !p_object_attributes)
     Return(ERR_FSAL_FAULT, 0, INDEX_FSAL_getattrs);
 
-  TakeTokenFSCall();
-  st = fsal_internal_handle2fd(p_context, p_filehandle, &fd, O_RDONLY);
-  ReleaseTokenFSCall();
-
-  if(FSAL_IS_ERROR(st))
-    ReturnStatus(st, INDEX_FSAL_getattrs);
-
-  /* get file metadata */
-  TakeTokenFSCall();
-  rc = fstat(fd, &buffstat);
-  errsv = errno;
-  ReleaseTokenFSCall();
-
-  close(fd);
-
-  if(rc != 0)
+  switch(xh->data.type)
     {
-      if(errsv == ENOENT)
-        Return(ERR_FSAL_STALE, errsv, INDEX_FSAL_getattrs);
-      else
-        Return(posix2fsal_error(errsv), errsv, INDEX_FSAL_getattrs);
-    }
+    case DT_LNK:
+    case DT_BLK:
+    case DT_SOCK:
+    case DT_CHR:
+    case DT_FIFO:
+      TakeTokenFSCall();
+      st = bulkstat_by_inode(p_context, xh->data.inode, p_object_attributes);
+      ReleaseTokenFSCall();
+      break;
 
-  /* convert attributes */
-  st = posix2fsal_attributes(&buffstat, p_object_attributes);
+    case DT_REG:
+    case DT_DIR:
+      TakeTokenFSCall();
+      st = fsal_internal_handle2fd(p_context, p_filehandle, &fd, O_RDONLY);
+      ReleaseTokenFSCall();
+
+      if(FSAL_IS_ERROR(st))
+	ReturnStatus(st, INDEX_FSAL_getattrs);
+
+      /* get file metadata */
+      TakeTokenFSCall();
+      rc = fstat(fd, &buffstat);
+      errsv = errno;
+      ReleaseTokenFSCall();
+
+      close(fd);
+
+      if(rc != 0)
+	{
+	  if(errsv == ENOENT)
+	    Return(ERR_FSAL_STALE, errsv, INDEX_FSAL_getattrs);
+	  else
+	    Return(posix2fsal_error(errsv), errsv, INDEX_FSAL_getattrs);
+	}
+
+      /* convert attributes */
+      st = posix2fsal_attributes(&buffstat, p_object_attributes);
+      break;
+
+    default:
+	LogEvent(COMPONENT_FSAL,
+		 "Corrupted filehandle - unexpected file type %d",
+		 xh->data.type);
+	Return(ERR_FSAL_BADHANDLE, EINVAL, INDEX_FSAL_getattrs);
+    }
   if(FSAL_IS_ERROR(st))
     {
       FSAL_CLEAR_MASK(p_object_attributes->asked_attributes);

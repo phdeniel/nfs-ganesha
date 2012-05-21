@@ -702,6 +702,12 @@ static int BuildExportEntry(config_item_t block, exportlist_t ** pp_export)
   memset(&p_entry->fsal_up_thr, 0, sizeof(pthread_t));
 #endif /* _USE_FSAL_UP */
 
+  p_entry->worker_stats = (nfs_worker_stat_t *)
+                          Mem_Alloc(sizeof(nfs_worker_stat_t) *
+                                    nfs_param.core_param.nb_worker);
+  memset(p_entry->worker_stats, 0,
+         sizeof(nfs_worker_stat_t) * nfs_param.core_param.nb_worker);
+
   /* by default, we support auth_none and auth_sys */
   p_entry->options |= EXPORT_OPTION_AUTH_NONE | EXPORT_OPTION_AUTH_UNIX;
 
@@ -3044,8 +3050,16 @@ int nfs_export_create_root_entry(exportlist_t * pexportlist, hash_table_t * ht)
           *pcurrent->proot_handle = fsal_handle;
 
           /* Add this entry to the Cache Inode as a "root" entry */
-          fsdata.handle = fsal_handle;
-          fsdata.cookie = 0;
+          fsdata.fh_desc.start = (caddr_t) &fsal_handle;
+          fsdata.fh_desc.len = 0;
+	  (void) FSAL_ExpandHandle(
+#ifdef _USE_SHARED_FSAL
+		                   context[pcurrent->fsalid].export_context,
+#else
+				   context.export_context,
+#endif
+				   FSAL_DIGEST_SIZEOF,
+				   &fsdata.fh_desc);
 
           if((pentry = cache_inode_make_root(&fsdata,
                                              pcurrent->cache_inode_policy,
@@ -3126,6 +3140,60 @@ exportlist_t *RemoveExportEntry(exportlist_t * exportEntry)
   if (exportEntry->proot_handle != NULL)
     Mem_Free(exportEntry->proot_handle);
 
+  if (exportEntry->worker_stats != NULL)
+    Mem_Free(exportEntry->worker_stats);
+
   Mem_Free(exportEntry);
   return next;
+}
+
+exportlist_t *GetExportEntry(char *exportPath)
+{
+  exportlist_t *pexport = NULL;
+  exportlist_t *p_current_item = NULL;
+  char tmplist_path[MAXPATHLEN];
+  char tmpexport_path[MAXPATHLEN];
+  int found = 0;
+
+  pexport = nfs_param.pexportlist;
+
+  /*
+   * Find the export for the dirname (using as well Path or Tag )
+   */
+  for(p_current_item = pexport; p_current_item != NULL;
+      p_current_item = p_current_item->next)
+  {
+    LogDebug(COMPONENT_CONFIG, "full path %s, export path %s",
+             p_current_item->fullpath, exportPath);
+
+    /* Make sure the path in export entry ends with a '/', if not adds one */
+    if(p_current_item->fullpath[strlen(p_current_item->fullpath) - 1] == '/')
+      strncpy(tmplist_path, p_current_item->fullpath, MAXPATHLEN);
+    else
+      snprintf(tmplist_path, MAXPATHLEN, "%s/", p_current_item->fullpath);
+
+    /* Make sure that the argument from MNT ends with a '/', if not adds one */
+    if(exportPath[strlen(exportPath) - 1] == '/')
+      strncpy(tmpexport_path, exportPath, MAXPATHLEN);
+    else
+      snprintf(tmpexport_path, MAXPATHLEN, "%s/", exportPath);
+
+    /* Is tmplist_path a subdirectory of tmpexport_path ? */
+    if(!strncmp(tmplist_path, tmpexport_path, strlen(tmplist_path)))
+    {
+      found = 1;
+      break;
+    }
+  }
+
+  if(found)
+    {
+      LogDebug(COMPONENT_CONFIG, "returning export %s", p_current_item->fullpath);
+      return p_current_item;
+    }
+  else
+    {
+      LogDebug(COMPONENT_CONFIG, "returning export NULL");
+      return NULL;
+    }
 }

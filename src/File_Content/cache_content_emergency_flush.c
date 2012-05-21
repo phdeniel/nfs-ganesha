@@ -211,16 +211,22 @@ cache_content_status_t cache_content_emergency_flush(char *cachedir,
           if((stream = fopen(indexpath, "r")) == NULL)
             return CACHE_CONTENT_LOCAL_CACHE_ERROR;
 
-          /* BUG: what happens if any of these fail? */
           #define XSTR(s) STR(s)
           #define STR(s) #s
-          fscanf(stream, "internal:read_time=%" XSTR(CACHE_INODE_DUMP_LEN) "s\n", buff);
-          fscanf(stream, "internal:mod_time=%" XSTR(CACHE_INODE_DUMP_LEN) "s\n", buff);
-          fscanf(stream, "internal:export_id=%" XSTR(CACHE_INODE_DUMP_LEN) "s\n", buff);
-          fscanf(stream, "file: FSAL handle=%" XSTR(CACHE_INODE_DUMP_LEN) "s", buff);
+          if((fscanf(stream, "internal:read_time=%" XSTR(CACHE_INODE_DUMP_LEN) "s\n", buff) != 1) ||
+             (fscanf(stream, "internal:mod_time=%" XSTR(CACHE_INODE_DUMP_LEN) "s\n", buff) != 1) ||
+             (fscanf(stream, "internal:export_id=%" XSTR(CACHE_INODE_DUMP_LEN) "s\n", buff) != 1) ||
+             (fscanf(stream, "file: FSAL handle=%" XSTR(CACHE_INODE_DUMP_LEN) "s", buff) != 1))
+	    {
+	      fclose(stream);
+              LogCrit(COMPONENT_CACHE_CONTENT,
+		      "Corrupted FSAL handle in index file %s", indexpath);
+	      continue;
+	    }
           #undef STR
           #undef XSTR
 
+          fclose(stream);
           if(sscanHandle(&fsal_handle, buff) < 0)
             {
               /* expected = 2*sizeof(fsal_handle_t) in hexa representation */
@@ -232,7 +238,6 @@ cache_content_status_t cache_content_emergency_flush(char *cachedir,
             }
 
           /* Now close the stream */
-          fclose(stream);
 
           cache_content_get_datapath(cachedir, inum, datapath);
 

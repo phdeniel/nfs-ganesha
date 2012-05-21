@@ -47,6 +47,9 @@ struct prealloc_pool;
 
 #include <malloc.h>
 #include <errno.h>
+#include <unistd.h>
+
+#include "log.h"
 
 #ifndef TRUE
 #define TRUE 1
@@ -111,6 +114,44 @@ struct prealloc_pool;
 #define GetPreferedPool( _n, _s )  BuddyPreferedPoolCount( _n, _s)
 
 #endif
+
+#define Mem_Alloc_Page_Aligned(s) Mem_Alloc_Page_Aligned_(s, __FILE__, __LINE__, __func__)
+#define Mem_Free_Page_Aligned(a)  free(a)
+
+/* To make these behave more like Mem_Alloc */
+static inline void*
+Mem_Alloc_Page_Aligned_(const size_t s,
+                        const char *file,
+                        const unsigned long line,
+                        const char *func)
+{
+     /* The system's page size */
+     const long page_size = sysconf(_SC_PAGESIZE);
+     /* Error code from posix_memalign */
+     int memalign_rc = 0;
+     /* Pointer for posix_memalign to fill in */
+     void *memalign_pointer = NULL;
+
+     if (page_size == -1) {
+          LogMajor(COMPONENT_MEMALLOC,
+                   "%s: System specifies no page size, unable to "
+                   "allocate page-aligned memory in %s:%ju.",
+                   func, file, line);
+          return NULL;
+     }
+
+     if ((memalign_rc = posix_memalign(&memalign_pointer,
+                                       page_size,
+                                       s)) != 0) {
+          LogMajor(COMPONENT_MEMALLOC,
+                   "%s: Unable to allocate %zu bytes of memory in "
+                   "%s:%ju: error code %d.",
+                   func, s, file, line, memalign_rc);
+          return NULL;
+     }
+
+     return memalign_pointer;
+}
 
 /*******************************************************************************
  *

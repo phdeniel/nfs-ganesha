@@ -1170,11 +1170,11 @@ static const fattr4_dent_t __attribute__ ((__unused__)) fattr4tab[] =
   "FATTR4_FS_STATUS", 61, 0, sizeof(fattr4_fs_status), FATTR4_ATTR_READ}
   ,
   {
-#ifdef _USE_FSALMDS
+#ifdef _PNFS_MDS
   "FATTR4_FS_LAYOUT_TYPES", 62, 1, sizeof(fattr4_fs_layout_types), FATTR4_ATTR_READ}
 #else
   "FATTR4_FS_LAYOUT_TYPES", 62, 0, sizeof(fattr4_fs_layout_types), FATTR4_ATTR_READ}
-#endif /* _USE_FSALMDS */
+#endif /* _PNFS_MDS */
   ,
   {
   "FATTR4_LAYOUT_HINT", 63, 0, sizeof(fattr4_layout_hint), FATTR4_ATTR_WRITE}
@@ -1183,11 +1183,11 @@ static const fattr4_dent_t __attribute__ ((__unused__)) fattr4tab[] =
   "FATTR4_LAYOUT_TYPES", 64, 0, sizeof(fattr4_layout_types), FATTR4_ATTR_READ}
   ,
   {
-#ifdef _USE_FSALMDS
+#ifdef _PNFS_MDS
   "FATTR4_LAYOUT_BLKSIZE", 65, 1, sizeof(fattr4_layout_blksize), FATTR4_ATTR_READ}
 #else
   "FATTR4_LAYOUT_BLKSIZE", 65, 0, sizeof(fattr4_layout_blksize), FATTR4_ATTR_READ}
-#endif /* _USE_FSALMDS */
+#endif /* _PNFS_MDS */
   ,
   {
   "FATTR4_LAYOUT_ALIGNMENT", 66, 0, sizeof(fattr4_layout_alignment), FATTR4_ATTR_READ}
@@ -1539,6 +1539,7 @@ int nfs4_bitmap4_Remove_Unsupported(bitmap4 * pbitmap) ;
 nfsstat4 nfs4_Errno(cache_inode_status_t error);
 nfsstat3 nfs3_Errno(cache_inode_status_t error);
 nfsstat2 nfs2_Errno(cache_inode_status_t error);
+int nfs3_AllocateFH(nfs_fh3 * fh);
 int nfs4_AllocateFH(nfs_fh4 * fh);
 
 uint64_t nfs_htonl64(uint64_t arg64);

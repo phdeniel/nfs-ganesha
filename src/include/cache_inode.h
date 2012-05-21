@@ -141,18 +141,19 @@ typedef enum cache_inode_expire_type__
   CACHE_INODE_EXPIRE_IMMEDIATE = 2
 } cache_inode_expire_type_t;
 
-typedef struct cache_inode_stat__
+typedef struct func_inode_stats__
 {
-  unsigned int nb_gc_lru_active;        /**< Number of active entries in Garbagge collecting list */
-  unsigned int nb_gc_lru_total;         /**< Total mumber of entries in Garbagge collecting list  */
-
-  struct func_inode_stats__
-  {
     unsigned int nb_call[CACHE_INODE_NB_COMMAND];                         /**< total number of calls per functions     */
     unsigned int nb_success[CACHE_INODE_NB_COMMAND];                      /**< succesfull calls per function           */
     unsigned int nb_err_retryable[CACHE_INODE_NB_COMMAND];                /**< failed/retryable calls per function     */
     unsigned int nb_err_unrecover[CACHE_INODE_NB_COMMAND];                /**< failed/unrecoverable calls per function */
-  } func_stats;
+} func_inode_stats_t;
+
+typedef struct cache_inode_stat__
+{
+  unsigned int nb_gc_lru_active;        /**< Number of active entries in Garbagge collecting list */
+  unsigned int nb_gc_lru_total;         /**< Total mumber of entries in Garbagge collecting list  */
+  func_inode_stats_t func_stats;
   unsigned int nb_call_total;                                       /**< Total number of calls */
 } cache_inode_stat_t;
 
@@ -294,6 +295,7 @@ struct cache_entry_t
 {
   cache_inode_policy_t  policy ;                          /**< The current cache policy for this entry               */
   fsal_handle_t handle;                                   /**< The FSAL Handle     */
+  struct fsal_handle_desc fh_desc;                        /**< points to handle.  adds size, len for hash table etc. */
   fsal_attrib_list_t attributes;                          /**< The FSAL Attributes */
 
   union cache_inode_fsobj__
@@ -359,8 +361,7 @@ typedef struct cache_inode_parent_entry__ cache_inode_parent_entry_t;
 
 typedef struct cache_inode_fsal_data__
 {
-  fsal_handle_t handle;                         /**< FSAL handle           */
-  uint64_t cookie;                              /**< Cache inode cookie    */
+  struct fsal_handle_desc fh_desc;              /**< FSAL handle descriptor  */
 } cache_inode_fsal_data_t;
 
 #define SMALL_CLIENT_INDEX 0x20000000
@@ -505,12 +506,6 @@ const char *cache_inode_err_str(cache_inode_status_t err);
 cache_inode_status_t cache_inode_clean_entry(cache_entry_t * pentry);
 
 int cache_inode_compare_key_fsal(hash_buffer_t * buff1, hash_buffer_t * buff2);
-
-int cache_inode_fsaldata_2_key(hash_buffer_t * pkey, cache_inode_fsal_data_t * pfsdata,
-                               cache_inode_client_t * pclient);
-
-void cache_inode_release_fsaldata_key(hash_buffer_t * pkey,
-                                      cache_inode_client_t * pclient);
 
 void cache_inode_release_symlink(cache_entry_t * pentry,
                                  struct prealloc_pool *pool);

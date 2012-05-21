@@ -86,7 +86,7 @@ int nfs4_op_setclientid(struct nfs_argop4 *op,
   clientid4 clientid;
   nfs_client_id_t * nfs_clientid;
   nfs_client_id_t   new_nfs_clientid;
-  nfs_worker_data_t *pworker = NULL;
+  nfs_worker_data_t *pworker __attribute__((unused)) = NULL;
 
   pworker = (nfs_worker_data_t *) data->pclient->pworker;
 
@@ -267,7 +267,9 @@ retry:
       nfs_clientid->clientid = clientid;
       nfs_clientid->last_renew = time(NULL);
       nfs_clientid->credential = data->credential;
+#ifdef _USE_NFS4_1
       nfs_clientid->create_session_sequence = 0;
+#endif
       if(pthread_mutex_init(&nfs_clientid->clientid_mutex, NULL) == -1)
       {
         res_SETCLIENTID4.status = NFS4ERR_SERVERFAULT;
