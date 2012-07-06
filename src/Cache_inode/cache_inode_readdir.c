@@ -597,6 +597,7 @@ bail:
  * @retval CACHE_INODE_SUCCESS if operation is a success
  * @retval CACHE_INODE_BAD_TYPE if entry is not related to a directory
  */
+
 cache_inode_status_t
 cache_inode_readdir(cache_entry_t *directory,
                     uint64_t cookie,
@@ -630,8 +631,6 @@ cache_inode_readdir(cache_entry_t *directory,
           return *status;
      }
 
-     printf( "====== cache_inode_readdir ======> Cookie for readdir: %llu\n", (unsigned long long)cookie ) ; 
- 
      /* cache_inode_lock_trust_attrs can return an error, and no lock will be
         acquired */
      *status = cache_inode_lock_trust_attrs(directory, context);

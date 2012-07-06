@@ -193,6 +193,11 @@ int cache_inode_avl_qp_insert(
     /* don't permit illegal cookies */
     MurmurHash3_x64_128(v->name.name,  FSAL_MAX_NAME_LEN, 67, hk);
     memcpy(&v->hk.k, hk, 8);
+#ifdef _USE_9P
+    // tmp hook : it seems like client running v9fs dislike "negative" cookies
+    if( ((int64_t)v->hk.k) < 0LL ) v->hk.k = - v->hk.k ;
+#endif
+
 
     /* XXX would we really wait for UINT64_MAX?  if not, how many
      * probes should we attempt? */
@@ -239,8 +244,6 @@ cache_inode_avl_lookup_k(cache_entry_t *entry, uint64_t k, uint32_t flags)
 
     dirent_key->hk.k = k;
 
-    printf( "====== cache_inode_avl_lookup_k ======> key: %llu\n", (unsigned long long)k ) ; 
-
     node = avltree_inline_lookup(&dirent_key->node_hk, t);
     if (node) {
         if (flags & CACHE_INODE_FLAG_NEXT_ACTIVE)
@@ -286,6 +289,10 @@ cache_inode_avl_qp_lookup_s(
 
     MurmurHash3_x64_128(v->name.name,  FSAL_MAX_NAME_LEN, 67, hk);
     memcpy(&v->hk.k, hk, 8);
+#ifdef _USE_9P
+    // tmp hook : it seems like client running v9fs dislike "negative" cookies
+    if( ((int64_t)v->hk.k) < 0LL ) v->hk.k = - v->hk.k ;
+#endif
 
     for (j = 0; j < maxj; j++) {
         v->hk.k = (v->hk.k + (j * 2));
