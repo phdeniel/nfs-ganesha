@@ -81,6 +81,12 @@ DISPATCH_9P_FILES =
 _9P_LIB = 
 endif
 
+if USE_9P_RDMA
+_9P_RDMA_LDADD = -lmsk -lrdmacm -libverbs
+else
+_9P_RDMA_LDADD = 
+endif
+
 if USE_FSAL_FUSE
 noinst_LTLIBRARIES           = libMainServices.la
 lib_LTLIBRARIES              = libganeshaNFS.la
@@ -193,8 +199,9 @@ if USE_FSAL_FUSE
 libganeshaNFS_la_SOURCES = fuse_binding.c $(libMainServices_la_SOURCES)
 
 libganeshaNFS_la_LIBADD = $(libMainServices_la_LIBADD) \
-                          $(FSAL_LDFLAGS) \
-                          $(EXT_LDADD) \
+                          $(FSAL_LDFLAGS)              \
+                          $(EXT_LDADD)                 \
+                          $(_9P_RDMA_LDADD)            \
                           $(SEC_LIB_FLAGS)
 
 libganeshaNFS_la_DEPENDENCIES = fuse_binding.c $(libMainServices_la_SOURCES) $(libMainServices_la_LIBADD)
@@ -207,12 +214,12 @@ __FS_NAME__ganesha_nfsd_SOURCES    = nfs_main.c  \
                                      nfs_init.h
 
 __FS_NAME__ganesha_nfsd_LDADD      =  ./libMainServices.la \
-                                       \
-                                      $(FSAL_LDFLAGS) \
-                                      $(TIRPC_STATIC_LIB) \
-				      $(EXT_LDADD)  \
-                                      $(SEC_LIB_FLAGS) \
-                                      @EFENCE@ \
+                                      $(FSAL_LDFLAGS)      \
+                                      $(TIRPC_STATIC_LIB)  \
+				      $(EXT_LDADD)         \
+                                      $(_9P_RDMA_LDADD)    \
+                                      $(SEC_LIB_FLAGS)     \
+                                      @EFENCE@             \
 	                              @EXTRA_LIB@
 
 endif
