@@ -295,7 +295,10 @@ void nfs_set_param_default()
   nfs_param.core_param.port[P_NLM] = 0;
 #endif
 #ifdef _USE_9P
-  nfs_param._9p_param._9p_port = _9P_PORT ;
+  nfs_param._9p_param._9p_tcp_port = _9P_TCP_PORT ;
+#endif
+#ifdef _USE_9P_RDMA
+  nfs_param._9p_param._9p_rdma_port = _9P_RDMA_PORT ;
 #endif
 #ifdef _USE_RQUOTA
   nfs_param.core_param.program[P_RQUOTA] = RQUOTAPROG;
