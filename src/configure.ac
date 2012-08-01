@@ -292,8 +292,6 @@ GA_AM_COND_ON_UNLESS([fsal-proxy],[do not build PROXY FSAL shared library],[USE_
 GA_AM_COND_ON_UNLESS([fsal-vfs],[do not build VFS FSAL shared library],[USE_FSAL_VFS])
 GA_AM_COND_ON_UNLESS([fsal-ceph],[do not build VFS FSAL shared library],[USE_FSAL_CEPH])
 GA_AM_COND_ON_UNLESS([fsal-lustre],[do not build LUSTRE FSAL shared library],[USE_FSAL_LUSTRE])
-# SHOOK is a variant of Lustre FSAL
-GA_AM_COND_ON_UNLESS([fsal-shook],[do not build SHOOK FSAL shared library],[USE_FSAL_SHOOK])
 
 # FSALs whicha re disabled by default
 GA_ENABLE_AM_CONDITION([fsal-hpss],[build HPSS FSAL],[USE_FSAL_HPSS])
@@ -303,6 +301,8 @@ GA_ENABLE_AM_CONDITION([fsal-xfs],[build XFS FSAL],[USE_FSAL_XFS])
 GA_ENABLE_AM_CONDITION([fsal-gpfs],[build GPFS FSAL],[USE_FSAL_GPFS])
 GA_ENABLE_AM_CONDITION([fsal-ceph],[build CEPH FSAL],[USE_FSAL_CEPH])
 GA_ENABLE_AM_CONDITION([fsal-zfs],[build ZFS FSAL],[USE_FSAL_ZFS])
+# SHOOK is a variant of Lustre FSAL
+GA_ENABLE_AM_CONDITION([fsal-shook],[build SHOOKFSAL],[USE_FSAL_SHOOK])
 
 # FSAL_UP
 GA_ENABLE_AM_CONDITION([fsal-up],[enable FSAL Upcall Interface support],[USE_FSAL_UP])
@@ -607,10 +607,18 @@ if test "$enable_fsal_lustre" == "yes"; then
 		AC_DEFINE([_LUSTRE_HSM], 1, [Lustre version supports HSM binding])
 	fi
 
-        FSAL_CFLAGS=
-        FSAL_LDFLAGS="-llustreapi"
-        FSAL_LIB="\$(top_builddir)/FSAL/FSAL_LUSTRE/libfsallustre.la"
+        LUSTRE_CFLAGS=
+        LUSTRE_LIB="-llustreapi"
+        LUSTRE_LDFLAGS=
+else
+        LUSTRE_CFLAGS=
+        LUSTRE_LDFLAGS=
+        LUSTRE_LIB=
 fi
+
+AC_SUBST(LUSTRE_CFLAGS)
+AC_SUBST(LUSTRE_LDFLAGS)
+AC_SUBST(LUSTRE_LIB)
 
 if test "$enable_fsal_shook" == "yes"; then
         AC_MSG_WARN([SHOOK FSAL is enabled])
@@ -624,10 +632,20 @@ if test "$enable_fsal_shook" == "yes"; then
 		AC_MSG_ERROR([Lustre 2.x and liblustreapi are required])
 	fi
 	AC_DEFINE([_USE_LUSTRE], 1, [GANESHA exports Lustre Filesystem])
-        FSAL_CFLAGS=
-        FSAL_LDFLAGS="-lshooksvr -llustreapi"
-        FSAL_LIB="\$(top_builddir)/FSAL/FSAL_LUSTRE/libfsalshook.la"
+
+        SHOOK_CFLAGS=
+        SHOOK_LDFLAGS=
+        SHOOK_LIB="-lshooksvr -llustreapi"
+else
+        SHOOK_CFLAGS=
+        SHOOK_LDFLAGS=
+        SHOOK_LIB=
 fi
+
+AC_SUBST(SHOOK_CFLAGS)
+AC_SUBST(SHOOK_LDFLAGS)
+AC_SUBST(SHOOK_LIB)
+
 
 if test "$enable_fsal_xfs" == "yes"; then
 	AC_DEFINE([_USE_XFS], 1, [GANESHA exports XFS Filesystem])
