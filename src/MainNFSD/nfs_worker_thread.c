@@ -54,6 +54,7 @@
 #include <poll.h>
 #include "HashData.h"
 #include "HashTable.h"
+#include "abstract_atomic.h"
 #include "log.h"
 #include "ganesha_rpc.h"
 #include "nfs23.h"
@@ -1726,7 +1727,16 @@ enum auth_stat AuthenticateRequest(nfs_request_data_t *nfsreq,
 static void _9p_execute( _9p_request_data_t * preq9p, 
                           nfs_worker_data_t * pworker_data)
 {
-  _9p_process_request( preq9p, pworker_data ) ;
+  if( preq9p->pconn->trans_type == _9P_TCP )
+    _9p_tcp_process_request( preq9p, pworker_data ) ;
+#ifdef _USE_9P_RDMA
+  else if( preq9p->pconn->trans_type == _9P_RDMA )
+     _9p_rdma_process_request( preq9p, pworker_data ) ;
+#endif
+
+  /* decrease connection refcount */
+  atomic_dec_uint32_t(&preq9p->pconn->refcount);
+
   return ;
 } /* _9p_execute */
 #endif
