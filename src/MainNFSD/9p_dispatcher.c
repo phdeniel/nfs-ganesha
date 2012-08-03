@@ -55,6 +55,7 @@
 #include "HashTable.h"
 #include "log.h"
 #include "abstract_mem.h"
+#include "abstract_atomic.h"
 #include "nfs_init.h"
 #include "nfs_core.h"
 #include "cache_inode.h"
@@ -105,6 +106,10 @@ void DispatchWork9P( request_data_t *preq, unsigned int worker_index)
 	  return ;
 	  break ;
    }
+
+  /* increase connection refcount */
+  atomic_inc_uint32_t(&preq->r_u._9p.pconn->refcount);
+
   P(workers_data[worker_index].wcb.tcb_mutex);
   P(workers_data[worker_index].request_pool_mutex);
 
@@ -231,6 +236,8 @@ void * _9p_socket_thread( void * Arg )
   /* Init the _9p_conn_t structure */
   _9p_conn.trans_type = _9P_TCP ;
   _9p_conn.trans_data.sockfd = tcp_sock ;
+  atomic_store_uint32_t(&_9p_conn.refcount, 0);
+
   for (i = 0; i < FLUSH_BUCKETS; i++) {
           pthread_mutex_init(&_9p_conn.flush_buckets[i].lock, NULL);
           init_glist(&_9p_conn.flush_buckets[i].list);
@@ -282,14 +289,14 @@ void * _9p_socket_thread( void * Arg )
       {
         LogEvent( COMPONENT_9P, "Client %s on socket %lu produced POLLNVAL", strcaller, tcp_sock ) ;
                   close( tcp_sock );
-        return NULL ;
+        goto end;
       }
 
      if( fds[0].revents & (POLLERR|POLLHUP|POLLRDHUP) )
       {
         LogEvent( COMPONENT_9P, "Client %s on socket %lu has shut down and closed", strcaller, tcp_sock ) ;
                   close( tcp_sock );
-        return NULL ;
+        goto end;
       }
 
      if( fds[0].revents & (POLLIN|POLLRDNORM) )
@@ -309,7 +316,7 @@ void * _9p_socket_thread( void * Arg )
          {
             LogCrit( COMPONENT_9P, "Could not allocate 9pmsg buffer for client %s on socket %lu", strcaller, tcp_sock ) ;
             close( tcp_sock ) ;
-            return NULL ;
+            goto end;
          }
         preq->rtype = _9P_REQUEST ;
         _9pmsg = preq->r_u._9p._9pmsg ;
@@ -382,11 +389,18 @@ void * _9p_socket_thread( void * Arg )
            LogEvent( COMPONENT_9P, "Client %s on socket %lu has shut down", strcaller, tcp_sock ) ;
            close( tcp_sock );
            gsh_free( _9pmsg ) ;
-           return NULL ;
+           goto end;
          }
       } /* if( fds[0].revents & (POLLIN|POLLRDNORM) ) */
    } /* for( ;; ) */
  
+
+end:
+  while(atomic_fetch_uint32_t(&_9p_conn.refcount)) {
+           LogEvent( COMPONENT_9P, "Waiting for workers to release pconn") ;
+           sleep(1);
+  }
+
   return NULL ;
 } /* _9p_socket_thread */
 
