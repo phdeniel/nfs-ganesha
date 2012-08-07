@@ -94,7 +94,7 @@ int _9p_symlink( _9p_request_data_t * preq9p,
             (u32)*msgtag, *fid, *name_len, name_str, *linkcontent_len, linkcontent_str, *gid ) ;
 
   if( *fid >= _9P_FID_PER_CONN )
-    return _9p_rerror( preq9p, msgtag, ERANGE, plenout, preply ) ;
+    return  _9p_rerror( preq9p, pworker_data,  msgtag, ERANGE, plenout, preply ) ;
 
    pfid = &preq9p->pconn->fids[*fid] ;
  
@@ -113,7 +113,7 @@ int _9p_symlink( _9p_request_data_t * preq9p,
                                               &fsalattr,
                                               &pfid->fsal_op_context,
                                               &cache_status)) == NULL)
-     return _9p_rerror( preq9p, msgtag, _9p_tools_errno( cache_status ), plenout, preply ) ;
+     return  _9p_rerror( preq9p, pworker_data,  msgtag, _9p_tools_errno( cache_status ), plenout, preply ) ;
 
    /* Build the qid */
    qid_symlink.type    = _9P_QTSYMLINK ;
@@ -133,7 +133,7 @@ int _9p_symlink( _9p_request_data_t * preq9p,
             "RSYMLINK: tag=%u fid=%u name=%.*s qid=(type=%u,version=%u,path=%llu)",
             (u32)*msgtag, *fid, *name_len, name_str, qid_symlink.type, qid_symlink.version, (unsigned long long)qid_symlink.path ) ;
 
-  _9p_stat_update( *pmsgtype, &pwkrdata->stats._9p_stat_req ) ;
+  _9p_stat_update( *pmsgtype, TRUE, &pwkrdata->stats._9p_stat_req ) ;
   return 1 ;
 }
 
