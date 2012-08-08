@@ -56,6 +56,8 @@ int _9p_lcreate( _9p_request_data_t * preq9p,
                   char * preply)
 {
   char * cursor = preq9p->_9pmsg + _9P_HDR_SIZE + _9P_TYPE_SIZE ;
+  u8   * pmsgtype =  preq9p->_9pmsg + _9P_HDR_SIZE ;
+  nfs_worker_data_t * pwkrdata = (nfs_worker_data_t *)pworker_data ;
 
   u16  * msgtag = NULL ;
   u32  * fid    = NULL ;
@@ -67,7 +69,7 @@ int _9p_lcreate( _9p_request_data_t * preq9p,
 
   _9p_fid_t * pfid = NULL ;
   _9p_qid_t qid_newfile ;
-  u32 iounit = 0 ;
+  u32 iounit = _9P_IOUNIT ; ;
 
   cache_entry_t       * pentry_newfile = NULL ;
   fsal_name_t           file_name ; 
@@ -90,7 +92,7 @@ int _9p_lcreate( _9p_request_data_t * preq9p,
             (u32)*msgtag, *fid, *name_len, name_str, *flags, *mode, *gid ) ;
 
   if( *fid >= _9P_FID_PER_CONN )
-    return _9p_rerror( preq9p, msgtag, ERANGE, plenout, preply ) ;
+    return  _9p_rerror( preq9p, pworker_data,  msgtag, ERANGE, plenout, preply ) ;
 
    pfid = &preq9p->pconn->fids[*fid] ;
 
@@ -108,7 +110,7 @@ int _9p_lcreate( _9p_request_data_t * preq9p,
                                               &fsalattr,
                                               &pfid->fsal_op_context, 
      			 		      &cache_status)) == NULL)
-     return  _9p_rerror( preq9p, msgtag,  _9p_tools_errno( cache_status ) , plenout, preply ) ;
+     return   _9p_rerror( preq9p, pworker_data,  msgtag,  _9p_tools_errno( cache_status ) , plenout, preply ) ;
       
    _9p_openflags2FSAL( flags, &openflags ) ; 
 
@@ -117,7 +119,7 @@ int _9p_lcreate( _9p_request_data_t * preq9p,
                         &pfid->fsal_op_context,
                         0, 
                         &cache_status) != CACHE_INODE_SUCCESS) 
-     return _9p_rerror( preq9p, msgtag, _9p_tools_errno( cache_status ), plenout, preply ) ;
+     return  _9p_rerror( preq9p, pworker_data,  msgtag, _9p_tools_errno( cache_status ), plenout, preply ) ;
 
    /* Build the qid */
    qid_newfile.type    = _9P_QTFILE ;
@@ -147,6 +149,7 @@ int _9p_lcreate( _9p_request_data_t * preq9p,
             "RLCREATE: tag=%u fid=%u name=%.*s qid=(type=%u,version=%u,path=%llu) iounit=%u",
             (u32)*msgtag, *fid, *name_len, name_str, qid_newfile.type, qid_newfile.version, (unsigned long long)qid_newfile.path, iounit ) ;
 
+  _9p_stat_update( *pmsgtype, TRUE, &pwkrdata->stats._9p_stat_req ) ;
   return 1 ;
 }
 

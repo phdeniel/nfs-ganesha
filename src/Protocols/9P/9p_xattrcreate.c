@@ -59,6 +59,8 @@ int _9p_xattrcreate( _9p_request_data_t * preq9p,
                      char * preply)
 {
   char * cursor = preq9p->_9pmsg + _9P_HDR_SIZE + _9P_TYPE_SIZE ;
+  u8   * pmsgtype =  preq9p->_9pmsg + _9P_HDR_SIZE ;
+  nfs_worker_data_t * pwkrdata = (nfs_worker_data_t *)pworker_data ;
 
   u16 * msgtag = NULL ;
   u32 * fid    = NULL ;
@@ -86,7 +88,7 @@ int _9p_xattrcreate( _9p_request_data_t * preq9p,
             (u32)*msgtag, *fid, *name_len, name_str, (unsigned long long)*size, *flag ) ;
 
   if( *fid >= _9P_FID_PER_CONN )
-    return _9p_rerror( preq9p, msgtag, ERANGE, plenout, preply ) ;
+    return  _9p_rerror( preq9p, pworker_data,  msgtag, ERANGE, plenout, preply ) ;
 
   pfid = &preq9p->pconn->fids[*fid] ;
   
@@ -104,7 +106,7 @@ int _9p_xattrcreate( _9p_request_data_t * preq9p,
                                            &name ) ;
 
      if(FSAL_IS_ERROR(fsal_status))
-       return  _9p_rerror( preq9p, msgtag, _9p_tools_errno( cache_inode_error_convert(fsal_status) ),  plenout, preply ) ;
+       return   _9p_rerror( preq9p, pworker_data,  msgtag, _9p_tools_errno( cache_inode_error_convert(fsal_status) ),  plenout, preply ) ;
    }
   else
    {
@@ -112,7 +114,7 @@ int _9p_xattrcreate( _9p_request_data_t * preq9p,
 
      /* Create the xattr at the FSAL level and cache result */
      if( ( pfid->specdata.xattr.xattr_content = gsh_malloc( XATTR_BUFFERSIZE ) ) == NULL ) 
-       return _9p_rerror( preq9p, msgtag, ENOMEM, plenout, preply ) ;
+       return  _9p_rerror( preq9p, pworker_data,  msgtag, ENOMEM, plenout, preply ) ;
 
      fsal_status = FSAL_SetXAttrValue( &pfid->pentry->handle,
                                        &name,
@@ -122,14 +124,14 @@ int _9p_xattrcreate( _9p_request_data_t * preq9p,
                                         (*flag == XATTR_REPLACE) ? FALSE : TRUE ) ;
 
      if(FSAL_IS_ERROR(fsal_status))
-       return  _9p_rerror( preq9p, msgtag, _9p_tools_errno( cache_inode_error_convert(fsal_status) ),  plenout, preply ) ;
+       return   _9p_rerror( preq9p, pworker_data,  msgtag, _9p_tools_errno( cache_inode_error_convert(fsal_status) ),  plenout, preply ) ;
 
      fsal_status = FSAL_GetXAttrIdByName( &pfid->pentry->handle,
                                           &name, 
                                           &pfid->fsal_op_context,
                                           &pfid->specdata.xattr.xattr_id);
       if(FSAL_IS_ERROR(fsal_status))
-       return  _9p_rerror( preq9p, msgtag, _9p_tools_errno( cache_inode_error_convert(fsal_status) ),  plenout, preply ) ;
+       return   _9p_rerror( preq9p, pworker_data,  msgtag, _9p_tools_errno( cache_inode_error_convert(fsal_status) ),  plenout, preply ) ;
    }
 
   /* Build the reply */
@@ -142,6 +144,7 @@ int _9p_xattrcreate( _9p_request_data_t * preq9p,
   LogDebug( COMPONENT_9P, "RXATTRCREATE: tag=%u fid=%u name=%.*s size=%llu flag=%u",
             (u32)*msgtag, *fid, *name_len, name_str, (unsigned long long)*size, *flag ) ;
 
+  _9p_stat_update( *pmsgtype, TRUE, &pwkrdata->stats._9p_stat_req ) ;
   return 1 ;
 } /* _9p_xattrcreate */
 

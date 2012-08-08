@@ -56,6 +56,8 @@ int _9p_attach( _9p_request_data_t * preq9p,
                 char * preply)
 {
   char * cursor = preq9p->_9pmsg + _9P_HDR_SIZE + _9P_TYPE_SIZE ;
+  u8   * pmsgtype =  preq9p->_9pmsg + _9P_HDR_SIZE ;
+  nfs_worker_data_t * pwkrdata = (nfs_worker_data_t *)pworker_data ;
 
   u16 * msgtag = NULL ;
   u32 * fid = NULL ;
@@ -118,10 +120,10 @@ int _9p_attach( _9p_request_data_t * preq9p,
 
   /* Did we find something ? */
   if( found == FALSE )
-    return _9p_rerror( preq9p, msgtag, ENOENT, plenout, preply ) ;
+    return _9p_rerror( preq9p, pworker_data, msgtag, ENOENT, plenout, preply ) ;
 
   if( *fid >= _9P_FID_PER_CONN )
-    return _9p_rerror( preq9p, msgtag, ERANGE, plenout, preply ) ;
+    return _9p_rerror( preq9p, pworker_data, msgtag, ERANGE, plenout, preply ) ;
  
   /* Set pexport and fid id in fid */
   pfid= &preq9p->pconn->fids[*fid] ;
@@ -133,13 +135,13 @@ int _9p_attach( _9p_request_data_t * preq9p,
    {
      /* Build the fid creds */
     if( ( err = _9p_tools_get_fsal_op_context_by_name( *uname_len, uname_str, pfid ) ) !=  0 )
-      return _9p_rerror( preq9p, msgtag, -err, plenout, preply ) ;
+      return _9p_rerror( preq9p, pworker_data,msgtag, -err, plenout, preply ) ;
    }
   else
    {
     /* Build the fid creds */
     if( ( err = _9p_tools_get_fsal_op_context_by_uid( *n_aname, pfid ) ) !=  0 )
-      return _9p_rerror( preq9p, msgtag, -err, plenout, preply ) ;
+      return _9p_rerror( preq9p, pworker_data,msgtag, -err, plenout, preply ) ;
    }
 
   /* Get the related pentry */
@@ -159,7 +161,7 @@ int _9p_attach( _9p_request_data_t * preq9p,
                                   &cache_status ) ;
 
   if( pfid->pentry == NULL )
-     return _9p_rerror( preq9p, msgtag, err, plenout, preply ) ;
+     return _9p_rerror( preq9p, pworker_data,msgtag, err, plenout, preply ) ;
 
   /* Compute the qid */
   pfid->qid.type = _9P_QTDIR ;
@@ -178,6 +180,7 @@ int _9p_attach( _9p_request_data_t * preq9p,
   LogDebug( COMPONENT_9P, "RATTACH: tag=%u fid=%u qid=(type=%u,version=%u,path=%llu)", 
             *msgtag, *fid, (u32)pfid->qid.type, pfid->qid.version, (unsigned long long)pfid->qid.path ) ;
 
+  _9p_stat_update( *pmsgtype, TRUE, &pwkrdata->stats._9p_stat_req ) ;
   return 1 ;
 }
 

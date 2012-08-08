@@ -46,11 +46,16 @@
 #include <fcntl.h>
 #include <sys/file.h>           /* for having FNDELAY */
 #include <sys/select.h>
+#include <sys/types.h>          
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <poll.h>
 #include "HashData.h"
 #include "HashTable.h"
 #include "log.h"
 #include "abstract_mem.h"
+#include "abstract_atomic.h"
 #include "nfs_init.h"
 #include "nfs_core.h"
 #include "cache_inode.h"
@@ -71,9 +76,39 @@
 
 void DispatchWork9P( request_data_t *preq, unsigned int worker_index)
 {
-  LogDebug(COMPONENT_DISPATCH,
-           "Awaking Worker Thread #%u for 9P request %p, tcpsock=%lu",
-           worker_index, preq, preq->r_u._9p.pconn->sockfd);
+  switch( preq->rtype )
+   {
+	case _9P_REQUEST:
+          switch( preq->r_u._9p.pconn->trans_type )
+           {
+	      case _9P_TCP:
+	        LogDebug(COMPONENT_DISPATCH,
+        	         "Awaking Worker Thread #%u for 9P/TCP request %p, tcpsock=%lu",
+           	         worker_index, preq, preq->r_u._9p.pconn->trans_data.sockfd);
+		break ;
+
+              case _9P_RDMA:
+	        LogDebug(COMPONENT_DISPATCH,
+        	         "Awaking Worker Thread #%u for 9P/RDMA",
+           	         worker_index );
+	        break ;
+                 
+              default:
+		LogCrit( COMPONENT_DISPATCH, "/!\\ Implementation error, bad 9P transport type" ) ;
+		return ;
+		break ;
+           }
+	  break ;
+
+	default:
+	  LogCrit( COMPONENT_DISPATCH,
+		   "/!\\ Implementation error, 9P Dispatch function is called for non-9P request !!!!");
+	  return ;
+	  break ;
+   }
+
+  /* increase connection refcount */
+  atomic_inc_uint32_t(&preq->r_u._9p.pconn->refcount);
 
   P(workers_data[worker_index].wcb.tcb_mutex);
   P(workers_data[worker_index].request_pool_mutex);
@@ -92,6 +127,70 @@ void DispatchWork9P( request_data_t *preq, unsigned int worker_index)
     }
   V(workers_data[worker_index].request_pool_mutex);
   V(workers_data[worker_index].wcb.tcb_mutex);
+}
+
+void _9p_AddFlushHook(_9p_request_data_t *req, int tag, unsigned long sequence)
+{
+        int bucket = tag % FLUSH_BUCKETS;
+        _9p_flush_hook_t *hook = &req->flush_hook;
+        _9p_conn_t *conn = req->pconn;
+
+        hook->tag = tag;
+        hook->flushed = 0;
+        hook->sequence = sequence;
+        pthread_mutex_lock(&conn->flush_buckets[bucket].lock);
+        glist_add(&conn->flush_buckets[bucket].list, &hook->list);
+        pthread_mutex_unlock(&conn->flush_buckets[bucket].lock);
+}
+
+void _9p_FlushFlushHook(_9p_conn_t *conn, int tag, unsigned long sequence)
+{
+        int bucket = tag % FLUSH_BUCKETS;
+        struct glist_head *node;
+
+        _9p_flush_hook_t *hook = NULL;
+        pthread_mutex_lock(&conn->flush_buckets[bucket].lock);
+        glist_for_each(node, &conn->flush_buckets[bucket].list) {
+                hook = glist_entry(node, _9p_flush_hook_t, list);
+                /* Cancel a request that has the right tag
+                 * --AND-- is older than the flush request.
+                 **/
+                if ((hook->tag == tag) && (hook->sequence < sequence)){
+                        hook->flushed = 1;
+                        glist_del(&hook->list);
+                        LogFullDebug( COMPONENT_9P, "Found tag to flush %d\n", tag);
+                        break;
+                }
+        }
+        pthread_mutex_unlock(&conn->flush_buckets[bucket].lock);
+}
+
+int _9p_LockAndTestFlushHook(_9p_request_data_t *req)
+{
+        _9p_flush_hook_t *hook = &req->flush_hook;
+        _9p_conn_t *conn = req->pconn;
+        int bucket = hook->tag % FLUSH_BUCKETS;
+
+        pthread_mutex_lock(&conn->flush_buckets[bucket].lock);
+        return hook->flushed;
+}
+
+void _9p_ReleaseFlushHook(_9p_request_data_t *req)
+{
+        _9p_flush_hook_t *hook = &req->flush_hook;
+        _9p_conn_t *conn = req->pconn;
+        int bucket = hook->tag % FLUSH_BUCKETS;
+
+        if (!hook->flushed)
+                        glist_del(&hook->list);
+
+        pthread_mutex_unlock(&conn->flush_buckets[bucket].lock);
+}
+
+void _9p_DiscardFlushHook(_9p_request_data_t *req)
+{
+        _9p_LockAndTestFlushHook(req);
+        _9p_ReleaseFlushHook(req);
 }
 
 
@@ -119,8 +218,10 @@ void * _9p_socket_thread( void * Arg )
   char strcaller[MAXNAMLEN] ;
   request_data_t *preq = NULL;
   unsigned int worker_index;
-
-  char * _9pmsg ;
+  int tag;
+  unsigned long sequence = 0;
+  unsigned int i = 0 ;
+  char * _9pmsg  = NULL;
   uint32_t * p_9pmsglen = NULL ;
 
   _9p_conn_t _9p_conn ;
@@ -132,10 +233,17 @@ void * _9p_socket_thread( void * Arg )
   SetNameFunction(my_name);
 
   /* Init the _9p_conn_t structure */
-  _9p_conn.sockfd = tcp_sock ;
+  _9p_conn.trans_type = _9P_TCP ;
+  _9p_conn.trans_data.sockfd = tcp_sock ;
+  for (i = 0; i < FLUSH_BUCKETS; i++) {
+          pthread_mutex_init(&_9p_conn.flush_buckets[i].lock, NULL);
+          init_glist(&_9p_conn.flush_buckets[i].list);
+  }
+  atomic_store_uint32_t(&_9p_conn.refcount, 0);
+
 
   if( gettimeofday( &_9p_conn.birth, NULL ) == -1 )
-   LogFatal( COMPONENT_9P, "Can get connection's time of birth" ) ;
+   LogFatal( COMPONENT_9P, "Cannot get connection's time of birth" ) ;
 
   if( ( rc =  getpeername( tcp_sock, (struct sockaddr *)&addrpeer, &addrpeerlen) ) == -1 )
    {
@@ -173,72 +281,45 @@ void * _9p_socket_thread( void * Arg )
          LogCrit( COMPONENT_9P,
                   "Got error %u (%s) on fd %ld connect to %s while polling on socket", 
                   errno, strerror( errno ), tcp_sock, strcaller ) ;
-
       }
 
      if( fds[0].revents & POLLNVAL )
       {
         LogEvent( COMPONENT_9P, "Client %s on socket %lu produced POLLNVAL", strcaller, tcp_sock ) ;
-                  close( tcp_sock );
-        return NULL ;
+        goto end;
       }
 
      if( fds[0].revents & (POLLERR|POLLHUP|POLLRDHUP) )
       {
         LogEvent( COMPONENT_9P, "Client %s on socket %lu has shut down and closed", strcaller, tcp_sock ) ;
-                  close( tcp_sock );
-        return NULL ;
+        goto end;
       }
 
      if( fds[0].revents & (POLLIN|POLLRDNORM) )
       {
-        /* choose a worker depending on its queue length */
-        worker_index = nfs_core_select_worker_queue( WORKER_INDEX_ANY );
-
-        /* Get a preq from the worker's pool */
-        P(workers_data[worker_index].request_pool_mutex);
-
-        preq = pool_alloc( request_pool, NULL ) ;
-
-        V(workers_data[worker_index].request_pool_mutex);
-
         /* Prepare to read the message */
-        preq->rtype = _9P_REQUEST ;
-        _9pmsg = preq->r_u._9p._9pmsg ;
-        preq->r_u._9p.pconn = &_9p_conn ;
+        if( ( _9pmsg = gsh_malloc( _9P_MSG_SIZE ) ) == NULL )
+         {
+            LogCrit( COMPONENT_9P, "Could not allocate 9pmsg buffer for client %s on socket %lu", strcaller, tcp_sock ) ;
+            goto end;
+         }
 
         /* An incoming 9P request: the msg has a 4 bytes header
            showing the size of the msg including the header */
-        if( (readlen = recv( fds[0].fd, _9pmsg ,_9P_HDR_SIZE, 0) == _9P_HDR_SIZE ) )
+        if( (readlen = recv( fds[0].fd, _9pmsg ,_9P_HDR_SIZE, MSG_WAITALL)) == _9P_HDR_SIZE ) 
          {
-           p_9pmsglen = (uint32_t *)_9pmsg ;
+            p_9pmsglen = (uint32_t *)_9pmsg ;
 
             LogFullDebug( COMPONENT_9P,
-                          "Received message of size %u from client %s on socket %lu",
+                          "Received 9P/TCP message of size %u from client %s on socket %lu",
                           *p_9pmsglen, strcaller, tcp_sock ) ;
 
-            if( *p_9pmsglen < _9P_HDR_SIZE ) 
-              {
-		LogEvent( COMPONENT_9P, 
-			  "Badly formed 9P message: Header is too small for client %s on socket %lu: readlen=%u expected=%u", 
-                          strcaller, tcp_sock, readlen, *p_9pmsglen - _9P_HDR_SIZE ) ;
-
-                /* Release the entry */
-                P(workers_data[worker_index].request_pool_mutex);
-                pool_free(request_pool, preq ) ;
-
-                workers_data[worker_index].passcounter += 1;
-                V(workers_data[worker_index].request_pool_mutex);
-
-                continue ; /* Maybe, use something smarter here */
-              }
-
-            total_readlen = 0 ;
-            while( total_readlen < (*p_9pmsglen - _9P_HDR_SIZE) )
+            total_readlen = readlen;
+            while( total_readlen < *p_9pmsglen )
              {
 		 readlen = recv( fds[0].fd,
-				 (char *)(_9pmsg + _9P_HDR_SIZE + total_readlen),  
-                                 *p_9pmsglen - _9P_HDR_SIZE - total_readlen, 0 ) ;
+				 _9pmsg + total_readlen,  
+                                 *p_9pmsglen - total_readlen, 0 ) ;
                
                  /* Signal management */
                  if( readlen < 0 && errno == EINTR )
@@ -247,33 +328,78 @@ void * _9p_socket_thread( void * Arg )
                  /* Error management */
                  if( readlen < 0 )  
                   {
-	            LogEvent( COMPONENT_9P, "Badly formed 9P header for client %s on socket %lu", strcaller, tcp_sock ) ;
+	            LogEvent( COMPONENT_9P, 
+                              "Read error client %s on socket %lu errno=%d", 
+                              strcaller, tcp_sock, errno ) ;
+                    goto end;
+                  }
 
-                    /* Release the entry */
-                    P(workers_data[worker_index].request_pool_mutex);
-                    pool_free( request_pool, preq ) ;
-  	    	    workers_data[worker_index].passcounter += 1;
-                    V(workers_data[worker_index].request_pool_mutex);
-
-                    continue ;
+                 /* Client quit */
+                 if( readlen == 0 )  
+                  {
+	            LogEvent( COMPONENT_9P,
+                              "Client %s closed on socket %lu",
+                              strcaller, tcp_sock) ;
+                    goto end;
                   }
                  
                  /* After this point, read() is supposed to be OK */
                  total_readlen += readlen ;
              } /* while */
              
+             /* Message is good. Get a preq from the worker's pool */
+             /* Choose a worker depending on its queue length */
+             worker_index = nfs_core_select_worker_queue( WORKER_INDEX_ANY );
+             P(workers_data[worker_index].request_pool_mutex);
+             preq = pool_alloc( request_pool, NULL ) ;
+             V(workers_data[worker_index].request_pool_mutex);
+
+             preq->rtype = _9P_REQUEST ;
+             preq->r_u._9p._9pmsg = _9pmsg;
+             preq->r_u._9p.pconn = &_9p_conn ;
+             
+             /* Add this request to the request list, should it be flushed later. */
+             tag = *(u16*) (_9pmsg + _9P_HDR_SIZE + _9P_TYPE_SIZE);
+             _9p_AddFlushHook(&preq->r_u._9p, tag, sequence++);
+             LogFullDebug( COMPONENT_9P, "Request tag is %d\n", tag);
+
 	     /* Message was OK push it the request to the right worker */
              DispatchWork9P(preq, worker_index);
+
+             /* We are not responsible for this buffer anymore: */
+             _9pmsg = NULL;
          }
-        else if( readlen == 0 )
+        else /* readlen != _9P_HDR_SIZE */
          {
-           LogEvent( COMPONENT_9P, "Client %s on socket %lu has shut down", strcaller, tcp_sock ) ;
-           close( tcp_sock );
-           return NULL ;
+           if (readlen == 0)
+             LogEvent( COMPONENT_9P, "Client %s on socket %lu has shut down", strcaller, tcp_sock ) ;
+           else
+	     LogEvent( COMPONENT_9P, 
+	               "Badly formed 9P/TCP message: Header is too small for client %s on socket %lu: readlen=%u expected=%u", 
+                       strcaller, tcp_sock, readlen, _9P_HDR_SIZE ) ;
+           
+           /* Either way, we close the connection. It is not possible to survive
+            * once we get out of sync in the TCP stream with the client
+            */ 
+           goto end;
          }
       } /* if( fds[0].revents & (POLLIN|POLLRDNORM) ) */
    } /* for( ;; ) */
  
+
+end:
+  LogEvent( COMPONENT_9P, "Closing connection on socket %lu", tcp_sock ) ;
+  close( tcp_sock ) ;
+
+  /* Free buffer if we encountered an error before we could give it to a worker */
+  if (_9pmsg)
+           gsh_free( _9pmsg ) ;
+
+  while(atomic_fetch_uint32_t(&_9p_conn.refcount)) {
+           LogEvent( COMPONENT_9P, "Waiting for workers to release pconn") ;
+           sleep(1);
+  }
+
   return NULL ;
 } /* _9p_socket_thread */
 
@@ -291,6 +417,8 @@ int _9p_create_socket( void )
 {
   int sock = -1 ;
   int one = 1 ;
+  int centvingt = 120 ;
+  int neuf = 9 ;
   struct sockaddr_in sinaddr;
 #ifdef _USE_TIRPC_IPV6
   struct sockaddr_in6 sinaddr_tcp6;
@@ -298,28 +426,29 @@ int _9p_create_socket( void )
   struct t_bind bindaddr_tcp6;
   struct __rpc_sockinfo si_tcp6;
 #endif
+  int bad = 1 ;
+  
+  if( ( sock= socket(P_FAMILY, SOCK_STREAM, IPPROTO_TCP) ) != -1 )
+   if(!setsockopt( sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)))
+    if(!setsockopt( sock, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one)))
+     if(!setsockopt( sock, IPPROTO_TCP, TCP_KEEPIDLE, &centvingt, sizeof(centvingt)))
+      if(!setsockopt( sock, IPPROTO_TCP, TCP_KEEPINTVL, &centvingt, sizeof(centvingt)))
+       if(!setsockopt( sock, IPPROTO_TCP, TCP_KEEPCNT, &neuf, sizeof(neuf)))
+        bad = 0 ;
 
-  if( ( sock= socket(P_FAMILY, SOCK_STREAM, IPPROTO_TCP) ) == -1 )
-    {
-          LogFatal(COMPONENT_9P_DISPATCH,
-                   "Cannot allocate a tcp socket for 9p, error %d (%s)", errno, strerror(errno));
-	  return -1 ;
-    }
-
-  if(setsockopt( sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)))
+   if( bad ) 
     {
 	LogFatal(COMPONENT_9P_DISPATCH,
-                 "Bad tcp socket options for 9p, error %d (%s)", errno, strerror(errno));
+                 "Bad socket option 9p, error %d (%s)", errno, strerror(errno));
         return -1 ;
     }
-
-  socket_setoptions(sock);
+  socket_setoptions( sock ) ;
 
 #ifndef _USE_TIRPC_IPV6
   memset( &sinaddr, 0, sizeof(sinaddr));
   sinaddr.sin_family      = AF_INET;
   sinaddr.sin_addr.s_addr = nfs_param.core_param.bind_addr.sin_addr.s_addr;
-  sinaddr.sin_port        = htons(nfs_param._9p_param._9p_port);
+  sinaddr.sin_port        = htons(nfs_param._9p_param._9p_tcp_port);
 
   if(bind(sock, (struct sockaddr *)&sinaddr, sizeof(sinaddr)) == -1)
    {
@@ -340,7 +469,7 @@ int _9p_create_socket( void )
   memset(&sinaddr_tcp6, 0, sizeof(sinaddr_tcp6));
   sinaddr_tcp6.sin6_family = AF_INET6;
   sinaddr_tcp6.sin6_addr   = in6addr_any;     /* All the interfaces on the machine are used */
-  sinaddr_tcp6.sin6_port   = htons(nfs_param.core_param._9p_port);
+  sinaddr_tcp6.sin6_port   = htons(nfs_param.core_param._9p_tcp_port);
 
   netbuf_tcp6.maxlen = sizeof(sinaddr_tcp6);
   netbuf_tcp6.len    = sizeof(sinaddr_tcp6);

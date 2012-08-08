@@ -103,6 +103,9 @@ void stats_collect (ganesha_stats_t                 *ganesha_stats)
     global_worker_stat->stat_req.nb_nfs41_op = 0;
     global_worker_stat->stat_req.nb_rquota1_req = 0;
     global_worker_stat->stat_req.nb_rquota2_req = 0;
+#ifdef _USE_9P
+    global_worker_stat->_9p_stat_req.nb_9p_req = 0 ;
+#endif
 
     /* prepare for computing pending request stats */
     ganesha_stats->min_pending_request = 10000000;
@@ -138,6 +141,10 @@ void stats_collect (ganesha_stats_t                 *ganesha_stats)
 
         global_worker_stat->stat_req.nb_rquota2_req +=
             workers_data[i].stats.stat_req.nb_nlm4_req;
+#ifdef _USE_9P
+        global_worker_stat->_9p_stat_req.nb_9p_req +=
+             workers_data[i].stats._9p_stat_req.nb_9p_req ;
+#endif
 
         for (j = 0; j < MNT_V1_NB_COMMAND; j++) {
             if (i == 0) {
@@ -326,6 +333,28 @@ void stats_collect (ganesha_stats_t                 *ganesha_stats)
                     workers_data[i].stats.stat_req.stat_req_rquota2[j].dropped;
             }
         }
+#ifdef _USE_9P
+        for (j = 0; j < _9P_NB_COMMAND; j++) {
+            if (i == 0) 
+             {
+                global_worker_stat->_9p_stat_req.stat_req_9p[j].total = 
+                     workers_data[i].stats._9p_stat_req.stat_req_9p[j].total ;
+                global_worker_stat->_9p_stat_req.stat_req_9p[j].success = 
+                     workers_data[i].stats._9p_stat_req.stat_req_9p[j].success ;
+                global_worker_stat->_9p_stat_req.stat_req_9p[j].failed = 
+                     workers_data[i].stats._9p_stat_req.stat_req_9p[j].failed ;
+             }
+            else
+             { 
+                global_worker_stat->_9p_stat_req.stat_req_9p[j].total += 
+                     workers_data[i].stats._9p_stat_req.stat_req_9p[j].total ;
+                global_worker_stat->_9p_stat_req.stat_req_9p[j].success += 
+                     workers_data[i].stats._9p_stat_req.stat_req_9p[j].success ;
+                global_worker_stat->_9p_stat_req.stat_req_9p[j].failed += 
+                     workers_data[i].stats._9p_stat_req.stat_req_9p[j].failed ;
+             }
+        }
+#endif
 
         ganesha_stats->len_pending_request = workers_data[i].pending_request_len;
         if (ganesha_stats->len_pending_request < ganesha_stats->min_pending_request)
@@ -623,6 +652,17 @@ void *stats_thread(void *UnusedArg)
                 global_worker_stat->stat_req.stat_req_rquota2[j].success,
                 global_worker_stat->stat_req.stat_req_rquota2[j].dropped);
       fprintf(stats_file, "\n");
+
+#ifdef _USE_9P
+      fprintf(stats_file, "9P REQUEST,%s;%u", strdate,
+              global_worker_stat->_9p_stat_req.nb_9p_req);
+      for(j = 0; j < _9P_NB_COMMAND; j++)
+        fprintf(stats_file, "|%u,%u,%u", 
+                global_worker_stat->_9p_stat_req.stat_req_9p[j].total,
+                global_worker_stat->_9p_stat_req.stat_req_9p[j].success,
+                global_worker_stat->_9p_stat_req.stat_req_9p[j].failed ) ;
+      fprintf(stats_file, "\n");
+#endif
 
       fprintf(stats_file,
               "DUP_REQ_HASH,%s;%zu,%zu,%zu,%zu\n",

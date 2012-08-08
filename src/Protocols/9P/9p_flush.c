@@ -56,6 +56,8 @@ int _9p_flush( _9p_request_data_t * preq9p,
                char * preply)
 {
   char * cursor = preq9p->_9pmsg + _9P_HDR_SIZE + _9P_TYPE_SIZE ;
+  u8   * pmsgtype =  preq9p->_9pmsg + _9P_HDR_SIZE ;
+  nfs_worker_data_t * pwkrdata = (nfs_worker_data_t *)pworker_data ;
 
   u16 * msgtag = NULL ;
   u16 * oldtag = NULL ;
@@ -70,6 +72,7 @@ int _9p_flush( _9p_request_data_t * preq9p,
 
   LogDebug( COMPONENT_9P, "TFLUSH: tag=%u oldtag=%u", (u32)*msgtag, (u32)*oldtag ) ;
 
+  _9p_FlushFlushHook(preq9p->pconn, (int) *oldtag, preq9p->flush_hook.sequence);
 
   /* Build the reply */
   _9p_setinitptr( cursor, preply, _9P_RFLUSH ) ;
@@ -80,6 +83,7 @@ int _9p_flush( _9p_request_data_t * preq9p,
 
   LogDebug( COMPONENT_9P, "RFLUSH: tag=%u oldtag=%u", (u32)*msgtag, (u32)*oldtag ) ;
 
+  _9p_stat_update( *pmsgtype, TRUE, &pwkrdata->stats._9p_stat_req ) ;
   return 1 ;
 }
 

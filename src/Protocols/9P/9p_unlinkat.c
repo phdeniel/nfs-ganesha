@@ -55,6 +55,8 @@ int _9p_unlinkat( _9p_request_data_t * preq9p,
                 char * preply)
 {
   char * cursor = preq9p->_9pmsg + _9P_HDR_SIZE + _9P_TYPE_SIZE ;
+  u8   * pmsgtype =  preq9p->_9pmsg + _9P_HDR_SIZE ;
+  nfs_worker_data_t * pwkrdata = (nfs_worker_data_t *)pworker_data ;
 
   u16  * msgtag   = NULL ;
   u32  * dfid     = NULL ;
@@ -82,7 +84,7 @@ int _9p_unlinkat( _9p_request_data_t * preq9p,
             (u32)*msgtag, *dfid, *name_len, name_str ) ;
 
   if( *dfid >= _9P_FID_PER_CONN )
-   return _9p_rerror( preq9p, msgtag, ERANGE, plenout, preply ) ;
+   return  _9p_rerror( preq9p, pworker_data,  msgtag, ERANGE, plenout, preply ) ;
 
   pdfid = &preq9p->pconn->fids[*dfid] ;
 
@@ -95,7 +97,7 @@ int _9p_unlinkat( _9p_request_data_t * preq9p,
                           &fsalattr,
                           &pdfid->fsal_op_context,
                           &cache_status) != CACHE_INODE_SUCCESS )
-    return _9p_rerror( preq9p, msgtag, _9p_tools_errno( cache_status ), plenout, preply ) ;
+    return  _9p_rerror( preq9p, pworker_data,  msgtag, _9p_tools_errno( cache_status ), plenout, preply ) ;
 
   /* Build the reply */
   _9p_setinitptr( cursor, preply, _9P_RUNLINKAT ) ;
@@ -107,6 +109,7 @@ int _9p_unlinkat( _9p_request_data_t * preq9p,
   LogDebug( COMPONENT_9P, "TUNLINKAT: tag=%u dfid=%u name=%.*s",
             (u32)*msgtag, *dfid, *name_len, name_str ) ;
 
+  _9p_stat_update( *pmsgtype, TRUE, &pwkrdata->stats._9p_stat_req ) ;
   return 1 ;
 }
 

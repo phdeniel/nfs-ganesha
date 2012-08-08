@@ -59,6 +59,8 @@ int _9p_getattr( _9p_request_data_t * preq9p,
                   char * preply)
 {
   char * cursor = preq9p->_9pmsg + _9P_HDR_SIZE + _9P_TYPE_SIZE ;
+  u8   * pmsgtype =  preq9p->_9pmsg + _9P_HDR_SIZE ;
+  nfs_worker_data_t * pwkrdata = (nfs_worker_data_t *)pworker_data ;
 
   u16 * msgtag = NULL ;
   u32 * fid    = NULL ;
@@ -66,7 +68,7 @@ int _9p_getattr( _9p_request_data_t * preq9p,
 
   _9p_fid_t * pfid = NULL ;
 
-  u64 * valid        = NULL ;
+  u64   valid        = 0LL ;  /* Not a pointer */
   u32   mode         = 0    ; /* Not a pointer */
   u32 * uid          = NULL ;
   u32 * gid          = NULL ;
@@ -97,13 +99,13 @@ int _9p_getattr( _9p_request_data_t * preq9p,
             (u32)*msgtag, *fid, (unsigned long long)*request_mask ) ;
  
   if( *fid >= _9P_FID_PER_CONN )
-    return _9p_rerror( preq9p, msgtag, ERANGE, plenout, preply ) ;
+    return  _9p_rerror( preq9p, pworker_data,  msgtag, ERANGE, plenout, preply ) ;
 
   pfid = &preq9p->pconn->fids[*fid] ;
 
   /* Attach point is found, build the requested attributes */
   
-  valid = request_mask ; /* FSAL covers all 9P attributes */
+  valid = _9P_GETATTR_BASIC ; /* FSAL covers all basic attributes */
 
   if( *request_mask & _9P_GETATTR_RDEV )
    {  
@@ -124,8 +126,8 @@ int _9p_getattr( _9p_request_data_t * preq9p,
   nlink      = (*request_mask & _9P_GETATTR_NLINK)  ? (u64 *)&pfid->pentry->attributes.numlinks:&zero64 ;  
   rdev       = (*request_mask & _9P_GETATTR_RDEV)   ? (u64 *)&pfid->pentry->attributes.rawdev.major:&zero64 ; 
   size       = (*request_mask & _9P_GETATTR_SIZE)   ? (u64 *)&pfid->pentry->attributes.filesize:&zero64 ; 
-  blksize    = (*request_mask & _9P_GETATTR_BLOCKS) ? (u64)_9p_BLK_SIZE:0LL ; 
-  blocks     = (*request_mask & _9P_GETATTR_BLOCKS) ? (u64)(pfid->pentry->attributes.filesize/_9p_BLK_SIZE):0LL ; 
+  blksize    = (*request_mask & _9P_GETATTR_BLOCKS) ? (u64)_9P_BLK_SIZE:0LL ; 
+  blocks     = (*request_mask & _9P_GETATTR_BLOCKS) ? (u64)(pfid->pentry->attributes.filesize/DEV_BSIZE):0LL ; 
   atime_sec  = (*request_mask & _9P_GETATTR_ATIME ) ? (u64 *)&pfid->pentry->attributes.atime.seconds:&zero64 ;
   atime_nsec = &zero64 ;
   mtime_sec  = (*request_mask & _9P_GETATTR_MTIME ) ? (u64 *)&pfid->pentry->attributes.mtime.seconds:&zero64 ;
@@ -143,7 +145,7 @@ int _9p_getattr( _9p_request_data_t * preq9p,
   _9p_setinitptr( cursor, preply, _9P_RGETATTR ) ;
   _9p_setptr( cursor, msgtag, u16 ) ;
 
-  _9p_setptr( cursor, valid,               u64 ) ;
+  _9p_setvalue( cursor, valid,             u64 ) ;
   _9p_setqid( cursor, pfid->qid ) ;
   _9p_setvalue( cursor, mode,              u32 ) ;
   _9p_setptr( cursor, uid,                 u32 ) ;
@@ -171,7 +173,7 @@ int _9p_getattr( _9p_request_data_t * preq9p,
             "RGETATTR: tag=%u valid=0x%llx qid=(type=%u,version=%u,path=%llu) mode=0%o uid=%u gid=%u nlink=%llu"
             " rdev=%llu size=%llu blksize=%llu blocks=%llu atime=(%llu,%llu) mtime=(%llu,%llu) ctime=(%llu,%llu)"
             " btime=(%llu,%llu) gen=%llu, data_version=%llu", 
-            *msgtag, (unsigned long long)*valid, (u32)pfid->qid.type, pfid->qid.version, (unsigned long long)pfid->qid.path,
+            *msgtag, (unsigned long long)valid, (u32)pfid->qid.type, pfid->qid.version, (unsigned long long)pfid->qid.path,
             mode, *uid, *gid, (unsigned long long)*nlink, (unsigned long long)*rdev, (unsigned long long)*size,
             (unsigned long long)blksize, (unsigned long long)blocks,
             (unsigned long long)*atime_sec, (unsigned long long)*atime_nsec,
@@ -179,6 +181,8 @@ int _9p_getattr( _9p_request_data_t * preq9p,
             (unsigned long long)*ctime_sec, (unsigned long long)*ctime_nsec,    
             (unsigned long long)*btime_sec, (unsigned long long)*btime_nsec, 
             (unsigned long long)*gen, (unsigned long long)*data_version )  ;
+
+  _9p_stat_update( *pmsgtype, TRUE, &pwkrdata->stats._9p_stat_req ) ;
   return 1 ;
 }
 

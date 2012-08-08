@@ -58,6 +58,8 @@ int _9p_getlock( _9p_request_data_t * preq9p,
                  char * preply)
 {
   char * cursor = preq9p->_9pmsg + _9P_HDR_SIZE + _9P_TYPE_SIZE ;
+  u8   * pmsgtype =  preq9p->_9pmsg + _9P_HDR_SIZE ;
+  nfs_worker_data_t * pwkrdata = (nfs_worker_data_t *)pworker_data ;
  
   u16  * msgtag        = NULL ;
   u32  * fid           = NULL ;
@@ -88,7 +90,7 @@ int _9p_getlock( _9p_request_data_t * preq9p,
             *proc_id, *client_id_len, client_id_str ) ;
 
   if( *fid >= _9P_FID_PER_CONN )
-   return _9p_rerror( preq9p, msgtag, ERANGE, plenout, preply ) ;
+   return  _9p_rerror( preq9p, pworker_data,  msgtag, ERANGE, plenout, preply ) ;
 
    // pfid = &preq9p->pconn->fids[*fid] ;
 
@@ -111,6 +113,7 @@ int _9p_getlock( _9p_request_data_t * preq9p,
             (u32)*msgtag, *fid, *type, (unsigned long long)*start, (unsigned long long)*length, 
             *proc_id, *client_id_len, client_id_str ) ;
 
+  _9p_stat_update( *pmsgtype, TRUE, &pwkrdata->stats._9p_stat_req ) ;
   return 1 ;
 }
 

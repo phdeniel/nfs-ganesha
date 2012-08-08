@@ -60,6 +60,8 @@ int _9p_lock( _9p_request_data_t * preq9p,
               char * preply)
 {
   char * cursor = preq9p->_9pmsg + _9P_HDR_SIZE + _9P_TYPE_SIZE ;
+  u8   * pmsgtype =  preq9p->_9pmsg + _9P_HDR_SIZE ;
+  nfs_worker_data_t * pwkrdata = (nfs_worker_data_t *)pworker_data ;
  
   u16  * msgtag        = NULL ;
   u32  * fid           = NULL ;
@@ -71,7 +73,8 @@ int _9p_lock( _9p_request_data_t * preq9p,
   u16  * client_id_len = NULL ;
   char * client_id_str = NULL ;
 
-  u8 status = 0  ;
+  u8 status = _9P_LOCK_SUCCESS  ;
+#if 0 // tmp work around
   state_status_t state_status = STATE_SUCCESS;
   state_owner_t      * holder ;
   state_owner_t      * powner ;
@@ -83,6 +86,7 @@ int _9p_lock( _9p_request_data_t * preq9p,
 
   struct hostent *hp ;
   struct sockaddr_storage client_addr ; 
+#endif
 
   _9p_fid_t * pfid = NULL ;
 
@@ -105,20 +109,20 @@ int _9p_lock( _9p_request_data_t * preq9p,
             *proc_id, *client_id_len, client_id_str ) ;
 
   if( *fid >= _9P_FID_PER_CONN )
-    return _9p_rerror( preq9p, msgtag, ERANGE, plenout, preply ) ;
+    return  _9p_rerror( preq9p, pworker_data,  msgtag, ERANGE, plenout, preply ) ;
 
   pfid = &preq9p->pconn->fids[*fid] ;
-
+#if 0 /* Tmp hook to avoid lock issue when compiling kernels. This should not impact ONE client only */
   /* get the client's ip addr */
   snprintf( name, MAXNAMLEN, "%.*s",*client_id_len, client_id_str ) ;
 
   if( ( hp = gethostbyname( name ) ) == NULL )
-    return _9p_rerror( preq9p, msgtag, EINVAL, plenout, preply ) ;
+    return  _9p_rerror( preq9p, pworker_data,  msgtag, EINVAL, plenout, preply ) ;
 
   memcpy( (char *)&client_addr, hp->h_addr, hp->h_length ) ;
 
   if( ( powner = get_9p_owner( &client_addr, *proc_id ) ) == NULL )
-    return _9p_rerror( preq9p, msgtag, EINVAL, plenout, preply ) ;
+    return  _9p_rerror( preq9p, pworker_data,  msgtag, EINVAL, plenout, preply ) ;
 
   /* Do the job */
   switch( *type )
@@ -173,10 +177,10 @@ int _9p_lock( _9p_request_data_t * preq9p,
         break ;
 
       default:
-        return _9p_rerror( preq9p, msgtag, EINVAL, plenout, preply ) ;
+        return  _9p_rerror( preq9p, pworker_data,  msgtag, EINVAL, plenout, preply ) ;
         break ;
    } /* switch( *type ) */ 
-
+#endif
   /* Build the reply */
   _9p_setinitptr( cursor, preply, _9P_RLOCK ) ;
   _9p_setptr( cursor, msgtag, u16 ) ;
@@ -190,6 +194,7 @@ int _9p_lock( _9p_request_data_t * preq9p,
             (u32)*msgtag, *fid, *type, *flags, (unsigned long long)*start, (unsigned long long)*length, 
             *proc_id, *client_id_len, client_id_str, status ) ;
 
+  _9p_stat_update( *pmsgtype, TRUE, &pwkrdata->stats._9p_stat_req ) ;
   return 1 ;
 }
 

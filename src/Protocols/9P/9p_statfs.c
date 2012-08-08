@@ -58,6 +58,8 @@ int _9p_statfs( _9p_request_data_t * preq9p,
                 char * preply)
 {
   char * cursor = preq9p->_9pmsg + _9P_HDR_SIZE + _9P_TYPE_SIZE ;
+  u8   * pmsgtype =  preq9p->_9pmsg + _9P_HDR_SIZE ;
+  nfs_worker_data_t * pwkrdata = (nfs_worker_data_t *)pworker_data ;
 
   u16 * msgtag = NULL ;
   u32 * fid    = NULL ;
@@ -88,7 +90,7 @@ int _9p_statfs( _9p_request_data_t * preq9p,
             (u32)*msgtag, *fid ) ;
  
   if( *fid >= _9P_FID_PER_CONN )
-   return _9p_rerror( preq9p, msgtag, ERANGE, plenout, preply ) ;
+   return  _9p_rerror( preq9p, pworker_data,  msgtag, ERANGE, plenout, preply ) ;
 
   pfid = &preq9p->pconn->fids[*fid] ;
 
@@ -97,7 +99,7 @@ int _9p_statfs( _9p_request_data_t * preq9p,
                           &dynamicinfo,
                           &pfid->fsal_op_context, 
                           &cache_status ) != CACHE_INODE_SUCCESS )
-    return _9p_rerror( preq9p, msgtag, _9p_tools_errno( cache_status ), plenout, preply ) ;
+    return  _9p_rerror( preq9p, pworker_data,  msgtag, _9p_tools_errno( cache_status ), plenout, preply ) ;
 
   blocks  = (u64 *)&dynamicinfo.total_bytes ;
   bfree   = (u64 *)&dynamicinfo.free_bytes ;
@@ -126,6 +128,7 @@ int _9p_statfs( _9p_request_data_t * preq9p,
   LogDebug( COMPONENT_9P, "RSTATFS: tag=%u fid=%u",
             (u32)*msgtag, *fid ) ;
  
+  _9p_stat_update( *pmsgtype, TRUE, &pwkrdata->stats._9p_stat_req ) ;
   return 1 ;
 }
 

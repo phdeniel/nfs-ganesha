@@ -597,6 +597,7 @@ bail:
  * @retval CACHE_INODE_SUCCESS if operation is a success
  * @retval CACHE_INODE_BAD_TYPE if entry is not related to a directory
  */
+
 cache_inode_status_t
 cache_inode_readdir(cache_entry_t *directory,
                     uint64_t cookie,
