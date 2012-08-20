@@ -38,7 +38,7 @@
 #ifdef _USE_9P_RDMA
 #include <infiniband/arch.h>
 #include <rdma/rdma_cma.h>
-#include "trans_rdma.h"
+#include "mooshika.h"
 
 typedef struct _9p_datamr
 {
@@ -79,8 +79,11 @@ typedef uint64_t u64;
 
 //#define _9P_RDMA_CHUNK_SIZE 8*1024
 #define _9P_RDMA_CHUNK_SIZE 65*1024
-#define _9P_RDMA_RECV_NUM 1
+#define _9P_RDMA_BUFF_NUM 40 
 #define _9P_RDMA_BACKLOG 10 
+
+#define _9P_RDMA_IN  0
+#define _9P_RDMA_OUT 20
 
 /**
  * enum _9p_msg_t - 9P message types
