@@ -81,15 +81,21 @@ void _9p_rdma_callback_disconnect(msk_trans_t *trans) {
 
 void _9p_rdma_process_request( _9p_request_data_t * preq9p, nfs_worker_data_t * pworker_data ) 
 {
+  msk_trans_t * trans =  preq9p->pconn->trans_data.rdma_ep.trans ;
+
   msk_data_t *pdata = preq9p->pconn->trans_data.rdma_ep.datamr->data ;
   _9p_datamr_t * datamr =  preq9p->pconn->trans_data.rdma_ep.datamr ;
-  msk_trans_t * trans =  preq9p->pconn->trans_data.rdma_ep.trans ;
+
+  __attribute__ (( unused )) _9p_datamr_t * outdatamr =  preq9p->pconn->trans_data.rdma_ep.datamr->sender ;
+  __attribute__ (( unused )) msk_data_t *poutdata =   preq9p->pconn->trans_data.rdma_ep.datamr->sender->data ;
+
+
+
   uint32_t * p_9pmsglen = NULL ;
-  char replydata[_9P_MSG_SIZE] ; // unclean, use RDMA buffer instead
   u32 outdatalen = 0 ;
   int rc = 0 ; 
 
-  if (pdata->size != 1 || pdata->data[_9P_RDMA_IN] != '\0')
+  if (pdata->size != 1 || pdata->data[0] != '\0')
    {
       printf( "Received %u bytes:\n", pdata->size ) ;
 
@@ -107,14 +113,12 @@ void _9p_rdma_process_request( _9p_request_data_t * preq9p, nfs_worker_data_t * 
           /* Use buffer received via RDMA as a 9P message */
           preq9p->_9pmsg = pdata->data ;
 
-          if ( ( rc = _9p_process_buffer( preq9p, pworker_data, replydata, &outdatalen ) ) != 1 )
+          if ( ( rc = _9p_process_buffer( preq9p, pworker_data, poutdata->data, &outdatalen ) ) != 1 )
              LogMajor( COMPONENT_9P, "Could not process 9P buffer on socket #%lu", preq9p->pconn->trans_data.sockfd ) ;
 
-          // Really unclean, but I want to see if other stuff works properly
-          memcpy( pdata->data, replydata, outdatalen ) ;
-          pdata->size = outdatalen ;
+          poutdata->size = outdatalen ;
          
-          msk_post_send( trans, pdata, datamr->mr, _9p_rdma_callback_send, NULL ) ;
+          msk_post_send( trans, poutdata, outdatamr->mr, _9p_rdma_callback_send, NULL ) ;
         }
 
       /* Mark the buffer ready for later recv */

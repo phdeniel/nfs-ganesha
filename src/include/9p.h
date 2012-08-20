@@ -47,6 +47,7 @@ typedef struct _9p_datamr
   msk_data_t *ackdata;
   pthread_mutex_t *lock;
   pthread_cond_t *cond;
+  struct _9p_datamr * sender ;
 } _9p_datamr_t ;
 
 #endif
@@ -79,11 +80,10 @@ typedef uint64_t u64;
 
 //#define _9P_RDMA_CHUNK_SIZE 8*1024
 #define _9P_RDMA_CHUNK_SIZE 65*1024
-#define _9P_RDMA_BUFF_NUM 40 
+#define _9P_RDMA_BUFF_NUM 100 
 #define _9P_RDMA_BACKLOG 10 
 
-#define _9P_RDMA_IN  0
-#define _9P_RDMA_OUT 20
+#define _9P_RDMA_OUT _9P_RDMA_BUFF_NUM/2
 
 /**
  * enum _9p_msg_t - 9P message types

@@ -63,14 +63,19 @@ int _9p_tools_get_fsal_op_context_by_uid( u32 uid, _9p_fid_t * pfid )
   gid_t gid ;
   fsal_status_t fsal_status ;
 
-  if((getpwuid_r( uid, &p, buff, MAXPATHLEN, &pp) != 0) || (pp == NULL))
-    {
-      LogFullDebug(COMPONENT_IDMAPPER, "getpwuid_r %d failed", uid ) ;
-      return -ENOENT;
-    }
+  /* Shortcut for root */
+  if( uid == 0 ) 
+    gid = 0 ;
   else
-   gid = p.pw_gid ;
-  
+   {
+    if((getpwuid_r( uid, &p, buff, MAXPATHLEN, &pp) != 0) || (pp == NULL))
+      {
+        LogFullDebug(COMPONENT_IDMAPPER, "getpwuid_r %d failed", uid ) ;
+        return -ENOENT;
+      }
+    else
+     gid = p.pw_gid ;
+   }
 
   fsal_status = FSAL_GetClientContext( &pfid->fsal_op_context,
                                        &pfid->pexport->FS_export_context,

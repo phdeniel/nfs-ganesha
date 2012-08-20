@@ -86,18 +86,13 @@
  * @return NULL 
  * 
  */
-
-/* Equivalent du _9p_socket_thread( */
-void * _9p_rdma_thread( void * Arg )
+static int _9p_rdma_register_buffer( msk_trans_t * trans, pthread_mutex_t * plock, pthread_cond_t * pcond )
 {
-  msk_trans_t   * trans   = Arg  ;
   uint8_t       * rdmabuf = NULL ;
   struct ibv_mr * mr      = NULL ;
   msk_data_t    * ackdata = NULL ;
   msk_data_t   ** rdata   = NULL ;
   struct _9p_datamr * datamr  = NULL ;
-  pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER ;
-  pthread_cond_t cond = PTHREAD_COND_INITIALIZER ;
   unsigned int i = 0 ;
   int rc = 0 ;
 
@@ -140,19 +135,29 @@ void * _9p_rdma_thread( void * Arg )
       datamr[i].data = rdata[i];
       datamr[i].mr = mr;
       datamr[i].ackdata = ackdata;
-      datamr[i].lock = &lock;
-      datamr[i].cond = &cond;
+      datamr[i].lock = plock;
+      datamr[i].cond = pcond;
 
-      if( ( rc = msk_post_recv( trans, 
-                                rdata[i], 
-                                mr, 
-                                _9p_rdma_callback_recv, 
-                                &(datamr[i]) ) ) != 0 )
-        {
-          LogEvent( COMPONENT_9P,  "9P/RDMA: trans handler could recv first byte of datamr[%u], rc=%u", i, rc ) ;
-          goto exit ;
-        }
+      if( i < _9P_RDMA_OUT )
+       {
+         if( ( rc = msk_post_recv( trans, 
+                                   rdata[i], 
+                                   mr, 
+                                   _9p_rdma_callback_recv, 
+                                  &(datamr[i]) ) ) != 0 )
+           {
+             LogEvent( COMPONENT_9P,  "9P/RDMA: trans handler could recv first byte of datamr[%u], rc=%u", i, rc ) ;
+             goto exit ;
+           }
+       }
    } /*  for (unsigned int i=0; i < _9P_RDMA_BUFF_NUM; i++)  */
+
+  for( i = 0 ; i <  _9P_RDMA_BUFF_NUM; i++)
+   if(  i < _9P_RDMA_OUT )
+      datamr[i].sender = &datamr[i+_9P_RDMA_OUT] ;
+   else
+      datamr[i].sender = NULL ;
+
 
   /* Finalize accept */
   if( ( rc = msk_finalize_accept( trans ) ) != 0 )
@@ -160,6 +165,43 @@ void * _9p_rdma_thread( void * Arg )
       LogMajor( COMPONENT_9P, "9P/RDMA: trans handler could not finalize accept, rc=%u", rc ) ;
       goto exit ;
     }
+
+  return 0 ; /* OK status */
+
+exit:  
+  for( i = 0 ; i < _9P_RDMA_BUFF_NUM ; i++ )
+    if( !rdata[i] ) gsh_free( rdata[i] ) ;
+
+  if( !datamr ) gsh_free( datamr ) ;
+  if( !rdata ) gsh_free( rdata ) ;
+  if( !ackdata ) gsh_free( ackdata ) ;
+  if( !rdmabuf ) gsh_free( rdmabuf ) ;
+  
+  return 1 ;
+
+} /* _9p_rdma_register_buffer */
+
+/**
+ * _9p_rdma_handle_trans_thr: 9P/RDMA listener
+ * 
+ * @param Arg : contains the child trans to be managed
+ * 
+ * @return NULL 
+ * 
+ */
+
+/* Equivalent du _9p_socket_thread( */
+void * _9p_rdma_thread( void * Arg )
+{
+  msk_trans_t   * trans   = Arg  ;
+  pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER ;
+  pthread_cond_t cond = PTHREAD_COND_INITIALIZER ;
+
+  if( _9p_rdma_register_buffer( trans, &lock, &cond ) )
+   { 
+      msk_destroy_trans( &trans ) ;
+      pthread_exit(NULL);
+   }
 
   while( trans->state == MSK_CONNECTED )
    {
@@ -169,20 +211,8 @@ void * _9p_rdma_thread( void * Arg )
      pthread_mutex_unlock(&lock);
    }
 
-exit:
-  msk_destroy_trans( &trans ) ;
-  
-  for( i = 0 ; i < _9P_RDMA_BUFF_NUM ; i++ )
-    if( !rdata[i] ) gsh_free( rdata[i] ) ;
-
-  if( !datamr ) gsh_free( datamr ) ;
-  if( !rdata ) gsh_free( rdata ) ;
-  if( !ackdata ) gsh_free( ackdata ) ;
-  if( !rdmabuf ) gsh_free( rdmabuf ) ;
-
   pthread_exit(NULL);
 } /* _9p_rdma_handle_trans */
-
 
 
 /**
