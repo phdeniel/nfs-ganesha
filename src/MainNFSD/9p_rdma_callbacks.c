@@ -86,8 +86,8 @@ void _9p_rdma_process_request( _9p_request_data_t * preq9p, nfs_worker_data_t * 
   msk_data_t *pdata = preq9p->pconn->trans_data.rdma_ep.datamr->data ;
   _9p_datamr_t * datamr =  preq9p->pconn->trans_data.rdma_ep.datamr ;
 
-  __attribute__ (( unused )) _9p_datamr_t * outdatamr =  preq9p->pconn->trans_data.rdma_ep.datamr->sender ;
-  __attribute__ (( unused )) msk_data_t *poutdata =   preq9p->pconn->trans_data.rdma_ep.datamr->sender->data ;
+  _9p_datamr_t * outdatamr =  preq9p->pconn->trans_data.rdma_ep.datamr->sender ;
+  msk_data_t *poutdata =   preq9p->pconn->trans_data.rdma_ep.datamr->sender->data ;
 
 
 
