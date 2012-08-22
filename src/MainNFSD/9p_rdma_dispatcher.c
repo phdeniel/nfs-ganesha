@@ -56,6 +56,7 @@
 #include "HashTable.h"
 #include "log.h"
 #include "abstract_mem.h"
+#include "abstract_atomic.h"
 #include "nfs_init.h"
 #include "nfs_core.h"
 #include "cache_inode.h"
@@ -86,7 +87,7 @@
  * @return NULL 
  * 
  */
-static int _9p_rdma_register_buffer( msk_trans_t * trans, pthread_mutex_t * plock, pthread_cond_t * pcond )
+static int _9p_rdma_register_buffer( msk_trans_t * trans, pthread_mutex_t * plock, pthread_cond_t * pcond, _9p_conn_t * pconn )
 {
   uint8_t       * rdmabuf = NULL ;
   struct ibv_mr * mr      = NULL ;
@@ -137,6 +138,7 @@ static int _9p_rdma_register_buffer( msk_trans_t * trans, pthread_mutex_t * ploc
       datamr[i].ackdata = ackdata;
       datamr[i].lock = plock;
       datamr[i].cond = pcond;
+      datamr[i].pconn = pconn;
 
       if( i < _9P_RDMA_OUT )
        {
@@ -196,13 +198,25 @@ void * _9p_rdma_thread( void * Arg )
   msk_trans_t   * trans   = Arg  ;
   pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER ;
   pthread_cond_t cond = PTHREAD_COND_INITIALIZER ;
+  unsigned int i = 0 ;
 
-  if( _9p_rdma_register_buffer( trans, &lock, &cond ) )
+  _9p_conn_t _9p_conn ;
+
+  for (i = 0; i < FLUSH_BUCKETS; i++) 
+   {
+     pthread_mutex_init(&_9p_conn.flush_buckets[i].lock, NULL);
+     init_glist(&_9p_conn.flush_buckets[i].list);
+   }
+  _9p_conn.sequence = 0 ;
+  atomic_store_uint32_t(&_9p_conn.refcount, 0);
+
+  if( _9p_rdma_register_buffer( trans, &lock, &cond, &_9p_conn ) )
    { 
       msk_destroy_trans( &trans ) ;
       pthread_exit(NULL);
    }
 
+ 
   while( trans->state == MSK_CONNECTED )
    {
      pthread_mutex_lock(&lock);

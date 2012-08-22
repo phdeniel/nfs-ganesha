@@ -39,17 +39,6 @@
 #include <infiniband/arch.h>
 #include <rdma/rdma_cma.h>
 #include "mooshika.h"
-
-typedef struct _9p_datamr
-{
-  msk_data_t *data;
-  struct ibv_mr *mr;
-  msk_data_t *ackdata;
-  pthread_mutex_t *lock;
-  pthread_cond_t *cond;
-  struct _9p_datamr * sender ;
-} _9p_datamr_t ;
-
 #endif
 
 typedef uint8_t   u8;
@@ -325,17 +314,6 @@ typedef enum _9p_trans_type__
   _9P_RDMA
 } _9p_trans_type_t ;
 
-#ifdef _USE_9P_RDMA
-typedef struct _9p_rdma_ep__
-{
-  _9p_datamr_t * datamr ;
-  msk_trans_t  * trans ;
-} _9p_rdma_ep_t ;
-#endif
-
-
-
-
 typedef struct _9p_flush_hook__
 {
   int tag;
@@ -352,6 +330,25 @@ typedef struct _9p_flush_bucket__
 
 #define FLUSH_BUCKETS 64
 
+#ifdef _USE_9P_RDMA
+typedef struct _9p_datamr
+{
+  msk_data_t *data;
+  struct ibv_mr *mr;
+  msk_data_t *ackdata;
+  pthread_mutex_t *lock;
+  pthread_cond_t *cond;
+  struct _9p_datamr * sender ;
+  void * pconn ;
+} _9p_datamr_t ;
+
+typedef struct _9p_rdma_ep__
+{
+  _9p_datamr_t * datamr ;
+  msk_trans_t  * trans ;
+} _9p_rdma_ep_t ;
+#endif
+
 typedef struct _9p_conn__
 {
   union  trans_data
@@ -366,6 +363,7 @@ typedef struct _9p_conn__
   struct timeval  birth;  /* This is useful if same sockfd is reused on socket's close/open  */
   _9p_fid_t       fids[_9P_FID_PER_CONN] ;
   _9p_flush_bucket_t flush_buckets[FLUSH_BUCKETS];
+  unsigned long sequence ;
 } _9p_conn_t ;
 
 typedef struct _9p_request_data__
@@ -374,6 +372,7 @@ typedef struct _9p_request_data__
   _9p_conn_t  *  pconn ;
   _9p_flush_hook_t flush_hook;
 } _9p_request_data_t ;
+
 
 
 typedef int (*_9p_function_t) (_9p_request_data_t * preq9p, 

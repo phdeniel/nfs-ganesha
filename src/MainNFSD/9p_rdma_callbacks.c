@@ -49,6 +49,7 @@
 #include <sys/socket.h>
 #include "log.h"
 #include "abstract_mem.h"
+#include "abstract_atomic.h"
 #include "nfs_init.h"
 #include "nfs_core.h"
 #include "cache_inode.h"
@@ -114,12 +115,21 @@ void _9p_rdma_process_request( _9p_request_data_t * preq9p, nfs_worker_data_t * 
           preq9p->_9pmsg = pdata->data ;
 
           if ( ( rc = _9p_process_buffer( preq9p, pworker_data, poutdata->data, &outdatalen ) ) != 1 )
+           {
+             _9p_DiscardFlushHook(preq9p);
              LogMajor( COMPONENT_9P, "Could not process 9P buffer on socket #%lu", preq9p->pconn->trans_data.sockfd ) ;
-
-          poutdata->size = outdatalen ;
-         
-          msk_post_send( trans, poutdata, outdatamr->mr, _9p_rdma_callback_send, NULL ) ;
-        }
+           }
+          else
+           {
+              /* Send reply only if no TFLUSH was received */
+              if (!_9p_LockAndTestFlushHook(preq9p))
+               {
+                 poutdata->size = outdatalen ;
+                 msk_post_send( trans, poutdata, outdatamr->mr, _9p_rdma_callback_send, NULL ) ;
+               }
+              _9p_ReleaseFlushHook(preq9p);
+           }
+         }
 
       /* Mark the buffer ready for later recv */
       msk_post_recv(trans, pdata, datamr->mr, _9p_rdma_callback_recv, datamr);
@@ -139,14 +149,14 @@ void _9p_rdma_callback_recv(msk_trans_t *trans, void *arg)
   struct _9p_datamr *_9p_datamr = arg;
   unsigned int worker_index;
   request_data_t *preq = NULL;
-  _9p_conn_t _9p_conn ;
+  u16 tag = 0 ;
+  char * _9pmsg = NULL ;
 
-
- if (!_9p_datamr) 
-  {
-     LogEvent( COMPONENT_9P, "no callback_arg in _9p_rdma_callback_recv");
-     return;
-  }
+  if (!_9p_datamr) 
+   {
+      LogEvent( COMPONENT_9P, "no callback_arg in _9p_rdma_callback_recv");
+      return;
+   }
 
   /* choose a worker depending on its queue length */
   worker_index = nfs_core_select_worker_queue( WORKER_INDEX_ANY );
@@ -159,13 +169,17 @@ void _9p_rdma_callback_recv(msk_trans_t *trans, void *arg)
   V(workers_data[worker_index].request_pool_mutex);
 
    preq->rtype = _9P_REQUEST ;
-   preq->r_u._9p.pconn = &_9p_conn ;  // Pas bon... A passer en arg et a initier dans le thread d'avant
+   preq->r_u._9p.pconn = (_9p_conn_t *)_9p_datamr->pconn ;  
 
-   _9p_conn.trans_type = _9P_RDMA ;
-   _9p_conn.trans_data.rdma_ep.datamr = _9p_datamr ;
-   _9p_conn.trans_data.rdma_ep.trans = trans ;
- 
+   preq->r_u._9p.pconn->trans_type = _9P_RDMA ;
+   preq->r_u._9p.pconn->trans_data.rdma_ep.datamr = _9p_datamr ;
+   preq->r_u._9p.pconn->trans_data.rdma_ep.trans = trans ;
+
+   /* Add this request to the request list, should it be flushed later. */
+   _9pmsg = _9p_datamr->data->data ;
+   tag = *(u16*) (_9pmsg + _9P_HDR_SIZE + _9P_TYPE_SIZE);
+   _9p_AddFlushHook(&preq->r_u._9p, tag, preq->r_u._9p.pconn->sequence++);
+
    DispatchWork9P( preq, worker_index ) ;
-  //_9p_rdma_do_recv( trans, _9p_datamr ) ;
-}
+} /* _9p_rdma_callback_recv */
 

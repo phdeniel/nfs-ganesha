@@ -129,71 +129,6 @@ void DispatchWork9P( request_data_t *preq, unsigned int worker_index)
   V(workers_data[worker_index].wcb.tcb_mutex);
 }
 
-void _9p_AddFlushHook(_9p_request_data_t *req, int tag, unsigned long sequence)
-{
-        int bucket = tag % FLUSH_BUCKETS;
-        _9p_flush_hook_t *hook = &req->flush_hook;
-        _9p_conn_t *conn = req->pconn;
-
-        hook->tag = tag;
-        hook->flushed = 0;
-        hook->sequence = sequence;
-        pthread_mutex_lock(&conn->flush_buckets[bucket].lock);
-        glist_add(&conn->flush_buckets[bucket].list, &hook->list);
-        pthread_mutex_unlock(&conn->flush_buckets[bucket].lock);
-}
-
-void _9p_FlushFlushHook(_9p_conn_t *conn, int tag, unsigned long sequence)
-{
-        int bucket = tag % FLUSH_BUCKETS;
-        struct glist_head *node;
-
-        _9p_flush_hook_t *hook = NULL;
-        pthread_mutex_lock(&conn->flush_buckets[bucket].lock);
-        glist_for_each(node, &conn->flush_buckets[bucket].list) {
-                hook = glist_entry(node, _9p_flush_hook_t, list);
-                /* Cancel a request that has the right tag
-                 * --AND-- is older than the flush request.
-                 **/
-                if ((hook->tag == tag) && (hook->sequence < sequence)){
-                        hook->flushed = 1;
-                        glist_del(&hook->list);
-                        LogFullDebug( COMPONENT_9P, "Found tag to flush %d\n", tag);
-                        break;
-                }
-        }
-        pthread_mutex_unlock(&conn->flush_buckets[bucket].lock);
-}
-
-int _9p_LockAndTestFlushHook(_9p_request_data_t *req)
-{
-        _9p_flush_hook_t *hook = &req->flush_hook;
-        _9p_conn_t *conn = req->pconn;
-        int bucket = hook->tag % FLUSH_BUCKETS;
-
-        pthread_mutex_lock(&conn->flush_buckets[bucket].lock);
-        return hook->flushed;
-}
-
-void _9p_ReleaseFlushHook(_9p_request_data_t *req)
-{
-        _9p_flush_hook_t *hook = &req->flush_hook;
-        _9p_conn_t *conn = req->pconn;
-        int bucket = hook->tag % FLUSH_BUCKETS;
-
-        if (!hook->flushed)
-                        glist_del(&hook->list);
-
-        pthread_mutex_unlock(&conn->flush_buckets[bucket].lock);
-}
-
-void _9p_DiscardFlushHook(_9p_request_data_t *req)
-{
-        _9p_LockAndTestFlushHook(req);
-        _9p_ReleaseFlushHook(req);
-}
-
-
 /**
  * _9p_socket_thread: 9p socket manager.
  *
@@ -218,9 +153,8 @@ void * _9p_socket_thread( void * Arg )
   char strcaller[MAXNAMLEN] ;
   request_data_t *preq = NULL;
   unsigned int worker_index;
-  int tag;
-  unsigned long sequence = 0;
-  unsigned int i = 0 ;
+  u16 tag;
+    unsigned int i = 0 ;
   char * _9pmsg  = NULL;
   uint32_t * p_9pmsglen = NULL ;
 
@@ -235,12 +169,13 @@ void * _9p_socket_thread( void * Arg )
   /* Init the _9p_conn_t structure */
   _9p_conn.trans_type = _9P_TCP ;
   _9p_conn.trans_data.sockfd = tcp_sock ;
-  for (i = 0; i < FLUSH_BUCKETS; i++) {
-          pthread_mutex_init(&_9p_conn.flush_buckets[i].lock, NULL);
-          init_glist(&_9p_conn.flush_buckets[i].list);
-  }
+  for (i = 0; i < FLUSH_BUCKETS; i++) 
+   {
+      pthread_mutex_init(&_9p_conn.flush_buckets[i].lock, NULL);
+      init_glist(&_9p_conn.flush_buckets[i].list);
+   }
+  _9p_conn.sequence = 0 ;
   atomic_store_uint32_t(&_9p_conn.refcount, 0);
-
 
   if( gettimeofday( &_9p_conn.birth, NULL ) == -1 )
    LogFatal( COMPONENT_9P, "Cannot get connection's time of birth" ) ;
@@ -360,7 +295,7 @@ void * _9p_socket_thread( void * Arg )
              
              /* Add this request to the request list, should it be flushed later. */
              tag = *(u16*) (_9pmsg + _9P_HDR_SIZE + _9P_TYPE_SIZE);
-             _9p_AddFlushHook(&preq->r_u._9p, tag, sequence++);
+             _9p_AddFlushHook(&preq->r_u._9p, tag, _9p_conn.sequence++);
              LogFullDebug( COMPONENT_9P, "Request tag is %d\n", tag);
 
 	     /* Message was OK push it the request to the right worker */
