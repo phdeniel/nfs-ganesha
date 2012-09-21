@@ -176,6 +176,7 @@ void * _9p_socket_thread( void * Arg )
    }
   _9p_conn.sequence = 0 ;
   atomic_store_uint32_t(&_9p_conn.refcount, 0);
+  pthread_mutex_init(&_9p_conn.sock_lock, NULL);
 
   if( gettimeofday( &_9p_conn.birth, NULL ) == -1 )
    LogFatal( COMPONENT_9P, "Cannot get connection's time of birth" ) ;
