@@ -116,19 +116,14 @@ void _9p_rdma_process_request( _9p_request_data_t * preq9p, nfs_worker_data_t * 
 
           if ( ( rc = _9p_process_buffer( preq9p, pworker_data, poutdata->data, &outdatalen ) ) != 1 )
            {
-             _9p_DiscardFlushHook(preq9p);
              LogMajor( COMPONENT_9P, "Could not process 9P buffer on socket #%lu", preq9p->pconn->trans_data.sockfd ) ;
            }
           else
            {
-              /* Send reply only if no TFLUSH was received */
-              if (!_9p_LockAndTestFlushHook(preq9p))
-               {
                  poutdata->size = outdatalen ;
                  msk_post_send( trans, poutdata, outdatamr->mr, _9p_rdma_callback_send, NULL ) ;
-               }
-              _9p_ReleaseFlushHook(preq9p);
            }
+           _9p_DiscardFlushHook(preq9p);
          }
 
       /* Mark the buffer ready for later recv */

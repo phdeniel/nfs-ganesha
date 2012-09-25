@@ -66,6 +66,12 @@
 #include "SemN.h"
 #include "9p.h"
 
+struct flush_condition 
+{
+        pthread_cond_t condition;
+        int reply_sent;
+};
+
 void _9p_AddFlushHook(_9p_request_data_t *req, int tag, unsigned long sequence)
 {
         int bucket = tag % FLUSH_BUCKETS;
@@ -73,7 +79,7 @@ void _9p_AddFlushHook(_9p_request_data_t *req, int tag, unsigned long sequence)
         _9p_conn_t *conn = req->pconn;
 
         hook->tag = tag;
-        hook->flushed = 0;
+        hook->condition = NULL;
         hook->sequence = sequence;
         pthread_mutex_lock(&conn->flush_buckets[bucket].lock);
         glist_add(&conn->flush_buckets[bucket].list, &hook->list);
@@ -84,8 +90,9 @@ void _9p_FlushFlushHook(_9p_conn_t *conn, int tag, unsigned long sequence)
 {
         int bucket = tag % FLUSH_BUCKETS;
         struct glist_head *node;
-
         _9p_flush_hook_t *hook = NULL;
+        struct flush_condition fc;
+
         pthread_mutex_lock(&conn->flush_buckets[bucket].lock);
         glist_for_each(node, &conn->flush_buckets[bucket].list) {
                 hook = glist_entry(node, _9p_flush_hook_t, list);
@@ -93,40 +100,43 @@ void _9p_FlushFlushHook(_9p_conn_t *conn, int tag, unsigned long sequence)
                  * --AND-- is older than the flush request.
                  **/
                 if ((hook->tag == tag) && (hook->sequence < sequence)){
-                        hook->flushed = 1;
+                        pthread_cond_init(&fc.condition, NULL);
+                        fc.reply_sent = 0;
+                        hook->condition = &fc;
                         glist_del(&hook->list);
                         LogFullDebug( COMPONENT_9P, "Found tag to flush %d\n", tag);
+                        /* 
+                         * Now, wait until the request is complete
+                         * so we can send the RFLUSH.
+                         * warning: this will unlock the bucket lock */
+                        while (!fc.reply_sent)
+                                pthread_cond_wait(&fc.condition, 
+                                                  &conn->flush_buckets[bucket].lock);
                         break;
                 }
         }
         pthread_mutex_unlock(&conn->flush_buckets[bucket].lock);
 }
 
-int _9p_LockAndTestFlushHook(_9p_request_data_t *req)
+void _9p_DiscardFlushHook(_9p_request_data_t *req)
 {
         _9p_flush_hook_t *hook = &req->flush_hook;
         _9p_conn_t *conn = req->pconn;
         int bucket = hook->tag % FLUSH_BUCKETS;
 
         pthread_mutex_lock(&conn->flush_buckets[bucket].lock);
-        return hook->flushed;
-}
-
-void _9p_ReleaseFlushHook(_9p_request_data_t *req)
-{
-        _9p_flush_hook_t *hook = &req->flush_hook;
-        _9p_conn_t *conn = req->pconn;
-        int bucket = hook->tag % FLUSH_BUCKETS;
-
-        if (!hook->flushed)
-                        glist_del(&hook->list);
+        /* If no flush request arrived, we have to
+         * remove the hook from the list.
+         * If a flush request arrived, signal the thread that is waiting 
+         */
+        if (hook->condition == NULL)
+                glist_del(&hook->list);
+        else
+        {
+                hook->condition->reply_sent = 1;
+                pthread_cond_signal(&hook->condition->condition);
+        }
 
         pthread_mutex_unlock(&conn->flush_buckets[bucket].lock);
-}
-
-void _9p_DiscardFlushHook(_9p_request_data_t *req)
-{
-        _9p_LockAndTestFlushHook(req);
-        _9p_ReleaseFlushHook(req);
 }
 

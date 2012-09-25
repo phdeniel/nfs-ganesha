@@ -314,10 +314,23 @@ typedef enum _9p_trans_type__
   _9P_RDMA
 } _9p_trans_type_t ;
 
+struct flush_condition;
+
+/* flush hook : 
+ * 
+ * We use this to insert the request in a list
+ * so it can be found later during a TFLUSH.
+ * The goal is to wait until a request has been fully
+ * processed and the reply sent before we send a RFLUSH.
+ *
+ * When a TFLUSH arrives, its thread will fill `condition'
+ * so we can wake it up later, after we have sent the reply 
+ * to the original request.
+ */
 typedef struct _9p_flush_hook__
 {
   int tag;
-  int flushed;
+  struct flush_condition *condition;
   unsigned long sequence;
   struct glist_head list;
 } _9p_flush_hook_t;
