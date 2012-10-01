@@ -3,7 +3,8 @@
 OPWD=`pwd`
 
 TIRPC_REPO='git://github.com/linuxbox2/ntirpc.git'
-TIRPC_COMMIT='a98793bc716b71fc267be994d111a3d66fed6e12'
+
+TIRPC_BRANCH_NAME='duplex-8-par-5'
 
 if [ -d libtirpc/.git ]; then
     cd libtirpc
