@@ -74,70 +74,68 @@ typedef struct _9p_cb_data
    unsigned int max ;
 } _9p_cb_data_t ;
 
-static bool_t _9p_readdir_callback( void* opaque,
-                                    char *name,
-                                    fsal_handle_t *handle,
-                                    fsal_attrib_list_t * pattrs,
-                                    uint64_t cookie)
+static bool _9p_readdir_callback( void                   * opaque,
+                                  char                   * name,
+                                  struct fsal_obj_handle * handle,
+                                  uint64_t                 cookie)
 {
    _9p_cb_data_t * cb_data = opaque ;
 
   if( cb_data == NULL )
-   return FALSE ;
+   return false ;
 
   if( cb_data->count >= cb_data->max )
-   return FALSE ;
+   return false ;
 
-  cb_data->entries[cb_data->count].qid_path = pattrs->fileid ;
+  cb_data->entries[cb_data->count].qid_path = handle->attributes.fileid ;
   cb_data->entries[cb_data->count].name_str = name ;
   cb_data->entries[cb_data->count].name_len = strlen( name ) ;
   cb_data->entries[cb_data->count].cookie = cookie ;
  
-  switch( pattrs->type ) 
+  switch( handle->attributes.type ) 
    {
-      case FSAL_TYPE_FIFO:
+      case FIFO_FILE:
         cb_data->entries[cb_data->count].qid_type = &qid_type_file ;
         cb_data->entries[cb_data->count].d_type = DT_FIFO ;
         break ;
 
-      case FSAL_TYPE_CHR:
+      case CHARACTER_FILE:
         cb_data->entries[cb_data->count].qid_type = &qid_type_file ;
         cb_data->entries[cb_data->count].d_type = DT_CHR ;
         break ;
 
-      case FSAL_TYPE_BLK:
+      case BLOCK_FILE:
         cb_data->entries[cb_data->count].qid_type = &qid_type_file ;
         cb_data->entries[cb_data->count].d_type = DT_BLK ;
         break ;
 
-      case FSAL_TYPE_FILE:
+      case REGULAR_FILE:
         cb_data->entries[cb_data->count].qid_type = &qid_type_file ;
         cb_data->entries[cb_data->count].d_type = DT_REG ;
         break ;
 
-      case FSAL_TYPE_SOCK:
+      case SOCKET_FILE:
         cb_data->entries[cb_data->count].qid_type = &qid_type_file ;
         cb_data->entries[cb_data->count].d_type = DT_SOCK ;
         break ;
 
-      case FSAL_TYPE_JUNCTION:
-      case FSAL_TYPE_DIR:
+      case FS_JUNCTION:
+      case DIRECTORY:
         cb_data->entries[cb_data->count].qid_type = &qid_type_dir ;
         cb_data->entries[cb_data->count].d_type = DT_DIR ;
         break ;
 
-      case FSAL_TYPE_LNK:
+      case SYMBOLIC_LINK:
         cb_data->entries[cb_data->count].qid_type = &qid_type_symlink ;
         cb_data->entries[cb_data->count].d_type = DT_LNK ;
         break ;
     
       default:
-        return FALSE;  
+        return false;  
    }
  
   cb_data->count += 1 ; 
-  return TRUE ;
-
+  return true ;
 }
 
 int _9p_readdir( _9p_request_data_t * preq9p,
@@ -226,20 +224,19 @@ int _9p_readdir( _9p_request_data_t * preq9p,
    {
       /* compute the parent entry */
       if( ( pentry_dot_dot = cache_inode_lookupp( pfid->pentry,
-                                                  &pfid->fsal_op_context,
+                                                  &pfid->op_context,
                                                   &cache_status ) ) == NULL )
         return  _9p_rerror( preq9p, pworker_data,  msgtag, _9p_tools_errno( cache_status ), plenout, preply ) ;
 
       /* Deal with "." and ".." */
-      cb_data.entries[0].qid_path =  pfid->pentry->attributes.fileid ;
+      cb_data.entries[0].qid_path =  pfid->pentry->obj_handle->attributes.fileid ;
       cb_data.entries[0].qid_type =  &qid_type_dir ;
       cb_data.entries[0].d_type   =  DT_DIR ;
       cb_data.entries[0].name_str =  pathdot ;
       cb_data.entries[0].name_len =  strlen( pathdot ) ;
       cb_data.entries[0].cookie   =  1LL ;
 
-
-      cb_data.entries[1].qid_path =  pentry_dot_dot->attributes.fileid ;
+      cb_data.entries[1].qid_path =  pentry_dot_dot->obj_handle->attributes.fileid ;
       cb_data.entries[1].qid_type =  &qid_type_dir ;
       cb_data.entries[1].d_type   =  DT_DIR ;
       cb_data.entries[1].name_str =  pathdotdot ;
@@ -253,11 +250,11 @@ int _9p_readdir( _9p_request_data_t * preq9p,
    {
       /* compute the parent entry */
       if( ( pentry_dot_dot = cache_inode_lookupp( pfid->pentry,
-                                                  &pfid->fsal_op_context,
+                                                  &pfid->op_context,
                                                   &cache_status ) ) == NULL )
         return  _9p_rerror( preq9p, pworker_data,  msgtag, _9p_tools_errno( cache_status ), plenout, preply ) ;
 
-      cb_data.entries[0].qid_path =  pentry_dot_dot->attributes.fileid ;
+      cb_data.entries[0].qid_path =  pentry_dot_dot->obj_handle->attributes.fileid ;
       cb_data.entries[0].qid_type =  &qid_type_dir ;
       cb_data.entries[0].d_type   =  DT_DIR ;
       cb_data.entries[0].name_str =  pathdotdot ;
@@ -286,7 +283,7 @@ int _9p_readdir( _9p_request_data_t * preq9p,
                           cookie,
                           &num_entries,
                           &eod_met,
-                          &pfid->fsal_op_context, 
+                          &pfid->op_context, 
                           _9p_readdir_callback,
                           &cb_data,
                           &cache_status) != CACHE_INODE_SUCCESS)
