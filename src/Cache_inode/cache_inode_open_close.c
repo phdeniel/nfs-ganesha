@@ -76,7 +76,7 @@
 bool
 is_open(cache_entry_t *entry)
 {
-     if (entry == NULL
+     if (entry == NULL || entry->obj_handle == NULL
          || entry->type != REGULAR_FILE) {
           return false ;
      }
@@ -159,7 +159,8 @@ cache_inode_open(cache_entry_t *entry,
      fsal_openflags_t current_flags;
      struct fsal_obj_handle *obj_hdl;
 
-     if ((entry == NULL) || (req_ctx == NULL) || (status == NULL)) {
+     if ((entry == NULL) || (req_ctx == NULL) || (status == NULL)
+         || (entry->obj_handle == NULL)) {
           *status = CACHE_INODE_INVALID_ARGUMENT;
           goto out;
      }
