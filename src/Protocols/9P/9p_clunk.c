@@ -96,13 +96,13 @@ int _9p_clunk( _9p_request_data_t * preq9p,
    {
      if(cache_inode_close( pfid->pentry,
                            CACHE_INODE_FLAG_REALLYCLOSE, // A clunk is associated with an actual close on the client side
+                           /** @todo: only close if it's the only fd open */
                            &cache_status) != CACHE_INODE_SUCCESS)
         return  _9p_rerror( preq9p, pworker_data,  msgtag, _9p_tools_errno( cache_status ), plenout, preply ) ;
    }
 
   /* Tell the cache the fid that used this entry is not used by this set of messages */
-  if( pfid->pentry->lru.refcount > 1 ) 
-    cache_inode_put( pfid->pentry ) ; 
+  cache_inode_put( pfid->pentry ) ;
 
   /* Clean the fid */
   memset( (char *)pfid, 0, sizeof( _9p_fid_t ) ) ;
