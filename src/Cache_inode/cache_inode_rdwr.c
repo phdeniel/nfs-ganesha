@@ -111,6 +111,8 @@ cache_inode_rdwr(cache_entry_t *entry,
              openflags |= FSAL_O_SYNC;
      }
 
+     assert(obj_hdl != NULL);
+
      /* IO is done only on REGULAR_FILEs */
      if (entry->type != REGULAR_FILE) {
           *status = entry->type == DIRECTORY
