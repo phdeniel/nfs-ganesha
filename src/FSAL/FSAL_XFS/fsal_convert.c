@@ -193,19 +193,6 @@ int fsal2posix_openflags(fsal_openflags_t fsal_flags, int *p_posix_flags)
 
   /* Check for flags compatibility */
 
-  /* O_RDONLY O_WRONLY O_RDWR cannot be used together */
-
-  cpt = 0;
-  if(fsal_flags & FSAL_O_RDONLY)
-    cpt++;
-  if(fsal_flags & FSAL_O_RDWR)
-    cpt++;
-  if(fsal_flags & FSAL_O_WRONLY)
-    cpt++;
-
-  if(cpt > 1)
-    return ERR_FSAL_INVAL;
-
   /* FSAL_O_APPEND et FSAL_O_TRUNC cannot be used together */
 
   if((fsal_flags & FSAL_O_APPEND) && (fsal_flags & FSAL_O_TRUNC))
@@ -219,12 +206,12 @@ int fsal2posix_openflags(fsal_openflags_t fsal_flags, int *p_posix_flags)
   /* conversion */
   *p_posix_flags = 0;
 
-  if(fsal_flags & FSAL_O_RDONLY)
-    *p_posix_flags |= O_RDONLY;
-  if(fsal_flags & FSAL_O_WRONLY)
-    *p_posix_flags |= O_WRONLY;
-  if(fsal_flags & FSAL_O_RDWR)
-    *p_posix_flags |= O_RDWR;
+    if ((fsal_flags & FSAL_O_RDWR) == FSAL_O_RDWR)
+        *p_posix_flags |= O_RDWR;
+    else if ((fsal_flags & FSAL_O_RDWR) == FSAL_O_READ)
+        *p_posix_flags |= O_RDONLY;
+    else if ((fsal_flags & FSAL_O_RDWR) == FSAL_O_WRITE)
+        *p_posix_flags |= O_WRONLY;
 
   return ERR_FSAL_NO_ERROR;
 
