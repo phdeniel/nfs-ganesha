@@ -54,6 +54,7 @@ fsal_status_t vfs_open(struct fsal_obj_handle *obj_hdl,
 	struct vfs_fsal_obj_handle *myself;
 	int fd, mntfd;
 	fsal_errors_t fsal_error = ERR_FSAL_NO_ERROR;
+        int posix_flags = 0;
 	int retval = 0;
 
 	myself = container_of(obj_hdl, struct vfs_fsal_obj_handle, obj_handle);
@@ -61,11 +62,15 @@ fsal_status_t vfs_open(struct fsal_obj_handle *obj_hdl,
 	assert(myself->u.file.fd == -1
 	       && myself->u.file.openflags == FSAL_O_CLOSED);
 
+        fsal2posix_openflags(openflags, &posix_flags);
+        LogFullDebug(COMPONENT_FSAL, "open_by_handle_at flags from %x to %x", openflags, posix_flags);
+
 	mntfd = vfs_get_root_fd(obj_hdl->export);
-	fd = open_by_handle_at(mntfd, myself->handle, (O_RDWR));
+	fd = open_by_handle_at(mntfd, myself->handle, posix_flags);
 	if(fd < 0) {
 		fsal_error = posix2fsal_error(errno);
 		retval = errno;
+                LogFullDebug(COMPONENT_FSAL, "open_by_handle_at error %d", retval);
 		goto out;
 	}
 	myself->u.file.fd = fd;
