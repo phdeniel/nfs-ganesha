@@ -1,0 +1,2 @@
+source /opt/GANESHA/src
+
