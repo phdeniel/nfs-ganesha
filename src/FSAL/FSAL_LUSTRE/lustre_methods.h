@@ -1,6 +1,16 @@
 /* VFS methods for handles
  */
 
+/* 
+ *  * Macro to deal with operation made with creds
+ *   */
+#define CRED_WRAP( __creds, __rc_type, __function, ...) ( { int __saved_uid = setfsuid( __creds->caller_uid ) ;     \
+                                                            int __saved_gid = setfsuid( __creds->caller_gid ) ;     \
+                                                            __rc_type __local_rc = __function( __VA_ARGS__ ) ;      \
+                                                            setfsuid( __saved_uid ) ;                               \
+                                                            setfsgid( __saved_gid ) ;                               \
+                                                            __local_rc ; } )
+
 /* private helpers from export
  */
 char * lustre_get_root_path(struct fsal_export *exp_hdl) ;
