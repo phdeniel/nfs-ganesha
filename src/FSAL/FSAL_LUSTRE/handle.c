@@ -175,7 +175,11 @@ static fsal_status_t lustre_lookup(struct fsal_obj_handle *parent,
 		return fsalstat(ERR_FSAL_NOTDIR, 0);
 	}
 
-        retval = lustre_name_to_handle_at( lustre_get_root_path( parent->export ), parent_hdl->handle, path, fh,  0);
+        retval = CRED_WRAP( opctx->creds, int, lustre_name_to_handle_at, lustre_get_root_path( parent->export ), 
+                                                                         parent_hdl->handle, 
+                                                                         path, 
+                                                                         fh,  
+                                                                         0 );
         if(retval < 0) {
                 retval = errno;
                 fsal_error = posix2fsal_error(retval);
@@ -184,14 +188,14 @@ static fsal_status_t lustre_lookup(struct fsal_obj_handle *parent,
  
         lustre_handle_to_path( lustre_get_root_path( parent->export ), fh, fidpath ) ;
 
-	retval = lstat(fidpath, &stat );
+	retval = CRED_WRAP( opctx->creds, int, lstat, fidpath, &stat );
 	if(retval < 0) {
 		retval = errno;
 		fsal_error = posix2fsal_error(retval);
 		goto errout;
 	}
 	if(S_ISLNK(stat.st_mode)) { /* I could lazy eval this... */
-		retlink = readlink( fidpath, link_buff, 1024);
+		retlink = CRED_WRAP( opctx->creds, int, readlink, fidpath, link_buff, 1024);
 		if(retlink < 0 || retlink == 1024) {
 			retval = errno;
 			if(retlink == 1024)
@@ -322,9 +326,11 @@ static fsal_status_t lustre_create(struct fsal_obj_handle *dir_hdl,
 	group = attrib->group;
 	unix_mode = fsal2unix_mode(attrib->mode)
 		& ~dir_hdl->export->ops->fs_umask(dir_hdl->export);
-        lustre_handle_to_path( lustre_get_root_path( dir_hdl->export ), myself->handle, dirpath ) ;
+        lustre_handle_to_path( lustre_get_root_path( dir_hdl->export ), 
+                               myself->handle, 
+                               dirpath ) ;
 
-	retval = lstat(dirpath, &stat);
+	retval = CRED_WRAP( opctx->creds, int, lstat, dirpath, &stat);
 	if(retval < 0) {
                 retval = errno ;
 		fsal_error = posix2fsal_error(retval);
@@ -337,7 +343,7 @@ static fsal_status_t lustre_create(struct fsal_obj_handle *dir_hdl,
 	 * we use openat because there is no creatat...
 	 */
         snprintf( newpath, MAXPATHLEN, "%s/%s", dirpath, name ) ;
-	fd = open( newpath, O_CREAT|O_WRONLY|O_TRUNC|O_EXCL, 0000);
+	fd = CRED_WRAP( opctx->creds, int, open, newpath, O_CREAT|O_WRONLY|O_TRUNC|O_EXCL, 0000);
 	if(fd < 0) {
 		retval = errno;
 		fsal_error = posix2fsal_error(retval);
@@ -345,8 +351,14 @@ static fsal_status_t lustre_create(struct fsal_obj_handle *dir_hdl,
 	}
         close( fd ) ; /* not needed anymore */
 
-	retval = make_file_safe( lustre_get_root_path( dir_hdl->export), 
-                                 myself->handle, name, unix_mode, user, group, fh, &stat);
+	retval = CRED_WRAP( opctx->creds, int, make_file_safe,  lustre_get_root_path( dir_hdl->export), 
+                                                                myself->handle, 
+                                                                name, 
+                                                                unix_mode, 
+                                                                user, 
+                                                                group, 
+                                                                fh, 
+                                                                &stat);
 	if(retval < 0) {
 		goto fileerr;
 	}
@@ -363,7 +375,7 @@ static fsal_status_t lustre_create(struct fsal_obj_handle *dir_hdl,
 
 fileerr:
 	fsal_error = posix2fsal_error(retval);
-	unlink( newpath ) ;  /* remove the evidence on errors */
+	CRED_WRAP( opctx->creds, int, unlink, newpath ) ;  /* remove the evidence on errors */
 errout:
 	return fsalstat(fsal_error, retval);	
 }
@@ -400,7 +412,7 @@ static fsal_status_t lustre_makedir(struct fsal_obj_handle *dir_hdl,
 	unix_mode = fsal2unix_mode(attrib->mode)
 		& ~dir_hdl->export->ops->fs_umask(dir_hdl->export);
         lustre_handle_to_path( lustre_get_root_path( dir_hdl->export ), myself->handle, dirpath ) ;
-	retval = lstat( dirpath,  &stat );
+	retval = CRED_WRAP( opctx->creds, int, lstat, dirpath,  &stat );
 	if(retval < 0) {
                 retval = errno ;
 		goto direrr;
@@ -410,12 +422,19 @@ static fsal_status_t lustre_makedir(struct fsal_obj_handle *dir_hdl,
 
 	/* create it with no access because we are root when we do this */
         snprintf( newpath, MAXPATHLEN, "%s/%s", dirpath, name ) ;
-	retval = mkdir( newpath, 0000);
+	retval = CRED_WRAP( opctx->creds, int, mkdir, newpath, 0000);
 	if(retval < 0) {
                 retval = errno ;
 		goto direrr;
 	}
-	retval = make_file_safe( lustre_get_root_path( dir_hdl->export), myself->handle, name, unix_mode, user, group, fh, &stat);
+	retval = CRED_WRAP( opctx->creds, int, make_file_safe,  lustre_get_root_path( dir_hdl->export), 
+                                                                myself->handle, 
+                                                                name, 
+                                                                unix_mode, 
+                                                                user, 
+                                                                group, 
+                                                                fh, 
+                                                                &stat);
 	if(retval < 0) {
 		goto fileerr;
 	}
@@ -438,7 +457,7 @@ direrr:
 
 fileerr:
 	fsal_error = posix2fsal_error(retval);
-	rmdir( newpath );  /* remove the evidence on errors */
+	CRED_WRAP( opctx->creds, int, rmdir, newpath );  /* remove the evidence on errors */
 errout:
 	return fsalstat(fsal_error, retval);	
 }
@@ -488,7 +507,7 @@ static fsal_status_t lustre_makenode(struct fsal_obj_handle *dir_hdl,
 			goto errout;
 		}
 		create_mode = S_IFBLK;
-		unix_dev = makedev(dev->major, dev->minor);
+		unix_dev = CRED_WRAP( opctx->creds, dev_t, makedev, dev->major, dev->minor);
 		break;
 	case CHARACTER_FILE:
 		if( !dev) {
@@ -498,7 +517,7 @@ static fsal_status_t lustre_makenode(struct fsal_obj_handle *dir_hdl,
 
 		}
 		create_mode = S_IFCHR;
-		unix_dev = makedev(dev->major, dev->minor);
+		unix_dev = CRED_WRAP( opctx->creds, dev_t, makedev, dev->major, dev->minor);
 		break;
 	case FIFO_FILE:
 		create_mode = S_IFIFO;
@@ -515,8 +534,10 @@ static fsal_status_t lustre_makenode(struct fsal_obj_handle *dir_hdl,
 		fsal_error = ERR_FSAL_INVAL;
 		goto errout;
 	}
-        lustre_handle_to_path( lustre_get_root_path( dir_hdl->export ), myself->handle, dirpath ) ;
-	retval = lstat( dirpath, &stat);
+        lustre_handle_to_path( lustre_get_root_path( dir_hdl->export ), 
+                               myself->handle, 
+                               dirpath ) ;
+	retval = CRED_WRAP( opctx->creds, int, lstat, dirpath, &stat);
 	if(retval < 0) {
                 retval = errno ;
 		goto direrr;
@@ -526,12 +547,21 @@ static fsal_status_t lustre_makenode(struct fsal_obj_handle *dir_hdl,
 
 	/* create it with no access because we are root when we do this */
         snprintf( newpath, MAXPATHLEN, "%s/%s", dirpath, name ) ;
-	retval = mknod( newpath, create_mode, unix_dev);
+	retval = CRED_WRAP( opctx->creds, int, mknod, newpath, 
+                                                      create_mode, 
+                                                      unix_dev);
 	if(retval < 0) {
                 retval = errno ;
 		goto direrr;
 	}
-	retval = make_file_safe(lustre_get_root_path( dir_hdl->export),myself->handle, name, unix_mode, user, group, fh, &stat);
+	retval = CRED_WRAP( opctx->creds, int, make_file_safe, lustre_get_root_path( dir_hdl->export),
+                                                               myself->handle, 
+                                                               name, 
+                                                               unix_mode, 
+                                                               user, 
+                                                               group, 
+                                                               fh, 
+                                                               &stat );
 	if(retval < 0) {
 		goto direrr;
 	}
@@ -549,7 +579,7 @@ static fsal_status_t lustre_makenode(struct fsal_obj_handle *dir_hdl,
 direrr:
 	fsal_error = posix2fsal_error(retval);
 errout:
-	unlink( newpath);
+	CRED_WRAP( opctx->creds, int, unlink, newpath);
 	return fsalstat(fsal_error, retval);	
 }
 
@@ -588,8 +618,10 @@ static fsal_status_t lustre_makesymlink(struct fsal_obj_handle *dir_hdl,
 	myself = container_of(dir_hdl, struct lustre_fsal_obj_handle, obj_handle);
 	user = attrib->owner;
 	group = attrib->group;
-        lustre_handle_to_path( lustre_get_root_path( dir_hdl->export ), myself->handle, dirpath ) ;
-	retval = lstat(dirpath, &stat );
+        lustre_handle_to_path( lustre_get_root_path( dir_hdl->export ), 
+                               myself->handle, 
+                               dirpath ) ;
+	retval = CRED_WRAP( opctx->creds, int, lstat, dirpath, &stat );
 	if(retval < 0) {
 		goto direrr;
 	}
@@ -598,23 +630,29 @@ static fsal_status_t lustre_makesymlink(struct fsal_obj_handle *dir_hdl,
 	
 	/* create it with no access because we are root when we do this */
         snprintf( newpath, MAXPATHLEN, "%s/%s", dirpath, name ) ;
-	retval = symlink(link_path, newpath );
+	retval = CRED_WRAP( opctx->creds, int, symlink, link_path, newpath );
 	if(retval < 0) {
 		goto direrr;
 	}
 	/* do this all by hand because we can't use fchmodat on symlinks...
 	 */
-	retval = lchown( newpath, user, group );
+	retval = CRED_WRAP( opctx->creds, int, lchown, newpath, 
+                                                       user, 
+                                                       group );
 	if(retval < 0) {
 		goto linkerr;
 	}
 
-	retval = lustre_name_to_handle_at( lustre_get_root_path( dir_hdl->export),myself->handle, name, fh, 0);
+	retval = CRED_WRAP( opctx->creds, int, lustre_name_to_handle_at, lustre_get_root_path( dir_hdl->export),
+                                                                         myself->handle, 
+                                                                         name, 
+                                                                         fh, 
+                                                                         0 );
 	if(retval < 0) {
 		goto linkerr;
 	}
 	/* now get attributes info, being careful to get the link, not the target */
-	retval = lstat(newpath, &stat);
+	retval = CRED_WRAP( opctx->creds, int, lstat, newpath, &stat);
 	if(retval < 0) {
 		goto linkerr;
 	}
@@ -630,7 +668,7 @@ static fsal_status_t lustre_makesymlink(struct fsal_obj_handle *dir_hdl,
 
 linkerr:
 	retval = errno;
-	unlink( newpath);
+	CRED_WRAP( opctx->creds, int, unlink, newpath);
 	goto errout;
 
 direrr:
@@ -668,7 +706,7 @@ static fsal_status_t lustre_readsymlink(struct fsal_obj_handle *obj_hdl,
 			myself->u.symlink.link_size = 0;
 		}
                 lustre_handle_to_path( lustre_get_root_path( obj_hdl->export ), myself->handle, mypath ) ;
-		retlink = readlink( mypath, link_buff, 1024);
+		retlink = CRED_WRAP( opctx->creds, int, readlink, mypath, link_buff, 1024);
 		if(retlink < 0) {
 			retval = errno;
 			fsal_error = posix2fsal_error(retval);
@@ -727,7 +765,7 @@ static fsal_status_t lustre_linkfile(struct fsal_obj_handle *obj_hdl,
 
         snprintf( destnamepath, MAXPATHLEN, "%s/%s", destdirpath, name ) ;
 
-	retval = link(srcpath, destnamepath);
+	retval = CRED_WRAP( opctx->creds, int, link, srcpath, destnamepath);
 	if(retval == -1) {
 		retval = errno;
 		fsal_error = posix2fsal_error(retval);
@@ -797,13 +835,15 @@ static fsal_status_t lustre_read_dirents(struct fsal_obj_handle *dir_hdl,
 	}
 	entry_cookie = alloca(sizeof(struct fsal_cookie) + sizeof(off_t));
 	myself = container_of(dir_hdl, struct lustre_fsal_obj_handle, obj_handle);
-	dirfd = lustre_open_by_handle( lustre_get_root_path( dir_hdl->export),myself->handle, (O_RDONLY|O_DIRECTORY));
+	dirfd = CRED_WRAP( opctx->creds, int, lustre_open_by_handle, lustre_get_root_path( dir_hdl->export),
+                                                                     myself->handle, 
+                                                                     (O_RDONLY|O_DIRECTORY) );
 	if(dirfd < 0) {
 		retval = errno;
 		fsal_error = posix2fsal_error(retval);
 		goto out;
 	}
-	seekloc = lseek(dirfd, seekloc, SEEK_SET);
+	seekloc = CRED_WRAP( opctx->creds, off_t, lseek, dirfd, seekloc, SEEK_SET);
 	if(seekloc < 0) {
 		retval = errno;
 		fsal_error = posix2fsal_error(retval);
@@ -811,7 +851,10 @@ static fsal_status_t lustre_read_dirents(struct fsal_obj_handle *dir_hdl,
 	}
 	cnt = 0;
 	do {
-		nread = syscall(SYS_getdents, dirfd, buf, BUF_SIZE);
+		nread = CRED_WRAP( opctx->creds, int, syscall, SYS_getdents, 
+                                                               dirfd, 
+                                                               buf, 
+                                                               BUF_SIZE );
 		if(nread < 0) {
 			retval = errno;
 			fsal_error = posix2fsal_error(retval);
@@ -842,7 +885,7 @@ static fsal_status_t lustre_read_dirents(struct fsal_obj_handle *dir_hdl,
 
         *eof = (nread == 0);
 done:
-	close(dirfd);
+	CRED_WRAP( opctx->creds, int, close, dirfd ) ;
 	
 out:
 	return fsalstat(fsal_error, retval);
@@ -871,7 +914,7 @@ static fsal_status_t lustre_renamefile(struct fsal_obj_handle *olddir_hdl,
         lustre_handle_to_path( lustre_get_root_path( newdir_hdl->export ), newdir->handle, newdirpath ) ;
         snprintf( newnamepath, MAXPATHLEN, "%s/%s", newdirpath, new_name ) ;
 
-	retval = rename(oldnamepath, newnamepath);
+	retval = CRED_WRAP( opctx->creds, int, rename, oldnamepath, newnamepath);
 	if(retval < 0) {
 		retval = errno;
 		fsal_error = posix2fsal_error(retval);
@@ -906,7 +949,7 @@ static fsal_status_t lustre_getattrs(struct fsal_obj_handle *obj_hdl,
 	} else if(obj_hdl->type == SOCKET_FILE) {
                 lustre_handle_to_path( lustre_get_root_path( obj_hdl->export ), 
                                                 myself->u.sock.sock_dir, mypath ) ;
-		retval = lstat( mypath, &stat ) ;
+		retval = CRED_WRAP( opctx->creds, int, lstat, mypath, &stat ) ;
 		if(retval < 0) {
 			goto errout;
 		}
@@ -917,8 +960,8 @@ static fsal_status_t lustre_getattrs(struct fsal_obj_handle *obj_hdl,
 			open_flags |= O_NONBLOCK;
 	open_file:
                 lustre_handle_to_path( lustre_get_root_path( obj_hdl->export ), myself->handle, mypath ) ;
-		retval = lstat( mypath, 
-				&stat ) ;
+		retval = CRED_WRAP( opctx->creds, int, lstat, mypath, 
+				                              &stat ) ;
 		if(retval < 0) {
 			goto errout;
 		}
@@ -996,7 +1039,7 @@ static fsal_status_t lustre_setattrs(struct fsal_obj_handle *obj_hdl,
 	         fsal_error = ERR_FSAL_INVAL;
 	         goto out;
 	     }
-	    retval = truncate( mypath, attrs->filesize);
+	    retval = CRED_WRAP( opctx->creds, int, truncate, mypath, attrs->filesize);
 	    if(retval != 0) {
 		    goto fileerr;
 	    }
@@ -1010,11 +1053,12 @@ static fsal_status_t lustre_setattrs(struct fsal_obj_handle *obj_hdl,
 			if(obj_hdl->type == SOCKET_FILE)
                           {
                                 snprintf( mysockpath, MAXPATHLEN, "%s/%s", mypath, myself->u.sock.sock_name ) ;
-				retval = chmod( mysockpath,
-						 fsal2unix_mode(attrs->mode));
+				retval = CRED_WRAP( opctx->creds, int, chmod, mysockpath,
+						                              fsal2unix_mode(attrs->mode));
                           }   
 			else
-				retval = chmod(mypath, fsal2unix_mode(attrs->mode));
+				retval = CRED_WRAP( opctx->creds, int, chmod, mypath, 
+                                                                              fsal2unix_mode(attrs->mode));
 
 			if(retval != 0) {
 				goto fileerr;
@@ -1033,12 +1077,14 @@ static fsal_status_t lustre_setattrs(struct fsal_obj_handle *obj_hdl,
 		if(obj_hdl->type == SOCKET_FILE)
                   {
                      snprintf( mysockpath, MAXPATHLEN, "%s/%s", mypath, myself->u.sock.sock_name ) ;
-		     retval = lchown( mysockpath,
-				      user,
-				      group ) ;
+		     retval = CRED_WRAP( opctx->creds, int, lchown, mysockpath,
+				                                    user,
+				                                    group ) ;
                   }
 		else
-			retval = lchown(mypath, user, group);
+			retval = CRED_WRAP( opctx->creds, int, lchown, mypath, 
+                                                                       user, 
+                                                                       group );
 
 		if(retval) {
 			goto fileerr;
@@ -1093,7 +1139,7 @@ static fsal_status_t lustre_setattrs(struct fsal_obj_handle *obj_hdl,
 		     retval = utimes( mysockpath, timebuf ) ;
                   }
 		else
-			retval = utimes(mypath, ptimebuf);
+			retval = CRED_WRAP( opctx->creds, int, utimes, mypath, ptimebuf);
 		if(retval != 0) {
 			goto fileerr;
 		}
@@ -1125,7 +1171,7 @@ static fsal_status_t lustre_file_unlink(struct fsal_obj_handle *dir_hdl,
 	myself = container_of(dir_hdl, struct lustre_fsal_obj_handle, obj_handle);
         lustre_handle_to_path( lustre_get_root_path( dir_hdl->export ), myself->handle, dirpath ) ;
         snprintf( filepath, MAXPATHLEN, "%s/%s", dirpath, name ) ;
-	retval = lstat( filepath, &stat );
+	retval = CRED_WRAP( opctx->creds, int, lstat, filepath, &stat );
 	if(retval < 0) {
 		retval = errno;
 		if(retval == ENOENT)
@@ -1135,9 +1181,9 @@ static fsal_status_t lustre_file_unlink(struct fsal_obj_handle *dir_hdl,
 		goto out;
 	}
         if( S_ISDIR(stat.st_mode))
-	  retval = rmdir( filepath ) ;
+	  retval = CRED_WRAP( opctx->creds, int, rmdir, filepath ) ;
         else
-	  retval = unlink( filepath ) ;
+	  retval = CRED_WRAP( opctx->creds, int, unlink, filepath ) ;
 	if(retval < 0) {
 		retval = errno;
 		if(retval == ENOENT)
@@ -1364,18 +1410,21 @@ fsal_status_t lustre_lookup_path(struct fsal_export *exp_hdl,
 		goto errout;
 	}
 	if(basepart == path) {
-		dir_fd = open("/", O_RDONLY);
+		dir_fd = open( "/", 
+                               O_RDONLY );
 	} else {
 		memcpy(dirpart, path, basepart - path);
 		dirpart[basepart - path] = '\0';
-		dir_fd = open(dirpart, O_RDONLY, 0600);
+		dir_fd = open( dirpart, 
+                               O_RDONLY, 
+                               0600 );
 	}
 	if(dir_fd < 0) {
 		retval = errno;
 		fsal_error = posix2fsal_error(retval);
 		goto errout;
 	}
-	retval = fstat(dir_fd, &stat);
+	retval = fstat( dir_fd, &stat);
 	if( !S_ISDIR(stat.st_mode)) {  /* this had better be a DIR! */
 		goto fileerr;
 	}
@@ -1387,14 +1436,19 @@ fsal_status_t lustre_lookup_path(struct fsal_export *exp_hdl,
 	}
 
 	/* what about the file? Do no symlink chasing here. */
-	retval = fstatat(dir_fd, basepart, &stat, AT_SYMLINK_NOFOLLOW);
+	retval = fstatat( dir_fd, 
+                          basepart, 
+                          &stat, 
+                          AT_SYMLINK_NOFOLLOW );
 	if(retval < 0) {
 		goto fileerr;
 	}
 	if(S_ISLNK(stat.st_mode)) {
 		link_content = malloc(PATH_MAX);
-		retlink = readlinkat(dir_fd, basepart,
-				     link_content, PATH_MAX);
+		retlink = readlinkat( dir_fd, 
+                                      basepart,
+				      link_content, 
+                                      PATH_MAX );
 		if(retlink < 0 || retlink == PATH_MAX) {
 			retval = errno;
 			if(retlink == PATH_MAX)
@@ -1435,7 +1489,7 @@ linkerr:
 		free(link_content);
 	if(dir_fh != NULL)
 		free(dir_fh);
-	close(dir_fd);
+	close( dir_fd );
 	fsal_error = posix2fsal_error(retval);
 
 errout:
@@ -1477,14 +1531,17 @@ fsal_status_t lustre_create_handle(struct fsal_export *exp_hdl,
 	fh = alloca(hdl_desc->len);
 	memcpy(fh, hdl_desc->addr, hdl_desc->len);  /* struct aligned copy */
         lustre_handle_to_path( lustre_get_root_path( exp_hdl ), fh, objpath ) ;
-	retval = lstat( objpath, &stat);
+	retval = CRED_WRAP( opctx->creds, int, lstat, objpath, 
+                                                      &stat);
 	if(retval < 0) {
 		retval = errno;
 		fsal_error = posix2fsal_error(retval);
 		goto errout;
 	}
 	if(S_ISLNK(stat.st_mode)) { /* I could lazy eval this... */
-		retlink = readlink(objpath, link_buff, PATH_MAX);
+		retlink = CRED_WRAP( opctx->creds, int, readlink, objpath, 
+                                                                  link_buff, 
+                                                                  PATH_MAX );
 		if(retlink < 0 || retlink == PATH_MAX) {
 			retval = errno;
 			if(retlink == PATH_MAX)

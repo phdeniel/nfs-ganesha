@@ -61,7 +61,9 @@ fsal_status_t lustre_open(struct fsal_obj_handle *obj_hdl,
 	assert(myself->u.file.fd == -1
 	       && myself->u.file.openflags == FSAL_O_CLOSED);
 
-	fd = lustre_open_by_handle( lustre_get_root_path( obj_hdl->export),myself->handle, (O_RDWR));
+	fd = CRED_WRAP( opctx->creds, int, lustre_open_by_handle, lustre_get_root_path( obj_hdl->export),
+                                                                   myself->handle, 
+                                                                   (O_RDWR) );
 	if(fd < 0) {
 		fsal_error = posix2fsal_error(errno);
 		retval = errno;
@@ -107,10 +109,10 @@ fsal_status_t lustre_read(struct fsal_obj_handle *obj_hdl,
 
 	assert(myself->u.file.fd >= 0 && myself->u.file.openflags != FSAL_O_CLOSED);
 
-        nb_read = pread(myself->u.file.fd,
-                        buffer,
-                        buffer_size,
-                        offset);
+        nb_read = CRED_WRAP( opctx->creds, int, pread, myself->u.file.fd,
+                                                       buffer,
+                                                       buffer_size,
+                                                       offset );
 
         if(offset == -1 || nb_read == -1) {
                 retval = errno;
@@ -144,10 +146,10 @@ fsal_status_t lustre_write(struct fsal_obj_handle *obj_hdl,
 
 	assert(myself->u.file.fd >= 0 && myself->u.file.openflags != FSAL_O_CLOSED);
 
-        nb_written = pwrite(myself->u.file.fd,
-                            buffer,
-                            buffer_size,
-                            offset);
+        nb_written = CRED_WRAP( opctx->creds, int, pwrite, myself->u.file.fd,
+                                                           buffer,
+                                                           buffer_size,
+                                                           offset );
 
 	if(offset == -1 || nb_written == -1) {
 		retval = errno;
@@ -178,7 +180,7 @@ fsal_status_t lustre_commit(struct fsal_obj_handle *obj_hdl, /* sync */
 
 	assert(myself->u.file.fd >= 0 && myself->u.file.openflags != FSAL_O_CLOSED);
 
-	retval = fsync(myself->u.file.fd);
+	retval = fsync( myself->u.file.fd );
 	if(retval == -1) {
 		retval = errno;
 		fsal_error = posix2fsal_error(retval);
@@ -259,14 +261,16 @@ fsal_status_t lustre_lock_op(struct fsal_obj_handle *obj_hdl,
 	lock_args.l_whence = SEEK_SET;
 
 	errno = 0;
-	retval = fcntl(myself->u.file.fd, fcntl_comm, &lock_args);
+	retval = CRED_WRAP( opctx->creds, int, fcntl, myself->u.file.fd, 
+                                                      fcntl_comm, 
+                                                      &lock_args );
 	if(retval && lock_op == FSAL_OP_LOCK) {
 		retval = errno;
 		if(conflicting_lock != NULL) {
 			fcntl_comm = F_GETLK;
-			retval = fcntl(myself->u.file.fd,
-				       fcntl_comm,
-				       &lock_args);
+			retval = CRED_WRAP( opctx->creds, int, fcntl, myself->u.file.fd,
+				                                      fcntl_comm,
+				                                      &lock_args );
 			if(retval) {
 				retval = errno; /* we lose the inital error */
 				LogCrit(COMPONENT_FSAL,

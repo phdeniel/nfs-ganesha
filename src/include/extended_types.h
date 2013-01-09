@@ -48,10 +48,13 @@
 #endif
 
 /* Added extended types, often missing */
-typedef long long longlong_t;
-typedef unsigned long long u_longlong_t;
+//typedef long long longlong_t;
+//typedef unsigned long long u_longlong_t;
 
 typedef unsigned int uint_t;
+//typedef unsigned int uint_t;
+//typedef unsigned int uint32_t;
+
 
 /* conflict between sys/xattr.h and attr/xattr.h
  * this comes from xfs/linux.h.  Very bad form but we are
