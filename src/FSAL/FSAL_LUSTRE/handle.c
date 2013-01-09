@@ -229,26 +229,12 @@ errout:
 }
 
 
-/* make_file_safe
- * the file/dir got created mode 0, uid root (me)
- * which leaves it inaccessible. Set ownership first
- * followed by mode.
- * could use setfsuid/gid around the mkdir/mknod/openat
- * but that only works on Linux and is more syscalls
- * 5 (set uid/gid, create, unset uid/gid) vs. 3
- * NOTE: this way escapes quotas however we do check quotas
- * first in cache_inode_*
- */
-
 static inline
-int make_file_safe( char * mntpath,
-                    struct lustre_file_handle * infh,
-		    const char *name,
-		    mode_t unix_mode,
-		    uid_t user,
-		    gid_t group,
-		    struct lustre_file_handle *fh,
-		    struct stat *stat)
+int get_stat_by_handle_at( char * mntpath,
+                           struct lustre_file_handle * infh,
+      		           const char *name,
+		           struct lustre_file_handle *fh,
+		           struct stat *stat)
 {
 	int retval;
         char lustre_path[MAXPATHLEN] ;
@@ -261,19 +247,8 @@ int make_file_safe( char * mntpath,
 	}
         snprintf( filepath, MAXPATHLEN, "%s/%s", lustre_path, name ) ;
 
-	retval = lchown( filepath, user, group ) ;
-	if(retval < 0) {
-		goto fileerr;
-	}
-        
 	/* now that it is owned properly, set accessible mode */
 	
-	retval = chmod( filepath, unix_mode );
-	if(retval < 0) {
-                retval = errno ;
-		goto fileerr;
-	}
-
 	retval = lustre_name_to_handle_at( mntpath, infh, name, fh, 0);
 	if(retval < 0) {
 		goto fileerr;
@@ -343,7 +318,7 @@ static fsal_status_t lustre_create(struct fsal_obj_handle *dir_hdl,
 	 * we use openat because there is no creatat...
 	 */
         snprintf( newpath, MAXPATHLEN, "%s/%s", dirpath, name ) ;
-	fd = CRED_WRAP( opctx->creds, int, open, newpath, O_CREAT|O_WRONLY|O_TRUNC|O_EXCL, 0000);
+	fd = CRED_WRAP( opctx->creds, int, open, newpath, O_CREAT|O_WRONLY|O_TRUNC|O_EXCL, unix_mode );
 	if(fd < 0) {
 		retval = errno;
 		fsal_error = posix2fsal_error(retval);
@@ -351,14 +326,11 @@ static fsal_status_t lustre_create(struct fsal_obj_handle *dir_hdl,
 	}
         close( fd ) ; /* not needed anymore */
 
-	retval = CRED_WRAP( opctx->creds, int, make_file_safe,  lustre_get_root_path( dir_hdl->export), 
-                                                                myself->handle, 
-                                                                name, 
-                                                                unix_mode, 
-                                                                user, 
-                                                                group, 
-                                                                fh, 
-                                                                &stat);
+	retval =  get_stat_by_handle_at( lustre_get_root_path( dir_hdl->export), 
+                                          myself->handle, 
+                                          name, 
+                                          fh, 
+                                          &stat);
 	if(retval < 0) {
 		goto fileerr;
 	}
@@ -422,19 +394,16 @@ static fsal_status_t lustre_makedir(struct fsal_obj_handle *dir_hdl,
 
 	/* create it with no access because we are root when we do this */
         snprintf( newpath, MAXPATHLEN, "%s/%s", dirpath, name ) ;
-	retval = CRED_WRAP( opctx->creds, int, mkdir, newpath, 0000);
+	retval = CRED_WRAP( opctx->creds, int, mkdir, newpath, unix_mode);
 	if(retval < 0) {
                 retval = errno ;
 		goto direrr;
 	}
-	retval = CRED_WRAP( opctx->creds, int, make_file_safe,  lustre_get_root_path( dir_hdl->export), 
-                                                                myself->handle, 
-                                                                name, 
-                                                                unix_mode, 
-                                                                user, 
-                                                                group, 
-                                                                fh, 
-                                                                &stat);
+	retval = get_stat_by_handle_at( lustre_get_root_path( dir_hdl->export), 
+                                         myself->handle, 
+                                         name, 
+                                         fh, 
+                                         &stat);
 	if(retval < 0) {
 		goto fileerr;
 	}
@@ -548,20 +517,17 @@ static fsal_status_t lustre_makenode(struct fsal_obj_handle *dir_hdl,
 	/* create it with no access because we are root when we do this */
         snprintf( newpath, MAXPATHLEN, "%s/%s", dirpath, name ) ;
 	retval = CRED_WRAP( opctx->creds, int, mknod, newpath, 
-                                                      create_mode, 
+                                                      unix_mode, 
                                                       unix_dev);
 	if(retval < 0) {
                 retval = errno ;
 		goto direrr;
 	}
-	retval = CRED_WRAP( opctx->creds, int, make_file_safe, lustre_get_root_path( dir_hdl->export),
-                                                               myself->handle, 
-                                                               name, 
-                                                               unix_mode, 
-                                                               user, 
-                                                               group, 
-                                                               fh, 
-                                                               &stat );
+	retval = get_stat_by_handle_at( lustre_get_root_path( dir_hdl->export),
+                                         myself->handle, 
+                                         name, 
+                                         fh, 
+                                         &stat );
 	if(retval < 0) {
 		goto direrr;
 	}
