@@ -5,8 +5,10 @@
  *  * Macro to deal with operation made with creds
  *   */
 #define CRED_WRAP( __creds, __rc_type, __function, ...) ( { int __saved_uid = setfsuid( __creds->caller_uid ) ;     \
-                                                            int __saved_gid = setfsuid( __creds->caller_gid ) ;     \
+                                                            int __saved_gid = setfsgid( __creds->caller_gid ) ;     \
                                                             __rc_type __local_rc = __function( __VA_ARGS__ ) ;      \
+         						    printf( "Function %s returned %d\n", #__function, (int)__local_rc ) ;\
+                                                            printf( "(%u,%u) => (%u,%u)\n", __creds->caller_uid, __creds->caller_gid, __saved_uid, __saved_gid ) ;\
                                                             setfsuid( __saved_uid ) ;                               \
                                                             setfsgid( __saved_gid ) ;                               \
                                                             __local_rc ; } )

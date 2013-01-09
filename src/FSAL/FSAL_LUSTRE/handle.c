@@ -175,11 +175,11 @@ static fsal_status_t lustre_lookup(struct fsal_obj_handle *parent,
 		return fsalstat(ERR_FSAL_NOTDIR, 0);
 	}
 
-        retval = CRED_WRAP( opctx->creds, int, lustre_name_to_handle_at, lustre_get_root_path( parent->export ), 
-                                                                         parent_hdl->handle, 
-                                                                         path, 
-                                                                         fh,  
-                                                                         0 );
+        retval = lustre_name_to_handle_at( lustre_get_root_path( parent->export ), 
+                                           parent_hdl->handle, 
+                                           path, 
+                                           fh,  
+                                           0 );
         if(retval < 0) {
                 retval = errno;
                 fsal_error = posix2fsal_error(retval);
@@ -643,11 +643,11 @@ static fsal_status_t lustre_makesymlink(struct fsal_obj_handle *dir_hdl,
 		goto linkerr;
 	}
 
-	retval = CRED_WRAP( opctx->creds, int, lustre_name_to_handle_at, lustre_get_root_path( dir_hdl->export),
-                                                                         myself->handle, 
-                                                                         name, 
-                                                                         fh, 
-                                                                         0 );
+	retval = lustre_name_to_handle_at( lustre_get_root_path( dir_hdl->export),
+                                           myself->handle, 
+                                           name, 
+                                           fh, 
+                                           0 );
 	if(retval < 0) {
 		goto linkerr;
 	}
@@ -885,7 +885,7 @@ static fsal_status_t lustre_read_dirents(struct fsal_obj_handle *dir_hdl,
 
         *eof = (nread == 0);
 done:
-	CRED_WRAP( opctx->creds, int, close, dirfd ) ;
+	close( dirfd ) ;
 	
 out:
 	return fsalstat(fsal_error, retval);
