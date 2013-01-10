@@ -66,12 +66,14 @@ fsal_status_t lustre_open(struct fsal_obj_handle *obj_hdl,
                                                                    (O_RDWR) );
         if( fd < 0 )
         { 
-          if( ( errno == EACCES )                             &&
-              ( ( obj_hdl->attributes.mode & 0700 ) == 0400 ) &&  
-              ( obj_hdl->attributes.owner == opctx->creds->caller_uid ) ) 
+          if( ( errno == EACCES )                                        &&
+              (  ( ( obj_hdl->attributes.mode & 0700 ) == 0400 )    ||
+                 ( ( obj_hdl->attributes.mode & 0200 ) == 0000 ) )       &&  
+              (  obj_hdl->attributes.owner == opctx->creds->caller_uid ) ) 
              {
-               /* if the file has been created in 444 but is owned by the user 
-                * we do have an explicit exception to deal with */ 
+               /* If the file is r-xYYYYYY or --xYYYYYY (a binary copied from another FS
+                * it is not writable (because no W flag) but it should be opened because 
+                * POSIX says you can do that on a O_CREAT (nfs looses the O_CREAT flag quite easily */
 
                /* File has been created with 04XY, POSIX said it is writable so
                 * we default on root superpower to open it */
