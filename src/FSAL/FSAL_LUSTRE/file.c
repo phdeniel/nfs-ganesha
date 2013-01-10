@@ -64,11 +64,32 @@ fsal_status_t lustre_open(struct fsal_obj_handle *obj_hdl,
 	fd = CRED_WRAP( opctx->creds, int, lustre_open_by_handle, lustre_get_root_path( obj_hdl->export),
                                                                    myself->handle, 
                                                                    (O_RDWR) );
-	if(fd < 0) {
-		fsal_error = posix2fsal_error(errno);
-		retval = errno;
-		goto out;
-	}
+        if( fd < 0 )
+        { 
+          if( ( errno == EACCES )                             &&
+              ( ( obj_hdl->attributes.mode & 0700 ) == 0400 ) &&  
+              ( obj_hdl->attributes.owner == opctx->creds->caller_uid ) ) 
+             {
+               /* if the file has been created in 444 but is owned by the user 
+                * we do have an explicit exception to deal with */ 
+
+               /* File has been created with 04XY, POSIX said it is writable so
+                * we default on root superpower to open it */
+               fd = lustre_open_by_handle(  lustre_get_root_path( obj_hdl->export),  myself->handle, O_RDWR ) ;
+               if( fd < 0 )
+                {
+	           fsal_error = posix2fsal_error(errno);
+	           retval = errno;
+	           goto out;
+                }
+             }
+	  else
+            {
+	       fsal_error = posix2fsal_error(errno);
+	       retval = errno;
+	       goto out;
+	    }
+        }
 	myself->u.file.fd = fd;
 	myself->u.file.openflags = openflags;
 
