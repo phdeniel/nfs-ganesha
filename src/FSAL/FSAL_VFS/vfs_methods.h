@@ -31,6 +31,16 @@ struct vfs_fsal_export {
 	void *pnfs_data;
 };
 
+/* 
+ *  Macro to deal with operation made with creds
+ */
+#define CRED_WRAP( __creds, __rc_type, __function, ...) ( { int __saved_uid = setfsuid( __creds->caller_uid ) ;     \
+                                                            int __saved_gid = setfsgid( __creds->caller_gid ) ;     \
+                                                            __rc_type __local_rc = __function( __VA_ARGS__ ) ;      \
+                                                            setfsuid( __saved_uid ) ;                               \
+                                                            setfsgid( __saved_gid ) ;                               \
+                                                            __local_rc ; } )
+
 /* private helpers from export
  */
 
