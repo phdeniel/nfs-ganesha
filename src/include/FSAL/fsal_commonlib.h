@@ -48,3 +48,8 @@ void fsal_detach_ds(struct fsal_export *exp_hdl,
 int fsal_ds_handle_init(struct fsal_ds_handle *, struct fsal_ds_ops *,
                         struct fsal_export *);
 int fsal_ds_handle_uninit(struct fsal_ds_handle *ds);
+
+void set_credentials( struct user_cred * creds ) ;
+void set_creds_to_root() ;
+
+
