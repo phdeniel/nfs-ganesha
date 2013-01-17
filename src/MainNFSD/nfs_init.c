@@ -1454,6 +1454,7 @@ void nfs_start(nfs_start_info_t * p_start_info)
     memcpy(NFS4_write_verifier, build_verifier.NFS4_write_verifier, sizeof(NFS4_write_verifier));
   }
 
+#ifdef LINUX
   /* Deal with capabilities in order to remove CAP_SYS_RESOURCE (needed
    * for proper management of data quotas) */ 
   caphdr.version = _LINUX_CAPABILITY_VERSION_2 ; // kernel is newer than 2.6.25
@@ -1479,7 +1480,7 @@ void nfs_start(nfs_start_info_t * p_start_info)
   else
       LogEvent( COMPONENT_INIT, "CAP_SYS_RESOURCE was successfully removed for proper quota management in FSAL" ) ;
   
-
+#endif
 
 
   /* Initialize all layers and service threads */
