@@ -817,7 +817,7 @@ static fsal_status_t read_dirents(struct fsal_obj_handle *dir_hdl,
 	cnt = 0;
 	do {
 		baseloc = seekloc;
-		nread = CRED_WRAP( opctx->creds, int, vfs_readentsr, dirfd, buf, BUF_SIZE, &seekloc);
+		nread = CRED_WRAP( opctx->creds, int, vfs_readents, dirfd, buf, BUF_SIZE, &seekloc);
 		if(nread < 0) {
 			retval = errno;
 			fsal_error = posix2fsal_error(retval);
