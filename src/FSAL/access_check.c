@@ -425,6 +425,15 @@ fsal_status_t fsal_test_access(struct fsal_obj_handle *obj_hdl,
 	/* The root user always wins */
 	if(req_ctx->creds->caller_uid == 0)
 		return fsalstat(ERR_FSAL_NO_ERROR, 0);
+
+        /* The "create" situation is to be managed properly for it can be split 
+         * in 2 step (cache_inode_create+cache_inode_open) when an atomic open( O_CREAT ) is 
+         * expected. If the file has 04XY mode, we could deny access that we should allow.
+         * So we should do the call to test_access methods ONLY if we are not in a 04XX+O_CREAT case */
+         if( ( obj_hdl->attributes.owner == req_ctx->creds->caller_uid ) &&
+             (  obj_hdl->attributes.mode & 0400 ) )  
+		return fsalstat(ERR_FSAL_NO_ERROR, 0);
+
 	if(attribs->acl && IS_FSAL_ACE4_MASK_VALID(access_type)) {
 		retval = fsal_check_access_acl(req_ctx->creds,
 					       FSAL_ACE4_MASK(access_type),
