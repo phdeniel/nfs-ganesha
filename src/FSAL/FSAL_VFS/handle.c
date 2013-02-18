@@ -628,7 +628,7 @@ vfs_fsal_readlink(struct vfs_fsal_obj_handle *myself,
                 myself->u.symlink.link_size = 0;
         }
 
-        fd = vfs_fsal_open(myself, flags, fsal_error);
+        fd = vfs_fsal_open(myself, O_PATH|O_NOACCESS, fsal_error);
         if(fd < 0)
                 return fd;
    
