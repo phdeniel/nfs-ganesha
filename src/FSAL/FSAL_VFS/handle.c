@@ -632,14 +632,9 @@ vfs_fsal_readlink(struct vfs_fsal_obj_handle *myself,
         if(fd < 0)
                 return fd;
    
-        retlink = readlinkat(fd, "", buff, MAXNAMLEN ) ;
-        if(retlink < 0) {
-                goto error;
-        }
-
-	myself->u.symlink.link_size = retlink+1 ;
+	myself->u.symlink.link_size = MAXPATHLEN ;
 	myself->u.symlink.link_content
-		= gsh_malloc(myself->u.symlink.link_size);
+		= gsh_malloc(MAXPATHLEN);
 	if (myself->u.symlink.link_content == NULL) {
 		goto error;
 	}
