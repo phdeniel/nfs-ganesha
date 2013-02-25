@@ -107,6 +107,7 @@ client_ip_cmpf(const struct avltree_node *lhs,
  * @return pointer to ref locked stats block
  */
 
+#if USE_DBUS
 struct gsh_client *get_gsh_client(sockaddr_t *client_ipaddr,
 				  bool lookup_only)
 {
@@ -167,6 +168,14 @@ out:
 	PTHREAD_RWLOCK_unlock(&client_by_ip.lock);
 	return cl;
 }
+#else
+struct gsh_client *get_gsh_client(sockaddr_t *client_ipaddr,
+				  bool lookup_only)
+{
+   return NULL ;
+}
+#endif
+
 
 /**
  * @brief Release the client management struct
