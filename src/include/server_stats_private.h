@@ -150,6 +150,7 @@ struct export_stats {
 
 #define END_ARG_LIST {NULL, NULL, NULL}
 
+#if USE_DBUS
 void server_stats_summary(DBusMessageIter *iter,
 			  struct gsh_stats *st);
 void server_dbus_v3_iostats(struct nfsv3_stats *v3p,
@@ -158,7 +159,7 @@ void server_dbus_v40_iostats(struct nfsv40_stats *v40p,
 			     DBusMessageIter *iter);
 void server_dbus_v41_iostats(struct nfsv41_stats *v41p,
 			     DBusMessageIter *iter);
-
+#endif /* USE_DBUS */
 #endif /* USE_DBUS_STATS */
 
 void server_stats_free(struct gsh_stats *statsp);

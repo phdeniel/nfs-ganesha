@@ -39,6 +39,7 @@
 
 #include "config.h"
 
+
 #include <time.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -226,7 +227,9 @@ out:
 	PTHREAD_RWLOCK_unlock(&client_by_ip.lock);
 	if(node) {
 		server_st = container_of(cl, struct server_stats, client);
+#if USE_DBUS
 		server_stats_free(&server_st->st);
+#endif
 		gsh_free(cl);
 	}
 	return removed;
