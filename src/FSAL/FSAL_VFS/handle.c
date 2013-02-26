@@ -619,7 +619,7 @@ vfs_fsal_readlink(struct vfs_fsal_obj_handle *myself,
         int retval = 0;
         int fd;
         ssize_t retlink;
-	struct stat st;
+        struct stat st;
         int flags = O_PATH|O_NOACCESS|O_NOFOLLOW;
 
         if(myself->u.symlink.link_content != NULL) {
@@ -627,40 +627,44 @@ vfs_fsal_readlink(struct vfs_fsal_obj_handle *myself,
                 myself->u.symlink.link_content = NULL;
                 myself->u.symlink.link_size = 0;
         }
-
-        fd = vfs_fsal_open(myself, O_PATH|O_NOACCESS, fsal_error);
+        fd = vfs_fsal_open(myself, flags, fsal_error);
         if(fd < 0)
                 return fd;
-   
-	myself->u.symlink.link_size = MAXPATHLEN ;
-	myself->u.symlink.link_content
-		= gsh_malloc(MAXPATHLEN);
-	if (myself->u.symlink.link_content == NULL) {
-		goto error;
-	}
+
+        retval = vfs_stat_by_handle(fd, myself->handle, &st, flags);
+        if (retval < 0) {
+                goto error;
+        }
+
+        myself->u.symlink.link_size = st.st_size + 1;
+        myself->u.symlink.link_content
+                = gsh_malloc(myself->u.symlink.link_size);
+        if (myself->u.symlink.link_content == NULL) {
+                goto error;
+        }
 
         retlink = vfs_readlink_by_handle(myself->handle,
                              fd, "",
                              myself->u.symlink.link_content,
-			     myself->u.symlink.link_size);
+                             myself->u.symlink.link_size);
         if(retlink < 0) {
-		goto error;
+                goto error;
         }
-	myself->u.symlink.link_content[retlink] = '\0';
+        myself->u.symlink.link_content[retlink] = '\0';
         close(fd);
 
         return retval;
 
 error:
         retval = -errno;
-	*fsal_error = posix2fsal_error(errno);
-	close(fd);
-	if (myself->u.symlink.link_content != NULL) {
-		gsh_free(myself->u.symlink.link_content);
-		myself->u.symlink.link_content = NULL;
-		myself->u.symlink.link_size = 0;
-	}
-	return retval;
+        *fsal_error = posix2fsal_error(errno);
+        close(fd);
+        if (myself->u.symlink.link_content != NULL) {
+                gsh_free(myself->u.symlink.link_content);
+                myself->u.symlink.link_content = NULL;
+                myself->u.symlink.link_size = 0;
+        }
+        return retval;
 }
 
 static fsal_status_t readsymlink(struct fsal_obj_handle *obj_hdl,
