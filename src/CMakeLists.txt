@@ -716,3 +716,6 @@ if(USE_FSAL_FUSE)
   install(FILES  "${PROJECT_BINARY_DIR}/libganeshaNFS.pc" COMPONENT daemon DESTINATION ${LIB_DESTINATION})
 endif(USE_FSAL_FUSE)
 
+
+########### add a "make dist"  ###############
+add_custom_target(dist COMMAND ${CMAKE_MAKE_PROGRAM} package_source)
