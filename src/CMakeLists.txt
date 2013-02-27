@@ -28,10 +28,10 @@ set(CPACK_COMPONENT_HEADERS_DISPLAY_NAME "Headers")
 include(${CMAKE_SOURCE_DIR}/cmake/cpack_config.cmake)
 include(CPack)
 
-set( PACKAGE_VERSION "2.0.0"  )
+include(${CMAKE_SOURCE_DIR}/cmake/rpmtools_config.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/modules/UseRPMTools.cmake)
 IF(RPMTools_FOUND)
-     RPMTools_ADD_RPM_TARGETS(nfs-ganesha)
+     RPMTools_ADD_RPM_TARGETS(${PROJECT_NAME})
 ENDIF(RPMTools_FOUND)
 
 include(GetGitRevisionDescription)
@@ -726,5 +726,5 @@ endif(USE_FSAL_FUSE)
 add_custom_target(dist COMMAND ${CMAKE_MAKE_PROGRAM} package_source)
 
 ########### add a "make srpm" and a "make rpm" ###############
-add_custom_target(srpm COMMAND ${CMAKE_MAKE_PROGRAM} nfs-ganesha_srpm)
-add_custom_target(rpm COMMAND ${CMAKE_MAKE_PROGRAM} nfs-ganesha_rpm)
+add_custom_target(rpm COMMAND ${CMAKE_MAKE_PROGRAM} ${PROJECT_NAME}_rpm)
+add_custom_target(srpm COMMAND ${CMAKE_MAKE_PROGRAM} ${PROJECT_NAME}_srpm)

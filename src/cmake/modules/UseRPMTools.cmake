@@ -14,38 +14,31 @@
 # https://savannah.nongnu.org/projects/tsp
 #
 
-IF (WIN32)  
-  MESSAGE(STATUS "RPM tools not available on Win32 systems")
-ENDIF(WIN32)
-
-IF (UNIX)
-  # Look for RPM builder executable
-  FIND_PROGRAM(RPMTools_RPMBUILD_EXECUTABLE 
+# Look for RPM builder executable
+FIND_PROGRAM(RPMTools_RPMBUILD_EXECUTABLE 
     NAMES rpmbuild
     PATHS "/usr/bin;/usr/lib/rpm"
     PATH_SUFFIXES bin
     DOC "The RPM builder tool")
   
-  IF (RPMTools_RPMBUILD_EXECUTABLE)
+IF (RPMTools_RPMBUILD_EXECUTABLE)
     MESSAGE(STATUS "Looking for RPMTools... - found rpmuild is ${RPMTools_RPMBUILD_EXECUTABLE}")
     SET(RPMTools_RPMBUILD_FOUND "YES")
     GET_FILENAME_COMPONENT(RPMTools_BINARY_DIRS ${RPMTools_RPMBUILD_EXECUTABLE} PATH)
-  ELSE (RPMTools_RPMBUILD_EXECUTABLE) 
+ELSE (RPMTools_RPMBUILD_EXECUTABLE) 
     SET(RPMTools_RPMBUILD_FOUND "NO")
     MESSAGE(STATUS "Looking for RPMTools... - rpmbuild NOT FOUND")
-  ENDIF (RPMTools_RPMBUILD_EXECUTABLE) 
+ENDIF (RPMTools_RPMBUILD_EXECUTABLE) 
   
-  # Detect if CPack was included or not
-  IF (NOT DEFINED "CPACK_PACKAGE_NAME") 
+# Detect if CPack was included or not
+IF (NOT DEFINED "CPACK_PACKAGE_NAME") 
     MESSAGE(FATAL_ERROR "CPack was not included, you should include CPack before Using RPMTools")
-  ENDIF (NOT DEFINED "CPACK_PACKAGE_NAME")
+ENDIF (NOT DEFINED "CPACK_PACKAGE_NAME")
   
-  IF (RPMTools_RPMBUILD_FOUND)
+IF (RPMTools_RPMBUILD_FOUND)
     SET(RPMTools_FOUND TRUE)    
     #
     # - first arg  (ARGV0) is RPM name
-    # - second arg (ARGV1) is the RPM spec file path [optional]
-    # - third arg  (ARGV2) is the RPM ROOT DIRECTORY used to build RPMs [optional]
     #
     MACRO(RPMTools_ADD_RPM_TARGETS RPMNAME)
 
@@ -58,15 +51,8 @@ IF (UNIX)
 	SET(SPECFILE_PATH "${ARGV1}")
       ENDIF("${ARGV1}" STREQUAL "")
       
-      # Verify whether if RPM_ROOTDIR was provided or not
-      IF("${ARGV2}" STREQUAL "") 
-	SET(RPM_ROOTDIR ${CMAKE_BINARY_DIR}/RPM)
-      ELSE ("${ARGV2}" STREQUAL "")
-	SET(RPM_ROOTDIR "${ARGV2}")	
-      ENDIF("${ARGV2}" STREQUAL "")
-      MESSAGE(STATUS "RPMTools:: Using RPM_ROOTDIR=${RPM_ROOTDIR}")
-
       # Prepare RPM build tree
+      SET(RPM_ROOTDIR ${CMAKE_BINARY_DIR}/RPM)
       FILE(MAKE_DIRECTORY ${RPM_ROOTDIR})
       FILE(MAKE_DIRECTORY ${RPM_ROOTDIR}/tmp)
       FILE(MAKE_DIRECTORY ${RPM_ROOTDIR}/BUILD)
@@ -75,33 +61,53 @@ IF (UNIX)
       FILE(MAKE_DIRECTORY ${RPM_ROOTDIR}/SPECS)
       FILE(MAKE_DIRECTORY ${RPM_ROOTDIR}/SRPMS)
 
-      #
-      # We check whether if the provided spec file is
-      # to be configure or not.
-      # 
-      IF ("${ARGV1}" STREQUAL "")
-	SET(SPECFILE_PATH "${RPM_ROOTDIR}/SPECS/${RPMNAME}.spec")
-	SET(SPECFILE_NAME "${RPMNAME}.spec")
-	MESSAGE(STATUS "No Spec file given generate a minimal one --> ${RPM_ROOTDIR}/SPECS/${RPMNAME}.spec")
-      	FILE(WRITE ${RPM_ROOTDIR}/SPECS/${RPMNAME}.spec
+      # Read RPM changelog and store the result into a variable
+      EXEC_PROGRAM(cat ARGS ${RPM_CHANGELOG_FILE} OUTPUT_VARIABLE RPM_CHANGELOG_FILE_CONTENT)
+
+      SET(SPECFILE_PATH "${RPM_ROOTDIR}/SPECS/${RPMNAME}.spec")
+      SET(SPECFILE_NAME "${RPMNAME}.spec")
+      FILE(WRITE ${RPM_ROOTDIR}/SPECS/${RPMNAME}.spec
 	  "# -*- rpm-spec -*-
-Summary:        ${RPMNAME}
+Summary:        ${RPM_SUMMARY}
 Name:           ${RPMNAME}
 Version:        ${PACKAGE_VERSION}
-Release:        1
-License:        Unknown
-Group:          Unknown
+Release:        ${RPM_RELEASE}
+License:        ${RPM_PACKAGE_LICENSE}
+Group:          ${RPM_PACKAGE_GROUP}
 Source:         ${CPACK_SOURCE_PACKAGE_FILE_NAME}.tar.gz
-BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root
+BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires:	cmake
+Url:            ${RPM_URL}
+
 
 %define prefix /opt/${RPMNAME}-%{version}
 %define rpmprefix $RPM_BUILD_ROOT%{prefix}
 %define srcdirname %{name}-%{version}-Source
 
 %description
-${RPMNAME} : No description for now
+${RPMNAME} : ${RPM_DESCRIPTION}
 
+ ")
+
+# if needed deal with FSAL modules
+if(USE_FSAL_CEPH)
+FILE(APPEND ${RPM_ROOTDIR}/SPECS/${RPMNAME}.spec  
+"%description ceph
+This is FSAL_VFS package. This package contains a FSAL shared object to 
+be used with NFS-Ganesha to suppport CEPH
+")
+endif(USE_FSAL_CEPH)
+
+if(USE_FSAL_VFS)
+FILE(APPEND ${RPM_ROOTDIR}/SPECS/${RPMNAME}.spec  
+"%description vfs
+This is FSAL_VFS package. This package contains a FSAL shared object to 
+be used with NFS-Ganesha to suppport VFS based filesystems
+")
+endif(USE_FSAL_VFS)
+
+FILE(APPEND ${RPM_ROOTDIR}/SPECS/${RPMNAME}.spec  
+"
 %prep
 %setup -q -n %{srcdirname}
 
@@ -123,38 +129,37 @@ rm -rf build_tree
 
 %files
 %defattr(-,root,root,-)
-%dir %{prefix}
-%{prefix}/*
+%{_bindir}/* 
+%{_sysconfdir}/*
+"
+)
+# if needed deal with FSALs
+if(USE_FSAL_CEPH)
+        FILE(APPEND ${RPM_ROOTDIR}/SPECS/${RPMNAME}.spec  
+"
+%files ceph
+%defattr(-,root,root,-)
 
+" )
+endif(USE_FSAL_CEPH)
+
+if(USE_FSAL_VFS)
+        FILE(APPEND ${RPM_ROOTDIR}/SPECS/${RPMNAME}.spec  
+"
+%files vfs
+%defattr(-,root,root,-)
+
+" )
+endif(USE_FSAL_VFS)
+
+# Append changelog
+FILE(APPEND ${RPM_ROOTDIR}/SPECS/${RPMNAME}.spec  
+"
 %changelog
-* Wed Feb 28 2007 Erk <eric.noulard@gmail.com>
-  Generated by CMake UseRPMTools macros"
-	)
+"
+)
 
-      ELSE ("${ARGV1}" STREQUAL "")
-	SET(SPECFILE_PATH "${ARGV1}")
-	
-	GET_FILENAME_COMPONENT(SPECFILE_EXT ${SPECFILE_PATH} EXT)      
-	IF ("${SPECFILE_EXT}" STREQUAL ".spec")
-	  # This is a 'ready-to-use' spec file which does not need to be CONFIGURED
-	  GET_FILENAME_COMPONENT(SPECFILE_NAME ${SPECFILE_PATH} NAME)
-	  MESSAGE(STATUS "Simple copy spec file <${SPECFILE_PATH}> --> <${RPM_ROOTDIR}/SPECS/${SPECFILE_NAME}>")
-	  CONFIGURE_FILE(
-	    ${SPECFILE_PATH} 
-	    ${RPM_ROOTDIR}/SPECS/${SPECFILE_NAME}
-	    COPYONLY)
-	ELSE ("${SPECFILE_EXT}" STREQUAL ".spec")
-	  # This is a to-be-configured spec file
-	  GET_FILENAME_COMPONENT(SPECFILE_NAME ${SPECFILE_PATH} NAME_WE)
-	  SET(SPECFILE_NAME "${SPECFILE_NAME}.spec")
-	  MESSAGE(STATUS "Configuring spec file <${SPECFILE_PATH}> --> <${RPM_ROOTDIR}/SPECS/${SPECFILE_NAME}>")
-	  CONFIGURE_FILE(
-	    ${SPECFILE_PATH} 
-	    ${RPM_ROOTDIR}/SPECS/${SPECFILE_NAME}
-	    @ONLY)
-	ENDIF ("${SPECFILE_EXT}" STREQUAL ".spec")
-      ENDIF("${ARGV1}" STREQUAL "")
-            
+FILE(APPEND ${RPM_ROOTDIR}/SPECS/${RPMNAME}.spec ${RPM_CHANGELOG_FILE_CONTENT} )
       ADD_CUSTOM_TARGET(${RPMNAME}_srpm
 	COMMAND cpack -G TGZ --config CPackSourceConfig.cmake
 	COMMAND ${CMAKE_COMMAND} -E copy ${CPACK_SOURCE_PACKAGE_FILE_NAME}.tar.gz ${RPM_ROOTDIR}/SOURCES    
@@ -172,5 +177,4 @@ rm -rf build_tree
     SET(RPMTools FALSE)
   ENDIF (RPMTools_RPMBUILD_FOUND)  
   
-ENDIF (UNIX)
   
