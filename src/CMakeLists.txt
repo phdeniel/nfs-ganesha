@@ -138,6 +138,9 @@ option(USE_CUNIT "Use Cunit test framework" OFF)
 option(USE_9P "enable 9P support" ON)
 option(USE_9P_RDMA "enable 9P_RDMA support" OFF)
 
+# This option will stop cmake compilation if a requested FSAL could not be built
+option(STRICT_PACKAGE "Enable strict packaging behavior" OFF )
+
 # Compile with "NO_MOUNT_LIST" [Don't use MOUNT PROTOCOL's  client list]
 set(_NO_MOUNT_LIST ON)
 
@@ -245,8 +248,12 @@ if(USE_FSAL_CEPH)
     CEPH_FS
     )
   if(NOT CEPH_FS)
-    message(WARNING "Cannot find CEPH runtime.  Disabling CEPH fsal build")
-    set(USE_FSAL_CEPH OFF)
+    if(STRICT_PACKAGE)
+      message(FATAL_ERROR "STRICT_PACKAGE : Cannot find CEPH runtime.  Disabling CEPH fsal build")
+    else(STRICT_PACKAGE)
+      message(WARNING "Cannot find CEPH runtime.  Disabling CEPH fsal build")
+      set(USE_FSAL_CEPH OFF)
+    endif(STRICT_PACKAGE)
   endif(NOT CEPH_FS)
 endif(USE_FSAL_CEPH)
 
@@ -259,8 +266,12 @@ if(USE_FSAL_LUSTRE)
     )
   check_include_files("unistd.h;lustre/lustre_user.h" HAVE_LUSTRE_USER_H)
   if((NOT HAVE_LUSTREAPI) OR (NOT HAVE_LUSTRE_USER_H))
-    message(WARNING "Cannot find LUSTRE runtime. Disabling LUSTRE fsal build")
-    set(USE_FSAL_LUSTRE OFF)
+   if(STRICT_PACKAGE)
+      message(FATAL_ERROR "STRICT_PACKAGE: Cannot find LUSTRE runtime. Disabling LUSTRE fsal build")
+    else(STRICT_PACKAGE)
+      message(WARNING "Cannot find LUSTRE runtime. Disabling LUSTRE fsal build")
+      set(USE_FSAL_LUSTRE OFF)
+    endif(STRICT_PACKAGE)
   endif((NOT HAVE_LUSTREAPI) OR (NOT HAVE_LUSTRE_USER_H))
 endif(USE_FSAL_LUSTRE)
 
@@ -273,8 +284,12 @@ if(USE_FSAL_LUSTRE AND USE_FSAL_SHOOK)
     )
   check_include_files("unistd.h;attr/xattr.h" HAVE_SHOOK_XATTRS)
   if((NOT HAVE_SHOOK) OR (NOT HAVE_SHOOK_XATTRS))
-    message(WARNING "Cannot find SHOOK runtime. Disabling SHOOK build")
-    set(USE_FSAL_SHOOK OFF)
+   if(STRICT_PACKAGE)
+      message(FATAL_ERROR "STRICT_PACKAGE: Cannot find SHOOK runtime. Disabling SHOOK build")
+    else(STRICT_PACKAGE)
+      message(WARNING "Cannot find SHOOK runtime. Disabling SHOOK build")
+      set(USE_FSAL_SHOOK OFF)
+    endif(STRICT_PACKAGE)
   endif((NOT HAVE_SHOOK) OR (NOT HAVE_SHOOK_XATTRS))
 endif(USE_FSAL_LUSTRE AND USE_FSAL_SHOOK)
 
@@ -287,8 +302,12 @@ if(USE_FSAL_XFS)
     )
   check_include_files("xfs/xfs.h" HAVE_XFS_H)
   if((NOT HAVE_XFS_LIB) OR (NOT HAVE_XFS_H))
-    message(WARNING "Cannot find XFS runtime. Disabling XFS build")
-    set(USE_FSAL_XFS OFF)
+   if(STRICT_PACKAGE)
+      message(FATAL_ERROR "STRICT_PACKAGE: Cannot find XFS runtime. Disabling XFS build")
+    else(STRICT_PACKAGE)
+      message(WARNING "Cannot find XFS runtime. Disabling XFS build")
+      set(USE_FSAL_XFS OFF)
+    endif(STRICT_PACKAGE)
   endif((NOT HAVE_XFS_LIB) OR (NOT HAVE_XFS_H))
 endif(USE_FSAL_XFS)
 
@@ -301,8 +320,12 @@ if(USE_FSAL_ZFS)
     )
   check_include_files("unistd.h;libzfswrap.h" HAVE_LIBZFSWRAP_H)
   if((NOT HAVE_ZFS_LIB) OR (NOT HAVE_LIBZFSWRAP_H))
-    message(WARNING "Cannot find ZFS runtime. Disabling ZFS build")
-    set(USE_FSAL_ZFS OFF)
+   if(STRICT_PACKAGE)
+      message(FATAL_ERROR "STRICT_PACKAGE: Cannot find ZFS runtime. Disabling ZFS build")
+    else(STRICT_PACKAGE)
+      message(WARNING "Cannot find ZFS runtime. Disabling ZFS build")
+      set(USE_FSAL_ZFS OFF)
+    endif(STRICT_PACKAGE)
   endif((NOT HAVE_ZFS_LIB) OR (NOT HAVE_LIBZFSWRAP_H))
 endif(USE_FSAL_ZFS)
 
@@ -542,6 +565,7 @@ message(STATUS "ENABLE_ERROR_INJECTION = ${ENABLE_ERROR_INJECTION}")
 message(STATUS "USE_STAT_EXPORTER = ${USE_STAT_EXPORTER}")
 message(STATUS "_USE_STAT_EXPORTER = ${_USE_STAT_EXPORTER}")
 message(STATUS "_MSPAC_SUPPORT = ${_MSPAC_SUPPORT}")
+message(STATUS "STRICT_PACKAGE = ${STRICT_PACKAGE}")
 message(STATUS "USE_EFENCE = ${USE_EFENCE}")
 message(STATUS "_NO_TCP_REGISTER = ${_NO_TCP_REGISTER}")
 message(STATUS "_NO_PORTMAPPER = ${_NO_PORTMAPPER}")
@@ -667,6 +691,11 @@ set(_USE_STAT_EXPORTER ${_USE_STAT_EXPORTER}
 set(_MSPAC_SUPPORT ${_MSPAC_SUPPORT}
   CACHE BOOL
    "enable mspac winbind support"
+   FORCE)
+
+set(STRICT_PACKAGE ${STRICT_PACKAGE}
+  CACHE BOOL
+   "enable strict packaging behavior"
    FORCE)
 
 set(USE_9P ${USE_9P}
