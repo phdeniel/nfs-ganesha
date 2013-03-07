@@ -231,10 +231,6 @@ if(KRB5_FOUND)
   set(_HAVE_GSSAPI ON)
 endif(KRB5_FOUND)
 
-# needed by RPCAL/gssd for some reason
-find_package(Curses)
-find_package(Readline)
-
 find_package(OpenSSL REQUIRED) # md5 needed by  ${CMAKE_THREAD_LIBS_INIT} nfs4 acls (why??)
 set(SYSTEM_LIBRARIES ${SYSTEM_LIBRARIES} ${OPENSSL_LIBRARIES})
 
