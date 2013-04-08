@@ -438,14 +438,7 @@ static fsal_status_t extract_handle(struct fsal_export *exp_hdl,
 		return fsalstat(ERR_FSAL_FAULT, 0);
 
 	fh_size = sizeof(vfs_file_handle_t);
-	if(in_type == FSAL_DIGEST_NFSV2) {
-		if(fh_desc->len < fh_size) {
-			LogMajor(COMPONENT_FSAL,
-				 "V2 size too small for handle.  should be %lu, got %lu",
-				 fh_size, fh_desc->len);
-			return fsalstat(ERR_FSAL_SERVERFAULT, 0);
-		}
-	} else if(in_type != FSAL_DIGEST_SIZEOF && fh_desc->len != fh_size) {
+	if(in_type != FSAL_DIGEST_SIZEOF && fh_desc->len != fh_size) {
 		LogMajor(COMPONENT_FSAL,
 			 "Size mismatch for handle.  should be %lu, got %lu",
 			 fh_size, fh_desc->len);
@@ -548,13 +541,11 @@ fsal_status_t vfs_create_export(struct fsal_module *fsal_hdl,
 	FILE *fp;
 	struct mntent *p_mnt;
 	size_t pathlen, outlen = 0;
-	char mntdir[MAXPATHLEN + 1];  /* there has got to be a better way... */
-	char fs_spec[MAXPATHLEN + 1];
-#ifdef LINUX
-        char hdllib[MAXPATHLEN + 1];
-#endif
+	char mntdir[MAXPATHLEN];  /* there has got to be a better way... */
+	char fs_spec[MAXPATHLEN];
+        char hdllib[MAXPATHLEN];
         struct vfs_exp_handle_ops *hops = &defops;
-	char type[MAXNAMLEN + 1];
+	char type[MAXNAMLEN];
 	int retval = 0;
 	fsal_errors_t fsal_error = ERR_FSAL_NO_ERROR;
 
