@@ -206,6 +206,8 @@ License:        ${RPM_PACKAGE_LICENSE}
 Group:          ${RPM_PACKAGE_GROUP}
 Source:         ${CPACK_SOURCE_PACKAGE_FILE_NAME}.tar.gz
 BuildRequires:	${ADDITIONAL_REQ}
+BuildRequires:	cmake dbus-devel libnfsidmap-devel libcap-devel krb5-devel libgssglue-devel bison flex
+Requires: dbus-libs libnfsidmap libcap krb5 libgssglue
 Url:            ${RPM_URL}
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
@@ -353,7 +355,7 @@ cd ..
 rm -rf build_tree
 mkdir build_tree
 cd build_tree
-cmake -DCMAKE_INSTALL_PREFIX=$RPM_BUILD_ROOT/usr -DCMAKE_BUILD_TYPE=Debug -DBUILD_CONFIG=rpmbuild -DDISTNAME_HAS_GIT_DATA=ON ../%{srcdirname}
+cmake -DCMAKE_INSTALL_PREFIX=$RPM_BUILD_ROOT/usr -DCMAKE_BUILD_TYPE=Debug -DBUILD_CONFIG=rpmbuild -DUSE_FSAL_POSIX=OFF -DDISTNAME_HAS_GIT_DATA=ON ../%{srcdirname}
 make
   
 %install 
