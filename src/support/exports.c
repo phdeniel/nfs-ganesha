@@ -243,10 +243,16 @@ void LogClientListEntry(log_components_t component,
 			    perms);
 		return;
 
+	case ADDR_SET_CLIENT:
+		LogMidDebug(component, "  %p ADDR_SET_CLIENT: * (%s)", entry,
+			    perms);
+		return;
+
 	case RAW_CLIENT_LIST:
 		LogCrit(component, "  %p RAW_CLIENT_LIST: <unknown>(%s)", entry,
 			perms);
 		return;
+
 	case BAD_CLIENT:
 		LogCrit(component, "  %p BAD_CLIENT: <unknown>(%s)", entry,
 			perms);
@@ -283,9 +289,6 @@ static int add_client(struct gsh_export *export,
 			 "Allocate of client space failed");
 		goto out;
 	}
-#ifdef USE_NODELIST
-#error "Node list expansion goes here but not yet"
-#endif
 	glist_init(&cli->cle_list);
 	if (client_tok[0] == '*' && client_tok[1] == '\0') {
 		cli->type = MATCH_ANY_CLIENT;
@@ -300,6 +303,18 @@ static int add_client(struct gsh_export *export,
 		}
 		cli->client.netgroup.netgroupname = gsh_strdup(client_tok + 1);
 		cli->type = NETGROUP_CLIENT;
+	} else if (index(client_tok, '[') != NULL) {
+		if (!nl_map_condensed(client_tok,
+				     nl_name_to_addr_set,
+				     &cli->client.client_set)) {
+			LogMajor(COMPONENT_CONFIG,
+				 "Got bad nodelist (%s)",
+				 client_tok);
+			err_type->invalid = true;
+			errcnt++;
+			goto out;
+		}
+		cli->type = ADDR_SET_CLIENT;
 	} else if (index(client_tok, '/') != NULL) {
 		CIDR *cidr;
 		uint32_t addr;
@@ -1383,6 +1398,8 @@ static void FreeClientList(struct glist_head *clients)
 		if (client->type == GSSPRINCIPAL_CLIENT &&
 		    client->client.gssprinc.princname != NULL)
 			gsh_free(client->client.gssprinc.princname);
+		if (client->type == ADDR_SET_CLIENT)
+			free_ip_addr_set(client->client.client_set);
 		gsh_free(client);
 	}
 }
@@ -1769,6 +1786,7 @@ static char *client_types[] = {
 	[WILDCARDHOST_CLIENT] = "WILDCARDHOST_CLIENT",
 	[GSSPRINCIPAL_CLIENT] = "GSSPRINCIPAL_CLIENT",
 	[HOSTIF_CLIENT_V6] = "HOSTIF_CLIENT_V6",
+	[ADDR_SET_CLIENT] = "ADDR_SET_CLIENT",
 	[MATCH_ANY_CLIENT] = "MATCH_ANY_CLIENT",
 	[BAD_CLIENT] = "BAD_CLIENT"
 	 };
@@ -1788,6 +1806,7 @@ static exportlist_client_entry_t *client_match(sockaddr_t *hostaddr,
 {
 	struct glist_head *glist;
 	in_addr_t addr = get_in_addr(hostaddr);
+	struct sockaddr_storage store_addr;
 	int rc;
 	int ipvalid = -1;	/* -1 need to print, 0 - invalid, 1 - ok */
 	char hostname[MAXHOSTNAMELEN + 1];
@@ -1814,6 +1833,12 @@ static exportlist_client_entry_t *client_match(sockaddr_t *hostaddr,
 		case NETWORK_CLIENT:
 			if ((client->client.network.netmask & ntohl(addr)) ==
 			    client->client.network.netaddr)
+				return client;
+			break;
+
+		case ADDR_SET_CLIENT:
+			if (is_in_addr_set(client->client.client_set,
+					   hostaddr))
 				return client;
 			break;
 

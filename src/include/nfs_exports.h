@@ -49,6 +49,9 @@
 #include "fsal_types.h"
 #include "cache_inode.h"
 #include "log.h"
+#include "cache_inode_lru.h"
+#include "nfs_ip_stats.h"
+#include "addr_set.h"
 
 /*
  * Export List structure
@@ -69,8 +72,9 @@ typedef enum exportlist_client_type__ {
 	WILDCARDHOST_CLIENT = 4,
 	GSSPRINCIPAL_CLIENT = 5,
 	HOSTIF_CLIENT_V6 = 6,
-	MATCH_ANY_CLIENT = 7,
-	BAD_CLIENT = 8
+	ADDR_SET_CLIENT = 7,
+	MATCH_ANY_CLIENT = 8,
+	BAD_CLIENT = 9
 } exportlist_client_type_t;
 
 struct global_export_perms {
@@ -85,6 +89,7 @@ typedef struct exportlist_client_entry__ {
 	exportlist_client_type_t type;
 	union {
 		char *raw_client_str;
+		struct ip_addr_set *client_set;
 		union {
 			uint32_t clientaddr; /* wrong! fix to be struct */
 			struct in6_addr clientaddr6;

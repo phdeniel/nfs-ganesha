@@ -95,6 +95,8 @@ static bool proc_export(struct gsh_export *export, void *arg)
 			grp_tail->gr_next = group;
 
 		grp_tail = group;
+/** @todo convert to use addr_set
+ */
 		switch (client->type) {
 		case HOSTIF_CLIENT:
 			grp_name =
