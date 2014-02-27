@@ -51,6 +51,7 @@ SET(support_STAT_SRCS
    bsd-base64.c
    server_stats.c
    export_mgr.c
+   addr_set.c
 )
 
 if(ERROR_INJECTION)
