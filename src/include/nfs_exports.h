@@ -53,6 +53,7 @@
 #include "cache_inode.h"
 #include "cache_inode_lru.h"
 #include "nfs_ip_stats.h"
+#include "addr_set.h"
 
 /*
  * Export List structure
@@ -89,6 +90,7 @@ typedef struct exportlist_client_entry__ {
 	exportlist_client_type_t type;
 	union {
 		char *raw_client_str;
+		struct ip_addr_set *client_set;
 		union {
 			uint32_t clientaddr; /* wrong! fix to be struct */
 			struct in6_addr clientaddr6;
