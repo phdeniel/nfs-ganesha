@@ -278,6 +278,8 @@ static int add_client(struct gsh_export *export,
 	struct exportlist_client_entry__ *cli;
 	int errcnt = 0;
 	struct addrinfo *info;
+	CIDR *cidr;
+	int rc;
 
 	cli = gsh_calloc(sizeof(struct exportlist_client_entry__), 1);
 	if (cli == NULL) {
@@ -291,7 +293,9 @@ static int add_client(struct gsh_export *export,
 	glist_init(&cli->cle_list);
 	if (client_tok[0] == '*' && client_tok[1] == '\0') {
 		cli->type = MATCH_ANY_CLIENT;
-	} else if (client_tok[0] == '@') {
+		goto done;
+	}
+	if (client_tok[0] == '@') {
 		if (strlen(client_tok) > MAXHOSTNAMELEN) {
 			LogMajor(COMPONENT_CONFIG,
 				 "netgroup (%s) name too long",
@@ -302,26 +306,9 @@ static int add_client(struct gsh_export *export,
 		}
 		cli->client.netgroup.netgroupname = gsh_strdup(client_tok + 1);
 		cli->type = NETGROUP_CLIENT;
-	} else if (index(client_tok, '/') != NULL) {
-		CIDR *cidr;
-		uint32_t addr;
-
-		cidr = cidr_from_str(client_tok);
-		if (cidr == NULL) {
-			LogMajor(COMPONENT_CONFIG,
-				 "Expected a CIDR address, got (%s)",
-				 client_tok);
-			err_type->invalid = true;
-			errcnt++;
-			goto out;
-		}
-		memcpy(&addr, &cidr->addr[12], 4);
-		cli->client.network.netaddr = ntohl(addr);
-		memcpy(&addr, &cidr->mask[12], 4);
-		cli->client.network.netmask = ntohl(addr);
-		cidr_free(cidr);
-		cli->type = NETWORK_CLIENT;
-	} else if (index(client_tok, '*') != NULL ||
+		goto done;
+	}
+	if (index(client_tok, '*') != NULL ||
 		   index(client_tok, '?') != NULL) {
 		if (strlen(client_tok) > MAXHOSTNAMELEN) {
 			LogMajor(COMPONENT_CONFIG,
@@ -333,6 +320,13 @@ static int add_client(struct gsh_export *export,
 		}
 		cli->client.wildcard.wildcard = gsh_strdup(client_tok);
 		cli->type = WILDCARDHOST_CLIENT;
+		goto done;
+	}
+	cidr = cidr_from_str(client_tok);
+	if (cidr != NULL) {
+		rc = cidr_to_addr_set(cidr, &cli->client.client_set);
+		cidr_free(cidr);
+		cli->type = ADDR_SET_CLIENT;
 	} else if (getaddrinfo(client_tok, NULL, NULL, &info) == 0) {
 		struct addrinfo *ap, *ap_last = NULL;
 		struct in_addr in_addr_last;
@@ -405,14 +399,15 @@ static int add_client(struct gsh_export *export,
 		}
 		freeaddrinfo(info);
 		goto out;
-	} else {  /* does gsspric decode go here? */
-		LogMajor(COMPONENT_CONFIG,
-			 "Unknown client token (%s)",
-			 client_tok);
-		err_type->bogus = true;
-		errcnt++;
-		goto out;
 	}
+	/* does gsspric decode go here? */
+	LogMajor(COMPONENT_CONFIG,
+		 "Unknown client token (%s)",
+		 client_tok);
+	errcnt++;
+	goto out;
+
+done:
 	cli->client_perms = *perms;
 	LogClientListEntry(COMPONENT_CONFIG, cli);
 	glist_add_tail(&export->clients,
@@ -511,6 +506,7 @@ static int client_commit(void *node, void *link_mem, void *self_struct,
 	/* take the first token for ourselves.  it may expand!
 	 * loop thru the rest and use our options as theirs (copy)
 	 */
+/* move tokenize to add_client */
 	tok = client_list;
 	while (errcnt == 0 && tok != NULL) {
 		endptr = index(tok, ',');
@@ -1443,6 +1439,8 @@ static void FreeClientList(struct glist_head *clients)
 		if (client->type == GSSPRINCIPAL_CLIENT &&
 		    client->client.gssprinc.princname != NULL)
 			gsh_free(client->client.gssprinc.princname);
+		if (client->type == ADDR_SET_CLIENT)
+			free_ip_addr_set(client->client.client_set);
 		gsh_free(client);
 	}
 }
