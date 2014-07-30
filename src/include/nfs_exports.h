@@ -167,7 +167,6 @@ typedef struct exportlist_client_entry__ {
 #define EXPORT_OPTION_RPCSEC_GSS_PRIV 0x00010000	/*< RPCSEC_GSS PRIVACY
 							    supported	    */
 
-#define EXPORT_OPTION_SELINUX 0x80000000 /*< Server checks with SELinux */
 
 #define EXPORT_OPTION_AUTH_TYPES      (EXPORT_OPTION_AUTH_NONE	     | \
 				       EXPORT_OPTION_AUTH_UNIX	     | \
@@ -199,6 +198,8 @@ typedef struct exportlist_client_entry__ {
 #define EXPORT_OPTION_MANAGE_GIDS 0x40000000 /*< Do not trust
 						    altgrp in AUTH_SYS creds */
 #define EXPORT_OPTION_NO_READDIR_PLUS 0x80000000 /*< Disallow readdir plus */
+
+#define EXPORT_OPTION_SELINUX 0x100000000 /*< Server checks with SELinux */
 
 /* Export list related functions */
 void export_check_access(void);

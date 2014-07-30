@@ -183,7 +183,7 @@ EXPORT_DEFAULTS {}
 
 	Anonymous_gid(anonid, range INT32MIN to UINT32MAX, default -2)
 
-	SecType(enum list, values [none, sys, krb5, krb5i, krb5p],
+	SecType(enum list, values [none, sys, krb5, krb5i, krb5p, selinux],
 	        default [none, sys])
 
 	PrivilegedPort(bool, default false)
