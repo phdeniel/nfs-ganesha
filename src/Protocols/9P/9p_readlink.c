@@ -77,6 +77,17 @@ int _9p_readlink(struct _9p_request_data *req9p, void *worker_data,
 				  preply);
 	}
 
+#ifdef USE_SELINUX
+	int sec_error = 0;
+	if (pfid->op_context.export_perms->options & EXPORT_OPTION_SELINUX) {
+		sec_error = _9p_check_security(pfid, "lnk_file", "read");
+		if (sec_error)
+			return _9p_rerror(req9p, worker_data, msgtag,
+					  sec_error, plenout,
+					  preply);
+	}
+#endif
+
 	op_ctx = &pfid->op_context;
 
 	/* let's do the job */

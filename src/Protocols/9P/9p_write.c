@@ -87,6 +87,18 @@ int _9p_write(struct _9p_request_data *req9p, void *worker_data,
 
 	pfid = req9p->pconn->fids[*fid];
 
+#ifdef USE_SELINUX
+	int sec_error = 0;
+	if ((pfid->op_context.export_perms->options & EXPORT_OPTION_SELINUX) &&
+	    (pfid->fid_type == _9P_FID_REG)) {
+		sec_error = _9p_check_security(pfid, "file", "write");
+		if (sec_error)
+			return _9p_rerror(req9p, worker_data, msgtag,
+					  sec_error, plenout,
+					  preply);
+	}
+#endif
+
 	/* Make sure the requested amount of data respects negotiated msize */
 	if (*count + _9P_ROOM_TWRITE > req9p->pconn->msize)
 		return _9p_rerror(req9p, worker_data, msgtag, ERANGE, plenout,
@@ -109,7 +121,8 @@ int _9p_write(struct _9p_request_data *req9p, void *worker_data,
 	/* Do the job */
 	size = *count;
 
-	if (pfid->specdata.xattr.xattr_content != NULL) {
+	if ((pfid->fid_type == _9P_FID_XATTR) &&
+	    (pfid->specdata.xattr.xattr_content != NULL)) {
 		memcpy(pfid->specdata.xattr.xattr_content + (*offset),
 		       databuffer, size);
 		pfid->specdata.xattr.xattr_offset += size;
@@ -132,7 +145,21 @@ int _9p_write(struct _9p_request_data *req9p, void *worker_data,
 #endif
 
 		outcount = *count;
+#ifndef USE_SELINUX
 	} else {
+#else
+	} else if (pfid->fid_type == _9P_FID_AUTH_SELINUX) {
+		if (size > pfid->selinux.scon_size)
+			return _9p_rerror(req9p, worker_data, msgtag,
+					  EINVAL, plenout, preply);
+
+		/* Keep the provided scon in the fid */
+		memcpy(pfid->selinux.scon,
+		       databuffer, size);
+		pfid->selinux.scon_size = size;
+		outcount = *count;
+	} else {
+#endif
 		cache_status =
 		    cache_inode_rdwr(pfid->pentry, CACHE_INODE_WRITE, *offset,
 				     size, &written_size, databuffer, &eof_met,

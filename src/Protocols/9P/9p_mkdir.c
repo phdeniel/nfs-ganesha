@@ -92,7 +92,21 @@ int _9p_mkdir(struct _9p_request_data *req9p, void *worker_data,
 				 EXPORT_OPTION_WRITE_ACCESS) == 0)
 		return _9p_rerror(req9p, worker_data, msgtag, EROFS, plenout,
 				  preply);
-
+#ifdef USE_SELINUX
+	int sec_error = 0;
+	if (pfid->op_context.export_perms->options & EXPORT_OPTION_SELINUX) {
+		sec_error = _9p_check_security(pfid, "dir", "create");
+		if (sec_error)
+			return _9p_rerror(req9p, worker_data, msgtag,
+					  sec_error, plenout,
+					  preply);
+		sec_error = _9p_check_security(pfid, "dir", "add_name");
+		if (sec_error)
+			return _9p_rerror(req9p, worker_data, msgtag,
+					  sec_error, plenout,
+					  preply);
+	}
+#endif
 	snprintf(dir_name, MAXNAMLEN, "%.*s", *name_len, name_str);
 
 	op_ctx = &pfid->op_context;

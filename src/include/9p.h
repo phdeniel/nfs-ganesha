@@ -283,10 +283,19 @@ struct _9p_qid {
 				 *  for a file system element */
 };
 
+enum _9p_fid_type {
+	_9P_FID_NONE = 0x0,
+	_9P_FID_REG = 0x1,
+	_9P_FID_XATTR = 0x2,
+	_9P_FID_AUTH_SELINUX = 0x4,
+	_9P_FID_AUTH_GSS = 0x8,
+};
+
 struct _9p_fid {
 	u32 fid;
 	struct req_op_context op_context;
 	struct user_cred ucred;
+	enum _9p_fid_type fid_type;
 	struct group_data *gdata;
 	cache_entry_t *pentry;
 	struct _9p_qid qid;
@@ -295,6 +304,12 @@ struct _9p_fid {
 	char name[MAXNAMLEN];
 	u32 opens;
 	bool from_attach;
+#ifdef USE_SELINUX
+	struct _9p_auth_selinux {
+		char *scon;
+		u32 scon_size;
+	} selinux;
+#endif
 	union {
 		u32 iounit;
 		struct _9p_xattr_desc {
@@ -680,8 +695,13 @@ void _9p_rdma_callback_recv_err(msk_trans_t *trans, msk_data_t *pdata,
 				void *arg);
 void _9p_rdma_callback_send_err(msk_trans_t *trans, msk_data_t *pdata,
 				void *arg);
-
 #endif
+
+#ifdef USE_SELINUX
+int _9p_check_security(struct _9p_fid *pfid, char *class, char *perm);
+int _9p_check_selinux_perm(struct _9p_fid *pfid, char *perm);
+#endif
+
 void _9p_AddFlushHook(struct _9p_request_data *req, int tag,
 		      unsigned long sequence);
 void _9p_FlushFlushHook(struct _9p_conn *conn, int tag, unsigned long sequence);

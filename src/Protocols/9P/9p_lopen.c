@@ -79,6 +79,17 @@ int _9p_lopen(struct _9p_request_data *req9p, void *worker_data,
 				  preply);
 	}
 
+#ifdef USE_SELINUX
+	int sec_error = 0;
+	if (pfid->op_context.export_perms->options & EXPORT_OPTION_SELINUX) {
+		sec_error = _9p_check_security(pfid, "file", "open");
+		if (sec_error)
+			return _9p_rerror(req9p, worker_data, msgtag,
+					  sec_error, plenout,
+					  preply);
+	}
+#endif
+
 	_9p_openflags2FSAL(flags, &openflags);
 	pfid->state.state_data.fid.share_access =
 		_9p_openflags_to_share_access(flags);

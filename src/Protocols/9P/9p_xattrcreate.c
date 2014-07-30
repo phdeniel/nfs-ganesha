@@ -191,6 +191,9 @@ int _9p_xattrcreate(struct _9p_request_data *req9p, void *worker_data,
 	pfid->specdata.xattr.xattr_size = *size;
 	pfid->specdata.xattr.xattr_offset = 0LL;
 
+	/* Set fid type */
+	pfid->fid_type = _9P_FID_XATTR;
+
 	/* Build the reply */
 	_9p_setinitptr(cursor, preply, _9P_RXATTRCREATE);
 	_9p_setptr(cursor, msgtag, u16);

@@ -39,6 +39,14 @@
 #include <pwd.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#ifdef USE_SELINUX
+#include <selinux/selinux.h>
+
+#include <selinux/flask.h>
+#include <selinux/avc.h>
+#include <selinux/av_permissions.h>
+
+#endif
 #include "nfs_core.h"
 #include "log.h"
 #include "fsal.h"
@@ -223,7 +231,8 @@ static void free_fid(struct _9p_fid *pfid)
 	if (pfid->from_attach)
 		put_gsh_export(pfid->op_context.export);
 
-	gsh_free(pfid->specdata.xattr.xattr_content);
+	if (pfid->fid_type == _9P_FID_XATTR)
+		gsh_free(pfid->specdata.xattr.xattr_content);
 	gsh_free(pfid);
 }
 
@@ -248,9 +257,15 @@ int _9p_tools_clunk(struct _9p_fid *pfid)
 	/* unref the related group list */
 	uid2grp_unref(pfid->gdata);
 
+#ifdef USE_SELINUX
+	if (pfid->selinux.scon != 0)
+		gsh_free(pfid->selinux.scon);
+#endif
+
 	/* If the fid is related to a xattr, free the related memory */
-	if (pfid->specdata.xattr.xattr_content != NULL &&
-	    pfid->specdata.xattr.xattr_write == true) {
+	if (pfid->fid_type == _9P_FID_XATTR &&
+	    pfid->specdata.xattr.xattr_content != NULL &&
+	    pfid->specdata.xattr.xattr_write == TRUE) {
 		/* Check size give at TXATTRCREATE with
 		 * the one resulting from the writes */
 		if (pfid->specdata.xattr.xattr_size !=
@@ -323,3 +338,98 @@ void _9p_cleanup_fids(struct _9p_conn *conn)
 		}
 	}
 }
+
+#ifdef USE_SELINUX
+int _9p_check_security(struct _9p_fid *pfid, char *class, char *perm)
+{
+	fsal_status_t fsal_status;
+	char *seclabel = alloca(XATTR_BUFFERSIZE);
+	u64 size;
+	int rc;
+	int error;
+
+	/* Is SELinux enabled ? */
+	switch (is_selinux_enabled()) {
+	case 1:
+		break; /* OK */
+	case 0:
+		LogMajor(COMPONENT_SECURITY,
+			 "SElinux security check failed, "
+			 "SElinux is not enabled");
+		return EACCES;
+		break;
+	default:
+		LogCrit(COMPONENT_SECURITY,
+			"Error when calling is_selinux_enabled()");
+		return EACCES;
+		break;
+	}
+
+	/* get seclabel by reading security.seculinux */
+	fsal_status = pfid->pentry->obj_handle->ops->getextattr_value_by_name(
+					pfid->pentry->obj_handle,
+					"security.selinux",
+					seclabel,
+					XATTR_BUFFERSIZE,
+					&size);
+	if (FSAL_IS_ERROR(fsal_status)) {
+		LogEvent(COMPONENT_SECURITY,
+			 "failed to get security.selinux xattr error=(%u,%u)",
+			 fsal_status.major, fsal_status.minor);
+
+		if (fsal_status.minor == ENODATA)
+			LogCrit(COMPONENT_SECURITY,
+				 "Unable to get security.selinux, "
+				 "check if kernel is SElinux ready");
+
+		return _9p_tools_errno(cache_inode_error_convert(fsal_status));
+	}
+
+	/* Call libselinux to check access */
+	rc = selinux_check_access(pfid->selinux.scon,
+				   seclabel,
+				   class,
+				   perm,
+				   NULL);
+	if (rc == -1) {
+		error = errno;
+		LogEvent(COMPONENT_SECURITY,
+			 "selinux_check_access(%s,%s,%s,%s) returned %d errno=%u",
+			 pfid->selinux.scon, seclabel, class, perm,
+			 rc, error);
+		return error;
+	}
+
+	return 0;
+}
+
+int _9p_check_selinux_perm(struct _9p_fid *pfid, char *perm)
+{
+	switch (pfid->pentry->type) {
+	case REGULAR_FILE:
+		return _9p_check_security(pfid, "file", "getattr");
+		break;
+	case CHARACTER_FILE:
+		return _9p_check_security(pfid, "chr_file", "getattr");
+		break;
+	case BLOCK_FILE:
+		return _9p_check_security(pfid, "blk_file", "getattr");
+		break;
+	case SYMBOLIC_LINK:
+		return _9p_check_security(pfid, "lnk_file", "getattr");
+		break;
+	case SOCKET_FILE:
+		return _9p_check_security(pfid, "socket", "getattr");
+		break;
+	case FIFO_FILE:
+		return _9p_check_security(pfid, "lnk_file", "getattr");
+		break;
+	case DIRECTORY:
+		return _9p_check_security(pfid, "dir", "getattr");
+		break;
+	default:
+		break;
+	}
+	return 0; /* Default case, no check */
+}
+#endif

@@ -122,8 +122,19 @@ int _9p_lock(struct _9p_request_data *req9p, void *worker_data,
 		return _9p_rerror(req9p, worker_data, msgtag, EIO, plenout,
 				  preply);
 	}
-	op_ctx = &pfid->op_context;
 
+#ifdef USE_SELINUX
+	int sec_error = 0;
+	if (pfid->op_context.export_perms->options & EXPORT_OPTION_SELINUX) {
+		sec_error = _9p_check_selinux_perm(pfid, "lock");
+		if (sec_error)
+			return _9p_rerror(req9p, worker_data, msgtag,
+					  sec_error, plenout,
+					  preply);
+	}
+#endif
+
+	op_ctx = &pfid->op_context;
 	/* Tmp hook to avoid lock issue when compiling kernels.
 	 * This should not impact ONE client only
 	 * get the client's ip addr */

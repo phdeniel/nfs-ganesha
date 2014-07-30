@@ -97,6 +97,17 @@ int _9p_renameat(struct _9p_request_data *req9p, void *worker_data,
 
 	pnewfid = req9p->pconn->fids[*newfid];
 
+#ifdef USE_SELINUX
+	int sec_error = 0;
+	if (poldfid->op_context.export_perms->options & EXPORT_OPTION_SELINUX) {
+		sec_error = _9p_check_security(poldfid, "file", "rename");
+		if (sec_error)
+			return _9p_rerror(req9p, worker_data, msgtag,
+					  sec_error, plenout,
+					  preply);
+	}
+#endif
+
 	/* Check that it is a valid fid */
 	if (pnewfid == NULL || pnewfid->pentry == NULL) {
 		LogDebug(COMPONENT_9P, "request on invalid fid=%u", *newfid);

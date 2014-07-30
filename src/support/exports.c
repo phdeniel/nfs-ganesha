@@ -182,6 +182,8 @@ static void StrExportOptions(struct export_perms *p_perms, char *buffer)
 			buf += sprintf(buf, ", krb5i");
 		if ((p_perms->options & EXPORT_OPTION_RPCSEC_GSS_PRIV) != 0)
 			buf += sprintf(buf, ", krb5p");
+		if ((p_perms->options & EXPORT_OPTION_SELINUX) != 0)
+			buf += sprintf(buf, ", selinux");
 	}
 }
 

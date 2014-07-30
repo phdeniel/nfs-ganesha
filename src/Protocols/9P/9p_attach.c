@@ -135,6 +135,38 @@ int _9p_attach(struct _9p_request_data *req9p, void *worker_data,
 	pfid->fid = *fid;
 	req9p->pconn->fids[*fid] = pfid;
 
+#ifdef USE_SELINUX
+	struct _9p_fid *pafid = NULL;
+
+	if (*afid != _9P_NOFID) {
+		LogDebug(COMPONENT_SECURITY,
+			 "Fid %u is authenticated by afid %u",
+			 *fid, *afid);
+
+		/* scon is attached to the related afid
+		 * The afid can be clunked after the ATTACH succeeds
+		 * so we allocated a selinux.scon and copy the scon there */
+		pafid =	req9p->pconn->fids[*afid];
+
+		pfid->selinux.scon = gsh_malloc(
+					pafid->selinux.scon_size);
+		if (pfid->selinux.scon == NULL) {
+			err = ENOMEM;
+			goto errout;
+		}
+
+		memcpy(pfid->selinux.scon,
+		       pafid->selinux.scon,
+		       pafid->selinux.scon_size);
+		pfid->selinux.scon_size =
+			 pafid->selinux.scon_size;
+	}
+#else
+	return _9p_rerror(req9p, worker_data, msgtag,
+			  ENOTSUP, plenout, preply);
+#endif
+
+
 	/* Is user name provided as a string or as an uid ? */
 	if (*n_uname != _9P_NONUNAME) {
 		/* Build the fid creds */
@@ -165,6 +197,7 @@ int _9p_attach(struct _9p_request_data *req9p, void *worker_data,
 
 	op_ctx =  &pfid->op_context;
 	export_check_access();
+	op_ctx->export_perms->options |= EXPORT_OPTION_SELINUX; /* @todo BAD */
 
 	if (exppath[0] != '/' ||
 	    !strcmp(exppath, export->fullpath)) {
@@ -201,6 +234,9 @@ int _9p_attach(struct _9p_request_data *req9p, void *worker_data,
 	/* This fid is a special one: it comes from TATTACH */
 	pfid->from_attach = true;
 
+	/* Set type of fid */
+	pfid->fid_type = _9P_FID_REG;
+
 	cache_status = cache_inode_fileid(pfid->pentry, &fileid);
 	if (cache_status != CACHE_INODE_SUCCESS) {
 		err = _9p_tools_errno(cache_status);
@@ -230,6 +266,10 @@ int _9p_attach(struct _9p_request_data *req9p, void *worker_data,
 	return 1;
 
 errout:
+#ifdef USE_SELINUX
+	if (pfid->selinux.scon != NULL)
+		gsh_free(pfid->selinux.scon);
+#endif
 
 	if (export != NULL)
 		put_gsh_export(export);

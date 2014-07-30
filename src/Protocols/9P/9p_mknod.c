@@ -90,6 +90,17 @@ int _9p_mknod(struct _9p_request_data *req9p, void *worker_data,
 
 	pfid = req9p->pconn->fids[*fid];
 
+#ifdef USE_SELINUX
+	int sec_error = 0;
+	if (pfid->op_context.export_perms->options & EXPORT_OPTION_SELINUX) {
+		sec_error = _9p_check_security(pfid, "dir", "add_name");
+		if (sec_error)
+			return _9p_rerror(req9p, worker_data, msgtag,
+					  sec_error, plenout,
+					  preply);
+	}
+#endif
+
 	/* Check that it is a valid fid */
 	if (pfid == NULL || pfid->pentry == NULL) {
 		LogDebug(COMPONENT_9P, "request on invalid fid=%u", *fid);

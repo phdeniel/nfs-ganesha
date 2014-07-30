@@ -81,7 +81,6 @@ set(fsal_CORE_SRCS
    ../FSAL/fsal_config.c
    ../FSAL/default_methods.c
    ../FSAL/common_pnfs.c
-   ../FSAL/common_selinux.c
    ../FSAL/fsal_destroyer.c
    ../FSAL_UP/fsal_up_top.c
    ../FSAL_UP/fsal_up_async.c
@@ -113,9 +112,9 @@ if(USE_9P AND USE_9P_RDMA)
 endif(USE_9P AND USE_9P_RDMA)
 
 # May be redondant, for libselinux is often linked to binaries
-if(USE_9P AND USE_9P_SELINUX)
+if(USE_SELINUX)
   target_link_libraries(ganesha.nfsd  selinux)
-endif(USE_9P AND USE_9P_SELINUX)
+endif(USE_SELINUX)
 
 install(TARGETS ganesha.nfsd COMPONENT daemon DESTINATION bin)
 
