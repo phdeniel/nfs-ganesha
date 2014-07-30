@@ -74,6 +74,10 @@
 
 %global dev_version %{lua: extraver = string.gsub('@GANESHA_EXTRA_VERSION@', '%-', '.'); print(extraver) }
 
+@BCOND_SELINUX@ selinux
+%global use_selinux %{on_off_switch utils}
+
+#%define sourcename nfs-ganesha-2.0-RC5-0.1.1-Source
 %define sourcename @CPACK_SOURCE_PACKAGE_FILE_NAME@
 
 Name:		nfs-ganesha
@@ -119,7 +123,10 @@ Requires(postun): systemd
 %else
 BuildRequires:	initscripts
 %endif
-
+%if %{with selinux}
+BuildRequires: 	libselinux-devel
+Requires:	libselinux
+%endif
 # Use CMake variables
 
 %description
@@ -346,6 +353,7 @@ cmake .	-DCMAKE_BUILD_TYPE=Debug			\
 	-DUSE_LTTNG=%{use_lttng}			\
 	-DUSE_ADMIN_TOOLS=%{use_utils}			\
 	-DUSE_GUI_ADMIN_TOOLS=%{use_gui_utils}		\
+	-DUSE_SELINUX=%{use_selinux}			\
 	-DUSE_FSAL_VFS=ON				\
 	-DUSE_FSAL_PROXY=ON				\
 	-DUSE_DBUS=ON					\

@@ -135,6 +135,18 @@ set(CPACK_COMPONENT_DAEMON_DISPLAY_NAME "NFS-Ganesha daemon")
 include(${CMAKE_SOURCE_DIR}/cmake/cpack_config.cmake)
 include(CPack)
 
+# Find packages and libs we need for building
+include(CheckIncludeFiles)
+include(CheckLibraryExists)
+include(CheckCSourceCompiles)
+include(TestBigEndian)
+
+# Now create a useable specfile
+configure_file(
+  "${PROJECT_SOURCE_DIR}/nfs-ganesha.spec-in.cmake"
+  "${PROJECT_SOURCE_DIR}/nfs-ganesha.spec"
+)
+
 if (FREEBSD)
 #default gcc doesn't like using -Wuninitialized without -O on FreeBSD
     set(PLATFORM "FREEBSD")
@@ -243,6 +255,9 @@ option(USE_NFS_MSK "enable NFS/MSK support" OFF)
 # Enable 9P Support
 option(USE_9P "enable 9P support" ON)
 option(USE_9P_RDMA "enable 9P_RDMA support" OFF)
+
+# Enable SELinux support
+option(USE_SELINUX "enable SElinux server support" OFF)
 
 # This option will stop cmake compilation if a requested FSAL could not be built
 option(STRICT_PACKAGE "Enable strict packaging behavior" OFF )
@@ -421,12 +436,6 @@ ELSE()
       "specify the memory allocator to use: jemalloc|tcmalloc|libc")
   endif( "${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" VERSION_GREATER "2.6" )
 ENDIF()
-
-# Find packages and libs we need for building
-include(CheckIncludeFiles)
-include(CheckLibraryExists)
-include(CheckCSourceCompiles)
-include(TestBigEndian)
 
 check_include_files(stdbool.h HAVE_STDBOOL_H)
 check_include_files(strings.h HAVE_STRINGS_H)
@@ -716,6 +725,20 @@ if(USE_LTTNG)
   endif(LTTNG_FOUND)
 endif(USE_LTTNG)
 
+IF(USE_SELINUX)
+  find_library(LIBSELINUX NAME selinux)
+  check_library_exists(
+		selinux
+		setcon
+		""
+		HAVE_LIBSELINUX
+                )
+  if(NOT HAVE_LIBSELINUX)
+    message(WARNING "Cannot find libselinux. Disabling SELinux server support")
+    set(USE_SELINUX OFF)
+  endif(NOT HAVE_LIBSELINUX)
+ENDIF(USE_SELINUX)
+
 # Cmake 2.6 has issue in managing BISON and FLEX
 if( "${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" VERSION_LESS "2.8" )
    message( status "CMake 2.6 detected, using portability hooks" )
@@ -971,6 +994,7 @@ message(STATUS "TIRPC_EPOLL = ${TIRPC_EPOLL}")
 message(STATUS "USE_9P = ${USE_9P}")
 message(STATUS "_USE_9P = ${_USE_9P}")
 message(STATUS "_USE_9P_RDMA = ${_USE_9P_RDMA}")
+message(STATUS "USE_SELINUX = ${USE_SELINUX}")
 message(STATUS "KRB5_PREFIX = ${KRB5_PREFIX}")
 message(STATUS "CEPH_PREFIX = ${CEPH_PREFIX}")
 message(STATUS "HPSS_PREFIX = ${HPSS_PREFIX}")
@@ -1122,6 +1146,11 @@ set(_USE_9P_RDMA ${_USE_9P_RDMA}
    "enable 9P_RDMA support"
    FORCE)
 
+set(USE_SELINUX ${USE_SELINUX}
+   CACHE BOOL
+   "enable 9P/SELinux server support"
+   FORCE)
+
 set(USE_ADMIN_TOOLS ${USE_ADMIN_TOOLS}
   CACHE BOOL
   "Package Admin Scripts"
@@ -1252,6 +1281,12 @@ if(${ALLOCATOR} STREQUAL "jemalloc")
 else(${ALLOCATOR} STREQUAL "jemalloc")
     set(BCOND_JEMALLOC "%bcond_with")
 endif(${ALLOCATOR} STREQUAL "jemalloc")
+
+if(USE_SELINUX)
+    set(BCOND_SELINUX "%bcond_without")
+else(USE_SELINUX)
+    set(BCOND_SELINUX "%bcond_with")
+endif(USE_SELINUX)
 
 if(USE_ADMIN_TOOLS)
     set(BCOND_UTILS "%bcond_without")
