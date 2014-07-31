@@ -1505,7 +1505,8 @@ static log_levels_t default_log_levels[] = {
 	[COMPONENT_9P_DISPATCH] = NIV_EVENT,
 	[COMPONENT_FSAL_UP] = NIV_EVENT,
 	[COMPONENT_DBUS] = NIV_EVENT,
-	[COMPONENT_NFS_MSK] = NIV_EVENT
+	[COMPONENT_NFS_MSK] = NIV_EVENT,
+	[COMPONENT_SECURITY] = NIV_EVENT
 };
 
 log_levels_t *component_log_level = default_log_levels;
@@ -1618,7 +1619,10 @@ struct log_component_info LogComponents[COMPONENT_COUNT] = {
 		.comp_str = "DBUS",},
 	[COMPONENT_NFS_MSK] = {
 		.comp_name = "COMPONENT_NFS_MSK",
-		.comp_str = "NFS_MSK",}
+		.comp_str = "NFS_MSK",},
+	[COMPONENT_SECURITY] = {
+		.comp_name = "COMPONENT_SECURITY",
+		.comp_str = "SECURITY",}
 };
 
 void DisplayLogComponentLevel(log_components_t component, char *file, int line,
@@ -2101,6 +2105,8 @@ static struct config_item component_levels[] = {
 			 COMPONENT_DBUS, int),
 	CONF_INDEX_TOKEN("COMPONENT_NFS_MSK", NB_LOG_LEVEL, log_levels,
 			 COMPONENT_NFS_MSK, int),
+	CONF_INDEX_TOKEN("SECURITY", NB_LOG_LEVEL, log_levels,
+			 COMPONENT_SECURITY, int),
 	CONFIG_EOL
 };
 
