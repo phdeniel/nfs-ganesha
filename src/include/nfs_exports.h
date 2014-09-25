@@ -166,10 +166,14 @@ typedef struct exportlist_client_entry__ {
 							 */
 #define EXPORT_OPTION_RPCSEC_GSS_PRIV 0x00010000	/*< RPCSEC_GSS PRIVACY
 							    supported	    */
+
+#define EXPORT_OPTION_SELINUX 0x80000000 /*< Server checks with SELinux */
+
 #define EXPORT_OPTION_AUTH_TYPES      (EXPORT_OPTION_AUTH_NONE	     | \
 				       EXPORT_OPTION_AUTH_UNIX	     | \
 				       EXPORT_OPTION_RPCSEC_GSS_NONE | \
 				       EXPORT_OPTION_RPCSEC_GSS_INTG | \
+				       EXPORT_OPTION_SELINUX         | \
 				       EXPORT_OPTION_RPCSEC_GSS_PRIV)
 
 /* Protocol flags */
