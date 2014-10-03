@@ -365,6 +365,12 @@ int _9p_check_security(struct _9p_fid *pfid, char *class, char *perm)
 		break;
 	}
 
+	if (!pfid || !pfid->selinux.scon) {
+		LogEvent(COMPONENT_SECURITY,
+			"Implentation bug : pfid or pfid->scon was NULL");
+		return EINVAL;
+	}
+
 	/* get seclabel by reading security.seculinux */
 	fsal_status = pfid->pentry->obj_handle->ops->getextattr_value_by_name(
 					pfid->pentry->obj_handle,

@@ -106,17 +106,6 @@ int _9p_xattrwalk(struct _9p_request_data *req9p, void *worker_data,
 				  preply);
 	}
 
-#ifdef USE_SELINUX
-	int sec_error = 0;
-	if (pfid->op_context.export_perms->options & EXPORT_OPTION_SELINUX) {
-		sec_error = _9p_check_selinux_perm(pfid, "getattr");
-		if (sec_error)
-			return _9p_rerror(req9p, worker_data, msgtag,
-					  sec_error, plenout,
-					  preply);
-	}
-#endif
-
 	pxattrfid = gsh_calloc(1, sizeof(struct _9p_fid));
 	if (pxattrfid == NULL)
 		return _9p_rerror(req9p, worker_data, msgtag, ENOMEM, plenout,
