@@ -107,6 +107,7 @@ while [[ $# -ge $OPTIND ]]; do
   fi
 done
 
+
 # the "-i" is mandatory to avoid looping on this helper
 EXEC_STRING="/bin/mount -i $switch -t 9p $IPADDR $MNT -o ${opts}access=${access},uname=${uname},msize=${msize},aname=${aname}"
 if [[ -n "$VERBOSE" ]]; then
