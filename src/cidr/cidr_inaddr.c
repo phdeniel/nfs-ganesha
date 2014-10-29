@@ -1,23 +1,29 @@
 /*
  * Functions to convert to/from in[6]_addr structs
  */
-#include "config.h"
 
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include "abstract_mem.h"
-#include "cidr.h"
+#include <arpa/inet.h>
+
+#include "../include/cidr.h"
+
 
 /* Create a struct in_addr with the given v4 address */
-struct in_addr *cidr_to_inaddr(const CIDR * addr, struct in_addr *uptr)
+struct in_addr *cidr_to_inaddr(const CIDR *addr, struct in_addr *uptr)
 {
 	struct in_addr *toret;
+
+	if (addr == NULL) {
+		errno = EFAULT;
+		return NULL;
+	}
 
 	/* Better be a v4 address... */
 	if (addr->proto != CIDR_IPV4) {
 		errno = EPROTOTYPE;
-		return (NULL);
+		return NULL;
 	}
 
 	/*
@@ -27,18 +33,18 @@ struct in_addr *cidr_to_inaddr(const CIDR * addr, struct in_addr *uptr)
 	 */
 	toret = uptr;
 	if (toret == NULL)
-		toret = gsh_malloc(sizeof(struct in_addr));
+		toret = malloc(sizeof(struct in_addr));
 	if (toret == NULL) {
 		errno = ENOMEM;
-		return (NULL);
+		return NULL;
 	}
 	memset(toret, 0, sizeof(struct in_addr));
 
 	/* Add 'em up and stuff 'em in */
 	toret->s_addr = ((addr->addr)[12] << 24)
-	    + ((addr->addr)[13] << 16)
-	    + ((addr->addr)[14] << 8)
-	    + ((addr->addr)[15]);
+			+ ((addr->addr)[13] << 16)
+			+ ((addr->addr)[14] << 8)
+			+ ((addr->addr)[15]);
 
 	/*
 	 * in_addr's are USUALLY used inside sockaddr_in's to do socket
@@ -48,19 +54,25 @@ struct in_addr *cidr_to_inaddr(const CIDR * addr, struct in_addr *uptr)
 	 */
 	toret->s_addr = htonl(toret->s_addr);
 
-	return (toret);
+	return toret;
 }
 
+
 /* Build up a CIDR struct from a given in_addr */
-CIDR *cidr_from_inaddr(const struct in_addr * uaddr)
+CIDR *cidr_from_inaddr(const struct in_addr *uaddr)
 {
 	int i;
 	CIDR *toret;
 	in_addr_t taddr;
 
+	if (uaddr == NULL) {
+		errno = EFAULT;
+		return NULL;
+	}
+
 	toret = cidr_alloc();
 	if (toret == NULL)
-		return (NULL);	/* Preserve errno */
+		return NULL; /* Preserve errno */
 	toret->proto = CIDR_IPV4;
 
 	/*
@@ -71,13 +83,13 @@ CIDR *cidr_from_inaddr(const struct in_addr * uaddr)
 
 	/* Mask these just to be safe */
 	toret->addr[15] = (taddr & 0xff);
-	toret->addr[14] = ((taddr >> 8) & 0xff);
-	toret->addr[13] = ((taddr >> 16) & 0xff);
-	toret->addr[12] = ((taddr >> 24) & 0xff);
+	toret->addr[14] = ((taddr>>8) & 0xff);
+	toret->addr[13] = ((taddr>>16) & 0xff);
+	toret->addr[12] = ((taddr>>24) & 0xff);
 
 	/* Give it a single-host mask */
-	toret->mask[15] = toret->mask[14] = toret->mask[13] = toret->mask[12] =
-	    0xff;
+	toret->mask[15] = toret->mask[14] =
+		toret->mask[13] = toret->mask[12] = 0xff;
 
 	/* Standard v4 overrides of addr and mask for mapped form */
 	for (i = 0; i <= 9; i++)
@@ -88,14 +100,20 @@ CIDR *cidr_from_inaddr(const struct in_addr * uaddr)
 		toret->mask[i] = 0xff;
 
 	/* That's it */
-	return (toret);
+	return toret;
 }
 
+
 /* Create a struct in5_addr with the given v6 address */
-struct in6_addr *cidr_to_in6addr(const CIDR * addr, struct in6_addr *uptr)
+struct in6_addr *cidr_to_in6addr(const CIDR *addr, struct in6_addr *uptr)
 {
 	struct in6_addr *toret;
 	int i;
+
+	if (addr == NULL) {
+		errno = EFAULT;
+		return NULL;
+	}
 
 	/*
 	 * Note: We're allowing BOTH IPv4 and IPv6 addresses to go through
@@ -108,16 +126,16 @@ struct in6_addr *cidr_to_in6addr(const CIDR * addr, struct in6_addr *uptr)
 	 */
 	if (addr->proto != CIDR_IPV6 && addr->proto != CIDR_IPV4) {
 		errno = EPROTOTYPE;
-		return (NULL);
+		return NULL;
 	}
 
 	/* Use their struct if they gave us one */
 	toret = uptr;
 	if (toret == NULL)
-		toret = gsh_malloc(sizeof(struct in6_addr));
+		toret = malloc(sizeof(struct in6_addr));
 	if (toret == NULL) {
 		errno = ENOMEM;
-		return (NULL);
+		return NULL;
 	}
 	memset(toret, 0, sizeof(struct in6_addr));
 
@@ -134,18 +152,24 @@ struct in6_addr *cidr_to_in6addr(const CIDR * addr, struct in6_addr *uptr)
 	for (i = 0; i <= 15; i++)
 		toret->s6_addr[i] = addr->addr[i];
 
-	return (toret);
+	return toret;
 }
 
+
 /* And create up a CIDR struct from a given in6_addr */
-CIDR *cidr_from_in6addr(const struct in6_addr * uaddr)
+CIDR *cidr_from_in6addr(const struct in6_addr *uaddr)
 {
 	int i;
 	CIDR *toret;
 
+	if (uaddr == NULL) {
+		errno = EFAULT;
+		return NULL;
+	}
+
 	toret = cidr_alloc();
 	if (toret == NULL)
-		return (NULL);	/* Preserve errno */
+		return NULL; /* Preserve errno */
 	toret->proto = CIDR_IPV6;
 
 	/*
@@ -157,5 +181,5 @@ CIDR *cidr_from_in6addr(const struct in6_addr * uaddr)
 		toret->mask[i] = 0xff;
 	}
 
-	return (toret);
+	return toret;
 }

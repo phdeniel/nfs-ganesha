@@ -15,6 +15,7 @@ SET(cidr_STAT_SRCS
    cidr_pow2_p.h
 )
 
+
 add_library(cidr STATIC ${cidr_STAT_SRCS})
 
 ########### install files ###############

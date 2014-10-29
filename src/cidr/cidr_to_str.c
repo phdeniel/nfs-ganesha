@@ -2,24 +2,22 @@
  * cidr_to_str() - Generate a textual representation of the given CIDR
  * subnet.
  */
-#include "config.h"
 
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "cidr.h"
-#include "abstract_mem.h"
+#include "../include/cidr.h"
 
-char *cidr_to_str(const CIDR * block, int flags)
+char *cidr_to_str(const CIDR *block, int flags)
 {
 	int i;
 	int zst, zcur, zlen, zmax;
 	short pflen;
-	short lzer;		/* Last zero */
+	short lzer; /* Last zero */
 	char *toret;
-	char tmpbuf[128];	/* We shouldn't need more than ~5 anywhere */
+	char tmpbuf[128]; /* We shouldn't need more than ~5 anywhere */
 	CIDR *nmtmp;
 	char *nmstr;
 	int nmflags;
@@ -27,9 +25,9 @@ char *cidr_to_str(const CIDR * block, int flags)
 	uint16_t v6sect;
 
 	/* Just in case */
-	if (block->proto == CIDR_NOPROTO) {
+	if ((block == NULL) || (block->proto == CIDR_NOPROTO)) {
 		errno = EINVAL;
-		return (NULL);
+		return NULL;
 	}
 
 	/*
@@ -38,7 +36,7 @@ char *cidr_to_str(const CIDR * block, int flags)
 	 */
 	if ((flags & CIDR_ONLYADDR) && (flags & CIDR_ONLYPFLEN)) {
 		errno = EINVAL;
-		return (NULL);
+		return NULL;
 	}
 
 	/*
@@ -54,10 +52,10 @@ char *cidr_to_str(const CIDR * block, int flags)
 	 * consumers of the library can count on this behavior...  well, I
 	 * haven't decided yet.  Lemme alone.
 	 */
-	toret = gsh_malloc(128);
+	toret = malloc(128);
 	if (toret == NULL) {
 		errno = ENOMEM;
-		return (NULL);
+		return NULL;
 	}
 	memset(toret, 0, 128);
 
@@ -66,23 +64,24 @@ char *cidr_to_str(const CIDR * block, int flags)
 	 * octets, and just proceed from there.
 	 */
 	if ((block->proto == CIDR_IPV4 && !(flags & CIDR_FORCEV6))
-	    || (flags & CIDR_FORCEV4)) {
+	   || (flags & CIDR_FORCEV4)) {
 		/* First off, creating the in-addr.arpa form is special */
 		if (flags & CIDR_REVERSE) {
 			/*
-			 * Build the d.c.b.a.in-addr.arpa form.  Note that we ignore
-			 * flags like CIDR_VERBOSE and the like here, since they lead
-			 * to non-valid reverse paths (or at least, paths that no DNS
-			 * implementation will look for).  So it pretty much always
-			 * looks exactly the same.  Also, we don't mess with dealing
-			 * with netmaks or anything here; we just assume it's a
-			 * host address, and treat it as such.
+			 * Build the d.c.b.a.in-addr.arpa form.  Note that we
+			 * ignore flags like CIDR_VERBOSE and the like here,
+			 * since they lead to non-valid reverse paths (or at
+			 * least, paths that no DNS implementation will look
+			 * for).  So it pretty much always looks exactly the
+			 * same.  Also, we don't mess with dealing with netmaks
+			 * or anything here; we just assume it's a host address,
+			 * and treat it as such.
 			 */
 
 			sprintf(toret, "%d.%d.%d.%d.in-addr.arpa",
-				block->addr[15], block->addr[14],
-				block->addr[13], block->addr[12]);
-			return (toret);
+					block->addr[15], block->addr[14],
+					block->addr[13], block->addr[12]);
+			return toret;
 		}
 
 		/* Are we bothering to show the address? */
@@ -92,7 +91,7 @@ char *cidr_to_str(const CIDR * block, int flags)
 				if (flags & CIDR_NOCOMPACT) {
 					if (flags & CIDR_VERBOSE)
 						strcat(toret,
-						       "0000:0000:0000:0000:0000:");
+						 "0000:0000:0000:0000:0000:");
 					else
 						strcat(toret, "0:0:0:0:0:");
 				} else
@@ -107,9 +106,8 @@ char *cidr_to_str(const CIDR * block, int flags)
 					}
 				} else
 					strcat(toret, "ffff:");
-			}
+			} /* USEV6 */
 
-			/* USEV6 */
 			/* Now, slap on the v4 address */
 			for (i = 12; i <= 15; i++) {
 				sprintf(tmpbuf, "%u", (block->addr)[i]);
@@ -117,14 +115,13 @@ char *cidr_to_str(const CIDR * block, int flags)
 				if (i < 15)
 					strcat(toret, ".");
 			}
-		}
+		} /* ! ONLYPFLEN */
 
-		/* ! ONLYPFLEN */
 		/* Are we bothering to show the pf/mask? */
 		if (!(flags & CIDR_ONLYADDR)) {
 			/*
-			 * And the prefix/netmask.  Don't show the '/' if we're only
-			 * showing the pflen/mask.
+			 * And the prefix/netmask.  Don't show the '/'
+			 * if we're only showing the pflen/mask.
 			 */
 			if (!(flags & CIDR_ONLYPFLEN))
 				strcat(toret, "/");
@@ -132,8 +129,8 @@ char *cidr_to_str(const CIDR * block, int flags)
 			/* Which are we showing? */
 			if (flags & CIDR_NETMASK) {
 				/*
-				 * In this case, we can just print out like the address
-				 * above.
+				 * In this case, we can just print out like
+				 * the address above.
 				 */
 				for (i = 12; i <= 15; i++) {
 					moct = (block->mask)[i];
@@ -151,8 +148,8 @@ char *cidr_to_str(const CIDR * block, int flags)
 				 */
 				pflen = cidr_get_pflen(block);
 				if (pflen == -1) {
-					gsh_free(toret);
-					return (NULL);	/* Preserve errno */
+					free(toret);
+					return NULL; /* Preserve errno */
 				}
 				/* Special handling for forced modes */
 				if (block->proto == CIDR_IPV6
@@ -160,25 +157,23 @@ char *cidr_to_str(const CIDR * block, int flags)
 					pflen -= 96;
 
 				sprintf(tmpbuf, "%u",
-					(flags & CIDR_USEV6) ? pflen +
-					96 : pflen);
+				     (flags & CIDR_USEV6) ? pflen+96 : pflen);
 
 				strcat(toret, tmpbuf);
 			}
-		}
+		} /* ! ONLYADDR */
 
-		/* ! ONLYADDR */
 		/* That's it for a v4 address, in any of our forms */
 	} else if ((block->proto == CIDR_IPV6 && !(flags & CIDR_FORCEV4))
-		   || (flags & CIDR_FORCEV6)) {
+		    || (flags & CIDR_FORCEV6)) {
 		/* First off, creating the .ip6.arpa form is special */
 		if (flags & CIDR_REVERSE) {
 			/*
-			 * Build the ...ip6.arpa form.  See notes in the CIDR_REVERSE
-			 * section of PROTO_IPV4 above for various notes.
+			 * Build the ...ip6.arpa form.  See notes in the
+			 * CIDR_REVERSE section of PROTO_IPV4 above
+			 * for various notes.
 			 */
-			sprintf(toret,
-				"%x.%x.%x.%x.%x.%x.%x.%x.%x.%x.%x.%x."
+			sprintf(toret, "%x.%x.%x.%x.%x.%x.%x.%x.%x.%x.%x.%x."
 				"%x.%x.%x.%x.%x.%x.%x.%x.%x.%x.%x.%x.%x.%x.%x."
 				"%x.%x.%x.%x.%x.ip6.arpa",
 				block->addr[15] & 0x0f, block->addr[15] >> 4,
@@ -187,31 +182,33 @@ char *cidr_to_str(const CIDR * block, int flags)
 				block->addr[12] & 0x0f, block->addr[12] >> 4,
 				block->addr[11] & 0x0f, block->addr[11] >> 4,
 				block->addr[10] & 0x0f, block->addr[10] >> 4,
-				block->addr[9] & 0x0f, block->addr[9] >> 4,
-				block->addr[8] & 0x0f, block->addr[8] >> 4,
-				block->addr[7] & 0x0f, block->addr[7] >> 4,
-				block->addr[6] & 0x0f, block->addr[6] >> 4,
-				block->addr[5] & 0x0f, block->addr[5] >> 4,
-				block->addr[4] & 0x0f, block->addr[4] >> 4,
-				block->addr[3] & 0x0f, block->addr[3] >> 4,
-				block->addr[2] & 0x0f, block->addr[2] >> 4,
-				block->addr[1] & 0x0f, block->addr[1] >> 4,
-				block->addr[0] & 0x0f, block->addr[0] >> 4);
-			return (toret);
+				block->addr[9]  & 0x0f, block->addr[9]  >> 4,
+				block->addr[8]  & 0x0f, block->addr[8]  >> 4,
+				block->addr[7]  & 0x0f, block->addr[7]  >> 4,
+				block->addr[6]  & 0x0f, block->addr[6]  >> 4,
+				block->addr[5]  & 0x0f, block->addr[5]  >> 4,
+				block->addr[4]  & 0x0f, block->addr[4]  >> 4,
+				block->addr[3]  & 0x0f, block->addr[3]  >> 4,
+				block->addr[2]  & 0x0f, block->addr[2]  >> 4,
+				block->addr[1]  & 0x0f, block->addr[1]  >> 4,
+				block->addr[0]  & 0x0f, block->addr[0]  >> 4);
+			return toret;
 		}
 		/* Are we showing the address part? */
 		if (!(flags & CIDR_ONLYPFLEN)) {
 			/* It's a simple, boring, normal v6 address */
 
-			/* First, find the longest string of 0's, if there is one */
+			/* First, find the longest string of 0's,
+			 *  if there is one */
 			zst = zcur = -1;
 			zlen = zmax = 0;
 			for (i = 0; i <= 15; i += 2) {
 				if (block->addr[i] == 0
-				    && block->addr[i + 1] == 0) {
+				    && block->addr[i+1] == 0) {
 					/* This section is zero */
 					if (zcur != -1) {
-						/* We're already in a block of 0's */
+						/* We're already in a block
+						 *  of 0's */
 						zlen++;
 					} else {
 						/* Starting a new block */
@@ -222,23 +219,26 @@ char *cidr_to_str(const CIDR * block, int flags)
 					/* This section is non-zero */
 					if (zcur != -1) {
 						/*
-						 * We were in 0's.  See if we set a new record,
-						 * and if we did, note it and move on.
+						 * We were in 0's.
+						 * See if we set a new record,
+						 * and if we did, note it and
+						 * move on.
 						 */
 						if (zlen > zmax) {
 							zst = zcur;
 							zmax = zlen;
 						}
 
-						/* We're out of 0's, so reset start */
+						/* We're out of 0's,
+						 *  so reset start */
 						zcur = -1;
 					}
 				}
 			}
 
 			/*
-			 * If zcur is !=-1, we were in 0's when the loop ended.  Redo
-			 * the "if we have a record, update" logic.
+			 * If zcur is !=-1, we were in 0's when the loop ended.
+			 * Redo the "if we have a record, update" logic.
 			 */
 			if (zcur != -1 && zlen > zmax) {
 				zst = zcur;
@@ -246,49 +246,50 @@ char *cidr_to_str(const CIDR * block, int flags)
 			}
 
 			/*
-			 * Now, what makes it HARD is the options we have.  To make
-			 * some things simpler, we'll take two octets at a time for
-			 * our run through.
+			 * Now, what makes it HARD is the options we have.
+			 * To make some things simpler, we'll take two octets at
+			 * a time for our run through.
 			 */
 			lzer = 0;
 			for (i = 0; i <= 15; i += 2) {
 				/*
-				 * Start with a cheat; if this begins our already-found
-				 * longest block of 0's, and we're not NOCOMPACT'ing,
-				 * stick in a ::, increment past them, and keep on
-				 * playing.
+				 * Start with a cheat; if this begins our
+				 * already-found longest block of 0's, and we're
+				 * not NOCOMPACT'ing, stick in a ::, increment
+				 * past them, and keep on playing.
 				 */
 				if (i == zst && !(flags & CIDR_NOCOMPACT)) {
 					strcat(toret, "::");
-					i += (zmax * 2) - 2;
+					i += (zmax*2)-2;
 					lzer = 1;
 					continue;
 				}
 
 				/*
-				 * First, if we're not the first set, we may need a :
-				 * before us.  If we're not compacting, we always want
-				 * it.  If we ARE compacting, we want it unless the
-				 * previous octet was a 0 that we're minimizing.
+				 * First, if we're not the first set, we may
+				 * need a : before us.  If we're not compacting,
+				 * we always want it.  If we ARE compacting, we
+				 * want it unless the previous octet was a 0
+				 * that we're minimizing.
 				 */
-				if (i != 0
-				    && ((flags & CIDR_NOCOMPACT) || lzer == 0))
+				if (i != 0 && ((flags & CIDR_NOCOMPACT)
+				    || lzer == 0))
 					strcat(toret, ":");
-				lzer = 0;	/* Reset */
+				lzer = 0; /* Reset */
 
 				/*
-				 * From here on, we no longer have to worry about
-				 * CIDR_NOCOMPACT.
+				 * From here on, we no longer have to worry
+				 * about CIDR_NOCOMPACT.
 				 */
 
 				/* Combine the pair of octets into one number */
 				v6sect = 0;
 				v6sect |= (block->addr)[i] << 8;
-				v6sect |= (block->addr)[i + 1];
+				v6sect |= (block->addr)[i+1];
 
 				/*
-				 * If we're being VERBOSE, use leading 0's.  Otherwise,
-				 * only use as many digits as we need.
+				 * If we're being VERBOSE, use leading 0's.
+				 * Otherwise, only use as many digits as we need
 				 */
 				if (flags & CIDR_VERBOSE)
 					sprintf(tmpbuf, "%.4x", v6sect);
@@ -296,42 +297,45 @@ char *cidr_to_str(const CIDR * block, int flags)
 					sprintf(tmpbuf, "%x", v6sect);
 				strcat(toret, tmpbuf);
 
-				/* And loop back around to the next 2-octet set */
-			}	/* for(each 16-bit set) */
-		}
+				/* And loop back around to the
+				 *  next 2-octet set */
+			} /* for (each 16-bit set) */
+		} /* ! ONLYPFLEN */
 
-		/* ! ONLYPFLEN */
 		/* Prefix/netmask */
 		if (!(flags & CIDR_ONLYADDR)) {
-			/* Only show the / if we're not showing just the prefix */
+			/* Only show the / if we're not showing
+			 * just the prefix */
 			if (!(flags & CIDR_ONLYPFLEN))
 				strcat(toret, "/");
 
 			if (flags & CIDR_NETMASK) {
 				/*
-				 * We already wrote how to build the whole v6 form, so
-				 * just call ourselves recurively for this.
+				 * We already wrote how to build the whole v6
+				 * form, so just call ourselves recurively
+				 * for this.
 				 */
 				nmtmp = cidr_alloc();
 				if (nmtmp == NULL) {
-					gsh_free(toret);
-					return (NULL);	/* Preserve errno */
+					free(toret);
+					return NULL; /* Preserve errno */
 				}
 				nmtmp->proto = block->proto;
 				for (i = 0; i <= 15; i++)
 					if (flags & CIDR_WILDCARD)
 						nmtmp->addr[i] =
-						    ~(block->mask[i]);
+							~(block->mask[i]);
 					else
-						nmtmp->addr[i] = block->mask[i];
+						nmtmp->addr[i] =
+							 block->mask[i];
 
 				/*
 				 * Strip flags:
 				 * - CIDR_NETMASK would make us recurse forever.
-				 * - CIDR_ONLYPFLEN would not show the address bit, which
-				 *   is the part we want here.
-				 * Add flag CIDR_ONLYADDR because that's the bit we care
-				 * about.
+				 * - CIDR_ONLYPFLEN would not show the address
+				 *   bit, which is the part we want here.
+				 * Add flag CIDR_ONLYADDR because that's the bit
+				 * we care about.
 				 */
 				nmflags = flags;
 				nmflags &= ~(CIDR_NETMASK) & ~(CIDR_ONLYPFLEN);
@@ -339,21 +343,22 @@ char *cidr_to_str(const CIDR * block, int flags)
 				nmstr = cidr_to_str(nmtmp, nmflags);
 				cidr_free(nmtmp);
 				if (nmstr == NULL) {
-					gsh_free(toret);
-					return (NULL);	/* Preserve errno */
+					free(toret);
+					return NULL; /* Preserve errno */
 				}
 
-				/* No need to strip the prefix, it doesn't have it */
+				/* No need to strip the prefix,
+				 *  it doesn't have it */
 
 				/* Just add it on */
 				strcat(toret, nmstr);
-				gsh_free(nmstr);
+				free(nmstr);
 			} else {
 				/* Just figure the and show prefix length */
 				pflen = cidr_get_pflen(block);
 				if (pflen == -1) {
-					gsh_free(toret);
-					return (NULL);	/* Preserve errno */
+					free(toret);
+					return NULL; /* Preserve errno */
 				}
 				/* Special handling for forced modes */
 				if (block->proto == CIDR_IPV4
@@ -363,14 +368,14 @@ char *cidr_to_str(const CIDR * block, int flags)
 				sprintf(tmpbuf, "%u", pflen);
 				strcat(toret, tmpbuf);
 			}
-		}		/* ! ONLYADDR */
+		} /* ! ONLYADDR */
 	} else {
 		/* Well, *I* dunno what the fuck it is */
-		gsh_free(toret);
-		errno = ENOENT;	/* Bad choice of errno */
-		return (NULL);
+		free(toret);
+		errno = ENOENT; /* Bad choice of errno */
+		return NULL;
 	}
 
 	/* Give back the string */
-	return (toret);
+	return toret;
 }
