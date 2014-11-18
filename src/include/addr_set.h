@@ -18,3 +18,5 @@ int cidr_to_addr_set(CIDR *cidr, struct ip_addr_set **set);
 void free_ip_addr_set(struct ip_addr_set *set);
 struct ip_addr_set *alloc_ip_addr_set(void);
 struct ip_addr_set *alloc_ip_addr_set(void);
+int nl_name_to_addr_set(char *hostname,
+			void *other);

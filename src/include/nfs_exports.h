@@ -74,8 +74,9 @@ typedef enum exportlist_client_type__ {
 	WILDCARDHOST_CLIENT = 4,
 	GSSPRINCIPAL_CLIENT = 5,
 	HOSTIF_CLIENT_V6 = 6,
-	MATCH_ANY_CLIENT = 7,
-	BAD_CLIENT = 8
+	ADDR_SET_CLIENT = 7,
+	MATCH_ANY_CLIENT = 8,
+	BAD_CLIENT = 9
 } exportlist_client_type_t;
 
 struct global_export_perms {

@@ -265,6 +265,14 @@ int hostnamev4_to_addr_set(char *hostname,
 	return addr_to_addr_set(&addr, set);
 }
 
+int nl_name_to_addr_set(char *hostname,
+			void *other)
+{
+	printf("====> %s\n", hostname);
+	return hostnamev4_to_addr_set(hostname,
+				      (struct ip_addr_set **)other);
+}
+
 /**
  * @brief Free an address set
  *
