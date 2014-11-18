@@ -40,6 +40,7 @@
 #include "config.h"
 #include <stdlib.h>
 #include <stdbool.h>
+#include <netdb.h>
 #include "abstract_mem.h"
 #include "addr_set.h"
 #include "log.h"
@@ -75,7 +76,7 @@ void foreach_addr_in_set(struct ip_addr_set *set,
  * @return true if in set, false otherwise
  */
 
-bool in_addr_set(struct ip_addr_set *set,
+bool is_in_addr_set(struct ip_addr_set *set,
 		    struct sockaddr_storage *sock)
 {
 	CIDR *cidr_tmp;
@@ -202,7 +203,7 @@ int cidr_to_addr_set(CIDR *cidr, struct ip_addr_set **set)
  * @param set  [IN/OUT] - call by reference to the set in question.
  *
  * @return 0 if added, < 0 (-errno) on failure.
- * 
+ *
  */
 
 int addr_to_addr_set(struct sockaddr_storage *sock,
@@ -233,12 +234,45 @@ int addr_to_addr_set(struct sockaddr_storage *sock,
 }
 
 /**
+ * @brief Resolves hostname and adds IP address to the address set.
+ *
+ * The address set is a CIDR subnet with a bitmap for the host
+ * range. The set param is call by reference so it can return
+ * a new set if the reference == NULL.  The sock must be within the
+ * subnet of the set in order to be added.  If it is outside the
+ * range and the subnet cannot be expanded to handle it, return NULL.
+ * A NULL return can then be handled by a second call with *set == NULL.
+ *
+ * @param hostname [IN] - The hostname to be converted to IPv4
+ * @param set  [IN/OUT] - call by reference to the set in question.
+ *
+ * @return 0 if added, < 0 (-errno) on failure.
+ *
+ */
+
+int hostnamev4_to_addr_set(char *hostname,
+			struct ip_addr_set **set)
+{
+	struct sockaddr_storage addr;
+	struct hostent *hp = NULL;
+
+	hp = gethostbyname(hostname);
+	if (hp == NULL)
+		return -EINVAL;
+
+	memcpy((char *)&addr, hp->h_addr, hp->h_length);
+
+	return addr_to_addr_set(&addr, set);
+}
+
+/**
  * @brief Free an address set
  *
  * @param set - the set to be freed
  */
 
-void free_ip_addr_set(struct ip_addr_set *set) {
+void free_ip_addr_set(struct ip_addr_set *set)
+{
 	if (set->subnet != NULL)
 		cidr_free(set->subnet);
 	if (set->bitmap != NULL)
@@ -246,4 +280,37 @@ void free_ip_addr_set(struct ip_addr_set *set) {
 	gsh_free(set);
 }
 
+
+/**
+ * @brief Allocates an address set
+ *
+ * @param nothing (void function)
+ *
+ * @return the allocated ip_addr_set or NULL is an error occurred
+ *
+ */
+
+struct ip_addr_set *alloc_ip_addr_set(void)
+{
+	struct ip_addr_set *set = NULL;
+
+	set = gsh_malloc(sizeof(struct ip_addr_set));
+	if (set == NULL)
+		return NULL;
+
+	set->subnet = gsh_malloc(sizeof(CIDR));
+	if (set->subnet	== NULL) {
+		gsh_free(set);
+		return NULL;
+	}
+
+	set->bitmap = gsh_malloc(sizeof(uint32_t));
+	if (set->bitmap == NULL) {
+		gsh_free(set->subnet);
+		gsh_free(set);
+		return NULL;
+	}
+
+	return set;
+}
 /** @} */
