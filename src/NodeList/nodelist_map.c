@@ -23,6 +23,7 @@ int nl_map(nl_nl_t *nodelist,
 {
 
 	int fstatus = 0;
+	int final_status = 0;
 
 	nl_nl_t *nlist;
 
@@ -96,12 +97,12 @@ int nl_map(nl_nl_t *nodelist,
 			gsh_free(node_string);
 		}
 		if (fstatus != 0)
-			break;
+			final_status = fstatus;
 
 		nlist = nlist->next;
 	}
 
-	return fstatus;
+	return final_status;
 }
 
 
