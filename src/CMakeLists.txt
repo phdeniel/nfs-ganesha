@@ -214,6 +214,9 @@ option(DEBUG_SYMS "include debug symbols to binaries (-g option)" OFF)
 # Add coverage information to build tree
 option(COVERAGE "add flag to generate coverage data at runtime" OFF)
 
+# Adds variables in configuration file
+option(VARIABLE_CONFIG "adds variables in configuration file" OFF)
+
 # enable code profiling [-g -pg]
 option(PROFILING "turn on code profiling (-g and -pg)" OFF)
 
@@ -943,6 +946,7 @@ message(STATUS "DEBUG_SAL = ${DEBUG_SAL}")
 message(STATUS "PROXY_HANDLE_MAPPING = ${PROXY_HANDLE_MAPPING}")
 message(STATUS "DEBUG_SYMS = ${DEBUG_SYMS}")
 message(STATUS "COVERAGE = ${COVERAGE}")
+message(STATUS "VARIABLE_CONFIG = ${VARIABLE_CONFIG}")
 message(STATUS "PROFILING = ${PROFILING}")
 message(STATUS "USE_GSS = ${USE_GSS}")
 message(STATUS "TIRPC_EPOLL = ${TIRPC_EPOLL}")

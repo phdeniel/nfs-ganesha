@@ -50,6 +50,7 @@
 #cmakedefine HAVE_INCLUDE_LIBLUSTREAPI_H 1
 #cmakedefine HAVE_DAEMON 1
 #cmakedefine USE_LTTNG 1
+#cmakedefine VARIABLE_CONFIG 1
 
 #define NFS_GANESHA 1
 

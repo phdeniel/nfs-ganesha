@@ -20,7 +20,6 @@
 #endif
 
 /* Alias for the dirty wrap */
-
 #define ganeshun_yyerror ganesha_yyerror
 
 /* Our versions of parser macros */
@@ -54,6 +53,7 @@ static char *filter_string(char *src, int esc);
 static int new_file(char *filename,
 	     struct parser_state *st);
 static int pop_file(struct parser_state *st);
+static char *env_var_deref( char *in );
 
 %}
 
@@ -70,7 +70,7 @@ VAL_CHAR     [^ \t\r\n\f;"'#]
 COMMENTEXT	 #.*$
 /* lettre posant probleme dans une chaine */
 STRING_CHAR       [^\n]
-IDENTIFIER [a-zA-Z_][a-zA-Z0-9_\-]*
+IDENTIFIER [\$a-zA-Z_][a-zA-Z0-9_\-]*
 
 /* INCLUDE state is used for picking the name of the include file */
 %START YY_INIT BLOCK IN_BLOCK STMT_OR_SUB_BLOCK VALUE ENDVALUE QUOTE_STR LIT_STRING INCLUDE
@@ -214,6 +214,13 @@ IDENTIFIER [a-zA-Z_][a-zA-Z0-9_\-]*
 	DEBUG_LEX("token value:%s",yytext);
 	BEGIN ENDVALUE;
 	yylval->token = gsh_strdup(yytext);
+#ifdef VARIABLE_CONFIG
+	if (yylval->token[0] == '$') {
+		yylval->token = env_var_deref(yytext);
+		if (yylval->token == NULL)
+			return _ERROR_;
+	}
+#endif
 	return KEYVALUE;
 }
 
@@ -495,3 +502,21 @@ static int pop_file(struct parser_state *st)
 	st->current_file = st->curbs->filename;
 	return 1;
 }
+
+/**
+ * Replaces a environment variable "$variable_name" by its value
+ */
+static char *env_var_deref( char *inout )
+{
+	char *env_var_val = NULL;
+
+	/* inout is a environment variable
+	 * do not forget the leading $ */
+	env_var_val = getenv(inout+1);
+
+	/* et variable will result in a NULL returned value */
+	return env_var_val;
+
+}
+
+
