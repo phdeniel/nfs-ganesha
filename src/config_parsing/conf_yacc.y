@@ -256,6 +256,24 @@ void link_node(struct config_node *node)
 }
 
 /**
+ * Replaces a environment variable "$variable_name" by its value
+ */
+int env_var_deref( char *inout )
+{
+	char * env_var_val = NULL;
+
+	/* inout is a environment variable
+	 * do not forget the leading $ */
+	env_var_val = getenv(inout+1);
+	if (env_var_val == NULL)
+		return -1;
+
+	inout = gsh_realloc(inout, strlen(env_var_val)+1);
+	strcpy( inout, env_var_val);
+	return 0;
+}
+
+/**
  *  Create a key=value peer (assignment)
  */
 struct config_node *config_stmt(char *varname,
@@ -266,6 +284,17 @@ struct config_node *config_stmt(char *varname,
 {
 	struct config_node *node;
 
+#ifdef VARIABLE_CONFIG
+	/* check for variables to dererence */
+	if (varname[0] == '$') {
+		if (env_var_deref(varname) != 0)
+			return NULL;
+	}
+	if (varval[0] == '$') {
+		if (env_var_deref(varval) != 0)
+			return NULL;
+	}
+#endif
 	node = gsh_calloc(1, sizeof(struct config_node));
 	if (node == NULL) {
 		st->err_type->resource = true;
