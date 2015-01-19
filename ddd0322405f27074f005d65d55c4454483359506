@@ -2,6 +2,23 @@
   "comments": [
     {
       "key": {
+        "uuid": "da2a55be_de30e1ea",
+        "filename": "src/CMakeLists.txt",
+        "patchSetId": 1
+      },
+      "lineNbr": 1247,
+      "author": {
+        "id": 1003523
+      },
+      "writtenOn": "2015-01-19T15:58:11Z",
+      "side": 1,
+      "message": "Breaks at 80 chars, do we care about that for CMakeLists.txt ?",
+      "revId": "ddd0322405f27074f005d65d55c4454483359506",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "da2a55be_3eff7d03",
         "filename": "src/nfs-ganesha.spec-in.cmake",
         "patchSetId": 1
@@ -13,6 +30,24 @@
       "writtenOn": "2015-01-19T15:26:14Z",
       "side": 1,
       "message": "mixed tab and spaces?",
+      "revId": "ddd0322405f27074f005d65d55c4454483359506",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "da2a55be_3e9bfdca",
+        "filename": "src/nfs-ganesha.spec-in.cmake",
+        "patchSetId": 1
+      },
+      "lineNbr": 404,
+      "author": {
+        "id": 1003523
+      },
+      "writtenOn": "2015-01-19T15:58:11Z",
+      "side": 1,
+      "message": "Actually, I think it would be even nicer if cmake takes care of installing all these files. But well, that\u0027s something for an other patch.",
+      "parentUuid": "da2a55be_3eff7d03",
       "revId": "ddd0322405f27074f005d65d55c4454483359506",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
