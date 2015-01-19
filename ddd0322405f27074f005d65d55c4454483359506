@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "da2a55be_3eff7d03",
+        "filename": "src/nfs-ganesha.spec-in.cmake",
+        "patchSetId": 1
+      },
+      "lineNbr": 404,
+      "author": {
+        "id": 1003556
+      },
+      "writtenOn": "2015-01-19T15:26:14Z",
+      "side": 1,
+      "message": "mixed tab and spaces?",
+      "revId": "ddd0322405f27074f005d65d55c4454483359506",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    }
+  ]
+}
