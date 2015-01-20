@@ -19,6 +19,24 @@
     },
     {
       "key": {
+        "uuid": "9a245df4_7099266e",
+        "filename": "src/CMakeLists.txt",
+        "patchSetId": 1
+      },
+      "lineNbr": 1247,
+      "author": {
+        "id": 1003517
+      },
+      "writtenOn": "2015-01-20T08:20:26Z",
+      "side": 1,
+      "message": "I think we should.\nI just pushed a fix for that (see patchset 2)",
+      "parentUuid": "da2a55be_de30e1ea",
+      "revId": "ddd0322405f27074f005d65d55c4454483359506",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "da2a55be_3eff7d03",
         "filename": "src/nfs-ganesha.spec-in.cmake",
         "patchSetId": 1
@@ -48,6 +66,24 @@
       "side": 1,
       "message": "Actually, I think it would be even nicer if cmake takes care of installing all these files. But well, that\u0027s something for an other patch.",
       "parentUuid": "da2a55be_3eff7d03",
+      "revId": "ddd0322405f27074f005d65d55c4454483359506",
+      "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9a245df4_30884e22",
+        "filename": "src/nfs-ganesha.spec-in.cmake",
+        "patchSetId": 1
+      },
+      "lineNbr": 404,
+      "author": {
+        "id": 1003517
+      },
+      "writtenOn": "2015-01-20T08:20:26Z",
+      "side": 1,
+      "message": "Usually, rpm install binary files as well as configuration environment (and related files are listed in %files \u003csubpackage\u003e stanzas. \n\nWe probably should discuss this on the list.",
+      "parentUuid": "da2a55be_3e9bfdca",
       "revId": "ddd0322405f27074f005d65d55c4454483359506",
       "serverId": "d5d70762-12d0-45a1-890d-524b12d3f735",
       "unresolved": false
