@@ -1,0 +1,9 @@
+Code-Review+1: Dominique Martinet <dominique.martinet@cea.fr>
+Code-Review+1: Niels de Vos <ndevos@redhat.com>
+Code-Review+2: Philippe DENIEL <philippe.deniel@cea.fr>
+Verified+1: Philippe DENIEL <philippe.deniel@cea.fr>
+Submitted-by: Philippe DENIEL <philippe.deniel@cea.fr>
+Submitted-at: Tue, 20 Jan 2015 14:22:03 +0100
+Reviewed-on: https://review.gerrithub.io/213935
+Project: phdeniel/nfs-ganesha
+Branch: refs/heads/next
