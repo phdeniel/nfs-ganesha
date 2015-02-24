@@ -4880,7 +4880,7 @@ extern "C" {
  * RECOMMENDED Attributes
  */
 
-/* new to NFSV4.1 */
+	/* new to NFSV4.1 */
 
 	static inline bool xdr_fattr4(XDR * xdrs, fattr4 *objp)
 	{
