@@ -227,6 +227,12 @@ int nfs4_op_lookup(struct nfs_argop4 *op, compound_data_t *data,
 	if (name)
 		gsh_free(name);
 
+	/* pynfs/nfs4.1/SEQ6 : with NFSv4.1, OP4_LOOKUP should not return
+	 * NFS4ERR_NAMETOOLONG but NFS4ERR_REQ_TOO_BIG */
+	if (res_LOOKUP4->status == NFS4ERR_NAMETOOLONG &&
+	    data->minorversion == 1)
+		res_LOOKUP4->status = NFS4ERR_REQ_TOO_BIG;
+
 	return res_LOOKUP4->status;
 }				/* nfs4_op_lookup */
 
