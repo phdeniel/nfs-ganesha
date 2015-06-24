@@ -694,10 +694,14 @@ gid_t *ganesha_groups = NULL;
 
 void fsal_set_credentials(const struct user_cred *creds)
 {
+#ifndef RUN_AS_USER
 	if (set_threadgroups(creds->caller_glen, creds->caller_garray) != 0)
 		LogFatal(COMPONENT_FSAL, "Could not set Context credentials");
 	setgroup(creds->caller_gid);
 	setuser(creds->caller_uid);
+#else
+	return;
+#endif
 }
 
 void fsal_save_ganesha_credentials(void)
@@ -742,10 +746,14 @@ void fsal_save_ganesha_credentials(void)
 
 void fsal_restore_ganesha_credentials(void)
 {
+#ifndef RUN_AS_USER
 	setuser(ganesha_uid);
 	setgroup(ganesha_gid);
 	if (set_threadgroups(ganesha_ngroups, ganesha_groups) != 0)
 		LogFatal(COMPONENT_FSAL, "Could not set Ganesha credentials");
+#else
+	return;
+#endif
 }
 
 /** @} */

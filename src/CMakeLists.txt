@@ -211,6 +211,9 @@ option(DEBUG_SAL "enable debugging of SAL by keeping list of all locks, stateids
 option(_VALGRIND_MEMCHECK "Initialize buffers passed to GPFS ioctl that valgrind doesn't understand" OFF)
 option(PROXY_HANDLE_MAPPING "enable NFSv3 handle mapping for PROXY FSAL" OFF)
 
+# Allow Ganesha to run as a user, not as root
+option(RUN_AS_USER "make Ganesha runable as a non-root user" OFF)
+
 # Debug symbols (-g) build flag
 option(DEBUG_SYMS "include debug symbols to binaries (-g option)" OFF)
 
@@ -954,6 +957,7 @@ message(STATUS "_NO_XATTRD = ${_NO_XATTRD}")
 message(STATUS "DEBUG_SAL = ${DEBUG_SAL}")
 message(STATUS "_VALGRIND_MEMCHECK = ${_VALGRIND_MEMCHECK}")
 message(STATUS "PROXY_HANDLE_MAPPING = ${PROXY_HANDLE_MAPPING}")
+message(STATUS "RUN_AS_USER = ${RUN_AS_USER}")
 message(STATUS "DEBUG_SYMS = ${DEBUG_SYMS}")
 message(STATUS "COVERAGE = ${COVERAGE}")
 message(STATUS "ENFORCE_GCC = ${ENFORCE_GCC}")
@@ -1097,6 +1101,11 @@ set(STRICT_PACKAGE ${STRICT_PACKAGE}
 set( DISTNAME_HAS_GIT_DATA ${DISTNAME_HAS_GIT_DATA}
   CACHE BOOL
   "Distribution package's name carries git data"
+  FORCE)
+
+set(RUN_AS_USER ${RUN_AS_USER}
+  CACHE BOOL
+  "make Ganesha runable as non-root user"
   FORCE)
 
 set(USE_9P ${USE_9P}

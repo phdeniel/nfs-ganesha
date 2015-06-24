@@ -601,12 +601,13 @@ static fsal_status_t lustre_makesymlink(struct fsal_obj_handle *dir_hdl,
 	rc = CRED_WRAP(op_ctx->creds, int, symlink, link_path, newpath);
 	if (rc < 0)
 		goto direrr;
-
+#ifndef RUN_AS_USER
 	/* do this all by hand because we can't use fchmodat on symlinks...
 	 */
 	rc = lchown(newpath, user, group);
 	if (rc < 0)
 		goto linkerr;
+#endif
 
 	rc =
 	    lustre_name_to_handle_at(dir_hdl->fs,
