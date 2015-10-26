@@ -148,3 +148,8 @@ int external_consolidate_attrs(struct fsal_obj_handle *obj_hdl,
 int external_unlink(struct fsal_obj_handle *dir_hdl,
 		    const char *name);
 
+int external_truncate(struct fsal_obj_handle *obj_hdl,
+		      off_t filesize);
+
+
+

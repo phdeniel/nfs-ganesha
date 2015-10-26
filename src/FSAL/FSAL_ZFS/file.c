@@ -198,6 +198,14 @@ fsal_status_t tank_close(struct fsal_obj_handle *obj_hdl)
 	if (retval)
 		return fsalstat(posix2fsal_error(retval), retval);
 
+	retval = external_consolidate_attrs(obj_hdl,
+					    &myself->u.file.saved_stat);
+	if (retval == ENOENT)
+		retval = 0; /* The file may be a whole with no data */
+
+	if (retval != 0)
+		return fsalstat(posix2fsal_error(retval), retval);
+
 	myself->u.file.openflags = FSAL_O_CLOSED;
 
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);

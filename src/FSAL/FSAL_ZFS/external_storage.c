@@ -207,3 +207,24 @@ int external_unlink(struct fsal_obj_handle *dir_hdl,
 	return 0;
 }
 
+int external_truncate(struct fsal_obj_handle *obj_hdl,
+		      off_t filesize)
+{
+	int rc;
+	char storepath[MAXPATHLEN];
+	struct zfs_fsal_obj_handle *myself;
+
+	myself = container_of(obj_hdl, struct zfs_fsal_obj_handle, obj_handle);
+
+	rc = build_external_path(myself->handle->zfs_handle,
+				 storepath, MAXPATHLEN);
+	if (rc < 0)
+		return rc;
+
+	rc = truncate(storepath, filesize);
+	if (rc == -1)
+		return -errno;
+
+	return 0;
+}
+

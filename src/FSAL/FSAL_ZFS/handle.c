@@ -669,7 +669,7 @@ static fsal_status_t tank_getattrs(struct fsal_obj_handle *obj_hdl)
 					   myself->handle->zfs_handle, &stat,
 					   &type);
 
-		if (retval == 0)
+		if (retval == 0 && myself->u.file.openflags == FSAL_O_CLOSED)
 			retval = external_consolidate_attrs(obj_hdl, &stat);
 
 		/* An explanation is required here.
@@ -746,6 +746,11 @@ static fsal_status_t tank_setattrs(struct fsal_obj_handle *obj_hdl,
 		    libzfswrap_truncate(tank_get_root_pvfs(op_ctx->fsal_export),
 					&cred, myself->handle->zfs_handle,
 					attrs->filesize);
+
+		if (retval == 0)
+			retval = external_truncate(obj_hdl,
+						   attrs->filesize);
+
 		if (retval != 0)
 			goto out;
 	}
