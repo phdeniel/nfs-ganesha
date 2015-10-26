@@ -13,6 +13,7 @@ SET(fsalzfs_LIB_SRCS
    handle.c
    file.c
    xattrs.c
+   external_storage.c
 )
 
 add_library(fsalzfs SHARED ${fsalzfs_LIB_SRCS})

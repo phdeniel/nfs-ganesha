@@ -113,23 +113,22 @@ fsal_status_t tank_read(struct fsal_obj_handle *obj_hdl,
 {
 	struct zfs_fsal_obj_handle *myself;
 	int rc = 0;
-	creden_t cred;
-	int behind = 0;
-
-	cred.uid = op_ctx->creds->caller_uid;
-	cred.gid = op_ctx->creds->caller_gid;
+	fsal_errors_t fsal_error = ERR_FSAL_NO_ERROR;
 
 	myself = container_of(obj_hdl, struct zfs_fsal_obj_handle, obj_handle);
 
 	assert(myself->u.file.openflags != FSAL_O_CLOSED);
 
-	rc = libzfswrap_read(ZFSFSAL_GetVFS(myself->handle), &cred,
-			     myself->u.file.p_vnode, buffer, buffer_size,
-			     behind, offset);
+	rc = external_read(obj_hdl, offset, buffer_size, buffer,
+		      read_amount, end_of_file);
+
 	/* With FSAL_ZFS, "end of file" is always returned via a last call,
 	 * once every data is read. The result is a last,
 	 * empty call which set end_of_file to true */
-	if (!rc) {
+	if (rc < 0) {
+		fsal_error = posix2fsal_error(-rc);
+		return fsalstat(fsal_error, -rc);
+	} else if (rc == 0) {
 		*end_of_file = true;
 		*read_amount = 0;
 	} else {
@@ -150,23 +149,17 @@ fsal_status_t tank_write(struct fsal_obj_handle *obj_hdl,
 			 size_t *write_amount, bool *fsal_stable)
 {
 	struct zfs_fsal_obj_handle *myself;
-	creden_t cred;
 	int retval = 0;
-	int behind = 0;
-
-	cred.uid = op_ctx->creds->caller_uid;
-	cred.gid = op_ctx->creds->caller_gid;
 
 	myself = container_of(obj_hdl, struct zfs_fsal_obj_handle, obj_handle);
 
 	assert(myself->u.file.openflags != FSAL_O_CLOSED);
 
-	retval = libzfswrap_write(ZFSFSAL_GetVFS(myself->handle), &cred,
-				  myself->u.file.p_vnode, buffer, buffer_size,
-				  behind, offset);
+	retval = external_write(obj_hdl, offset, buffer_size, buffer,
+		       write_amount, fsal_stable);
 
-	if (retval == -1)
-		return fsalstat(posix2fsal_error(retval), retval);
+	if (retval < 0)
+		return fsalstat(posix2fsal_error(-retval), -retval);
 	*write_amount = buffer_size;
 	*fsal_stable = false;
 

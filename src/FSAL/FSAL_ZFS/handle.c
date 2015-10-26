@@ -669,6 +669,9 @@ static fsal_status_t tank_getattrs(struct fsal_obj_handle *obj_hdl)
 					   myself->handle->zfs_handle, &stat,
 					   &type);
 
+		if (retval == 0)
+			retval = external_consolidate_attrs(obj_hdl, &stat);
+
 		/* An explanation is required here.
 		 * This is an exception management.
 		 * when a file is opened, then deleted without being closed,
@@ -803,7 +806,6 @@ static fsal_status_t tank_setattrs(struct fsal_obj_handle *obj_hdl,
 /* file_unlink
  * unlink the named file in the directory
  */
-
 static fsal_status_t tank_unlink(struct fsal_obj_handle *dir_hdl,
 				 const char *name)
 {
@@ -832,12 +834,16 @@ static fsal_status_t tank_unlink(struct fsal_obj_handle *dir_hdl,
 						  &cred,
 						  myself->handle->zfs_handle,
 						  name);
-		else
-			retval = libzfswrap_unlink(tank_get_root_pvfs(
-							   op_ctx->fsal_export),
-						   &cred,
-						   myself->handle->zfs_handle,
-						   name);
+		else {
+			retval = external_unlink(dir_hdl, name);
+			if (!retval)
+				retval = libzfswrap_unlink(
+						tank_get_root_pvfs(
+							op_ctx->fsal_export),
+						&cred,
+						myself->handle->zfs_handle,
+						name);
+		}
 	}
 
 	if (retval)

@@ -126,3 +126,25 @@ fsal_status_t tank_lock_op(struct fsal_obj_handle *obj_hdl,
 			   fsal_lock_op_t lock_op,
 			   fsal_lock_param_t *request_lock,
 			   fsal_lock_param_t *conflicting_lock);
+
+/* external storage */
+int external_write(struct fsal_obj_handle *obj_hdl,
+		   uint64_t offset,
+		   size_t buffer_size,
+		   void *buffer,
+		   size_t *write_amount,
+		   bool *fsal_stable);
+
+int external_read(struct fsal_obj_handle *obj_hdl,
+		  uint64_t offset,
+		  size_t buffer_size,
+		  void *buffer,
+		  size_t *read_amount,
+		  bool *end_of_file);
+
+int external_consolidate_attrs(struct fsal_obj_handle *obj_hdl,
+			       struct stat *zfsstat);
+
+int external_unlink(struct fsal_obj_handle *dir_hdl,
+		    const char *name);
+
