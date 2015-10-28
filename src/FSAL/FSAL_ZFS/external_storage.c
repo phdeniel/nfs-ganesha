@@ -75,13 +75,15 @@ int external_write(struct fsal_obj_handle *obj_hdl,
 		   size_t buffer_size,
 		   void *buffer,
 		   size_t *write_amount,
-		   bool *fsal_stable)
+		   bool *fsal_stable,
+		   struct stat *stat)
 {
 	char storepath[MAXPATHLEN];
 	int rc;
 	int fd;
 	ssize_t written_bytes;
 	struct zfs_fsal_obj_handle *myself;
+	struct stat storestat;
 
 	myself = container_of(obj_hdl, struct zfs_fsal_obj_handle, obj_handle);
 
@@ -103,6 +105,15 @@ int external_write(struct fsal_obj_handle *obj_hdl,
 	}
 
 	*write_amount = written_bytes;
+
+	rc = fstat(fd, &storestat);
+	if (rc < 0)
+		return -errno;
+
+	stat->st_mtime = storestat.st_mtime;
+	stat->st_size = storestat.st_size;
+	stat->st_blocks = storestat.st_blocks;
+	stat->st_blksize = storestat.st_blksize;
 
 	rc = close(fd);
 	if (rc < 0)
@@ -137,6 +148,7 @@ int external_consolidate_attrs(struct fsal_obj_handle *obj_hdl,
 
 	rc = stat(storepath, &extstat);
 	if (rc < 0) {
+		printf("===> external_stat: errno=%u\n", errno);
 		if (errno == ENOENT)
 			return 0; /* No data written yet */
 		else
@@ -222,8 +234,12 @@ int external_truncate(struct fsal_obj_handle *obj_hdl,
 		return rc;
 
 	rc = truncate(storepath, filesize);
-	if (rc == -1)
-		return -errno;
+	if (rc == -1) {
+		if (errno == ENOENT)
+			return 0;
+		else
+			return -errno;
+	}
 
 	return 0;
 }

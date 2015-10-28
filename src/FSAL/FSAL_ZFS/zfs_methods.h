@@ -133,7 +133,8 @@ int external_write(struct fsal_obj_handle *obj_hdl,
 		   size_t buffer_size,
 		   void *buffer,
 		   size_t *write_amount,
-		   bool *fsal_stable);
+		   bool *fsal_stable,
+		   struct stat *stat);
 
 int external_read(struct fsal_obj_handle *obj_hdl,
 		  uint64_t offset,

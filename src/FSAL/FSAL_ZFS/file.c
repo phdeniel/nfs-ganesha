@@ -156,7 +156,8 @@ fsal_status_t tank_write(struct fsal_obj_handle *obj_hdl,
 	assert(myself->u.file.openflags != FSAL_O_CLOSED);
 
 	retval = external_write(obj_hdl, offset, buffer_size, buffer,
-		       write_amount, fsal_stable);
+		       write_amount, fsal_stable,
+		       &myself->u.file.saved_stat);
 
 	if (retval < 0)
 		return fsalstat(posix2fsal_error(-retval), -retval);

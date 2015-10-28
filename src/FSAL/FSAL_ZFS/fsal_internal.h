@@ -7,6 +7,9 @@
  *
  */
 
+#ifndef _FSAL_INTERNAL_H
+#define _FSAL_INTERNAL_H
+
 #include  "fsal.h"
 #include <libzfswrap.h>
 
@@ -60,4 +63,5 @@ static inline size_t zfs_sizeof_handle(struct zfs_file_handle *hdl)
  */
 extern struct fsal_staticfsinfo_t global_fs_info;
 
+#endif
 #endif
