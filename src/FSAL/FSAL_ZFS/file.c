@@ -150,6 +150,7 @@ fsal_status_t tank_write(struct fsal_obj_handle *obj_hdl,
 {
 	struct zfs_fsal_obj_handle *myself;
 	int retval = 0;
+	int retstat = 0;
 
 	myself = container_of(obj_hdl, struct zfs_fsal_obj_handle, obj_handle);
 
@@ -158,6 +159,14 @@ fsal_status_t tank_write(struct fsal_obj_handle *obj_hdl,
 	retval = external_write(obj_hdl, offset, buffer_size, buffer,
 		       write_amount, fsal_stable,
 		       &myself->u.file.saved_stat);
+
+	/* Try to consolidate attrs */
+	retstat = external_consolidate_attrs(obj_hdl,
+					     &myself->u.file.saved_stat); 
+	printf("tank_write/consolidate_attrs : retstat=%d size=%lld\n",
+		 retstat, (long long int)myself->u.file.saved_stat.st_size);
+	obj_hdl->attrs->filesize = myself->u.file.saved_stat.st_size;
+	obj_hdl->attrs->mtime.tv_sec = myself->u.file.saved_stat.st_mtime;
 
 	if (retval < 0)
 		return fsalstat(posix2fsal_error(-retval), -retval);
@@ -175,6 +184,20 @@ fsal_status_t tank_write(struct fsal_obj_handle *obj_hdl,
 fsal_status_t tank_commit(struct fsal_obj_handle *obj_hdl,	/* sync */
 			  off_t offset, size_t len)
 {
+	struct zfs_fsal_obj_handle *myself;
+	int retval = 0;
+
+	myself = container_of(obj_hdl, struct zfs_fsal_obj_handle, obj_handle);
+
+	/* Try to consolidate attrs */
+	retval = external_consolidate_attrs(obj_hdl,
+					     &myself->u.file.saved_stat); 
+	printf("tank_commit/consolidate_attrs : retstat=%d size=%lld\n", 
+		retval, (long long int)myself->u.file.saved_stat.st_size);
+	obj_hdl->attrs->filesize = myself->u.file.saved_stat.st_size;
+	obj_hdl->attrs->mtime.tv_sec = myself->u.file.saved_stat.st_mtime;
+	
+	
 	/* ZFS is a COW based FS, commit are not needed */
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
@@ -203,6 +226,11 @@ fsal_status_t tank_close(struct fsal_obj_handle *obj_hdl)
 					    &myself->u.file.saved_stat);
 	if (retval == ENOENT)
 		retval = 0; /* The file may be a whole with no data */
+	else {
+		obj_hdl->attrs->filesize = myself->u.file.saved_stat.st_size;
+		obj_hdl->attrs->mtime.tv_sec =
+			myself->u.file.saved_stat.st_mtime;
+	}
 
 	if (retval != 0)
 		return fsalstat(posix2fsal_error(retval), retval);
