@@ -156,6 +156,9 @@ fsal_status_t tank_write(struct fsal_obj_handle *obj_hdl,
 
 	assert(myself->u.file.openflags != FSAL_O_CLOSED);
 
+	printf("======> tank_write: off=%lld  size=%lld\n",
+		(long long int)offset, 
+		(long long int)buffer_size);
 	retval = external_write(obj_hdl, offset, buffer_size, buffer,
 		       write_amount, fsal_stable,
 		       &myself->u.file.saved_stat);
@@ -163,7 +166,7 @@ fsal_status_t tank_write(struct fsal_obj_handle *obj_hdl,
 	/* Try to consolidate attrs */
 	retstat = external_consolidate_attrs(obj_hdl,
 					     &myself->u.file.saved_stat); 
-	printf("tank_write/consolidate_attrs : retstat=%d size=%lld\n",
+	printf("======> tank_write/consolidate_attrs : retstat=%d size=%lld\n",
 		 retstat, (long long int)myself->u.file.saved_stat.st_size);
 	obj_hdl->attrs->filesize = myself->u.file.saved_stat.st_size;
 	obj_hdl->attrs->mtime.tv_sec = myself->u.file.saved_stat.st_mtime;
@@ -192,7 +195,7 @@ fsal_status_t tank_commit(struct fsal_obj_handle *obj_hdl,	/* sync */
 	/* Try to consolidate attrs */
 	retval = external_consolidate_attrs(obj_hdl,
 					     &myself->u.file.saved_stat); 
-	printf("tank_commit/consolidate_attrs : retstat=%d size=%lld\n", 
+	printf("======> tank_commit/consolidate_attrs : retstat=%d size=%lld\n", 
 		retval, (long long int)myself->u.file.saved_stat.st_size);
 	obj_hdl->attrs->filesize = myself->u.file.saved_stat.st_size;
 	obj_hdl->attrs->mtime.tv_sec = myself->u.file.saved_stat.st_mtime;

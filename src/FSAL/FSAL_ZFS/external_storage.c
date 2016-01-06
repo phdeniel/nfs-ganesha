@@ -57,8 +57,11 @@ int external_read(struct fsal_obj_handle *obj_hdl,
 	printf("READ: I got external path=%s\n", storepath);
 
 	fd = open(storepath, O_CREAT|O_RDONLY|O_SYNC);
-	if (fd < 0)
+	if (fd < 0) {
+		printf("READ: error %u while open %s\n",
+			errno, storepath);
 		return -errno;
+	}
 
 	read_bytes = pread(fd, buffer, buffer_size, offset);
 	if (read_bytes < 0) {
@@ -144,8 +147,6 @@ int external_consolidate_attrs(struct fsal_obj_handle *obj_hdl,
 	if (rc < 0)
 		return rc;
 
-	printf("=======> external_stat: %s\n", storepath);
-
 	rc = stat(storepath, &extstat);
 	if (rc < 0) {
 		printf("===> external_stat: errno=%u\n", errno);
@@ -160,6 +161,10 @@ int external_consolidate_attrs(struct fsal_obj_handle *obj_hdl,
 	zfsstat->st_size = extstat.st_size;
 	zfsstat->st_blksize = extstat.st_blksize;
 	zfsstat->st_blocks = extstat.st_blocks;
+
+	printf("=======> external_stat: %s size=%lld\n",
+		storepath, 
+		(long long int)zfsstat->st_size);
 
 	return 0;
 }

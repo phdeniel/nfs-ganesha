@@ -669,8 +669,7 @@ static fsal_status_t tank_getattrs(struct fsal_obj_handle *obj_hdl)
 					   myself->handle->zfs_handle, &stat,
 					   &type);
 
-		if (retval == 0 && myself->u.file.openflags == FSAL_O_CLOSED)
-			retval = external_consolidate_attrs(obj_hdl, &stat);
+		external_consolidate_attrs(obj_hdl, &stat);
 
 		/* An explanation is required here.
 		 * This is an exception management.
