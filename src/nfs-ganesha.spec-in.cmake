@@ -34,6 +34,9 @@
 @BCOND_ZFS@ zfs
 %global use_fsal_zfs %{on_off_switch zfs}
 
+@BCOND_CLOVIS@ clovis
+%global use_fsal_clovis %{on_off_switch clovis}
+
 @BCOND_XFS@ xfs
 %global use_fsal_xfs %{on_off_switch xfs}
 
@@ -232,11 +235,26 @@ be used with NFS-Ganesha to support GPFS backend
 Summary: The NFS-GANESHA's ZFS FSAL
 Group: Applications/System
 Requires:	nfs-ganesha = %{version}-%{release}
+Requires: 	libzfswrap
 BuildRequires:	libzfswrap-devel
 
 %description zfs
 This package contains a FSAL shared object to
 be used with NFS-Ganesha to support ZFS
+%endif
+
+# CLOVIS
+%if %{with clovis}
+%package zfs
+Summary: The NFS-GANESHA's CLOVIS FSAL
+Group: Applications/System
+Requires:       nfs-ganesha = %{version}-%{release}
+Requires: 	libzfswrap mero
+BuildRequires:  libzfswrap-devel mero-devel
+
+%description zfs
+This package contains a FSAL shared object to
+be used with NFS-Ganesha to support CLOVIS
 %endif
 
 # CEPH
@@ -368,6 +386,7 @@ cmake .	-DCMAKE_BUILD_TYPE=Debug			\
 	-DBUILD_CONFIG=rpmbuild				\
 	-DUSE_FSAL_NULL=%{use_fsal_null}		\
 	-DUSE_FSAL_ZFS=%{use_fsal_zfs}			\
+	-DUSE_FSAL_CLOVIS=%{use_fsal_clovis}		\
 	-DUSE_FSAL_XFS=%{use_fsal_xfs}			\
 	-DUSE_FSAL_CEPH=%{use_fsal_ceph}		\
 	-DUSE_FSAL_RGW=%{use_fsal_rgw}			\

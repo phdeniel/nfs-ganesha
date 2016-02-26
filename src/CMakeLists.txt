@@ -178,6 +178,7 @@ option(USE_FSAL_VFS "build VFS FSAL shared library" ON)
 option(USE_FSAL_CEPH "build CEPH FSAL shared library" ON)
 option(USE_FSAL_GPFS "build GPFS FSAL" ON)
 option(USE_FSAL_ZFS "build ZFS FSAL" ON)
+option(USE_FSAL_CLOVIS "build CLOVIS FSAL" ON)
 option(USE_FSAL_LUSTRE "build LUSTRE FSAL" ON)
 option(USE_FSAL_XFS "build XFS support in VFS FSAL" ON)
 option(USE_FSAL_PANFS "build PanFS support in VFS FSAL" OFF)
@@ -398,6 +399,19 @@ IF(USE_FSAL_HPSS)
 endif(USE_FSAL_HPSS)
 
 IF(USE_FSAL_ZFS)
+  IF(ZFS_PREFIX)
+    set(ZFS_PREFIX ${ZFS_PREFIX} CACHE PATH "Path to ZFS installation")
+    LIST(APPEND CMAKE_PREFIX_PATH "${ZFS_PREFIX}")
+    LIST(APPEND CMAKE_LIBRARY_PATH "${ZFS_PREFIX}/lib")
+    LIST(APPEND CMAKE_LIBRARY_PATH "${ZFS_PREFIX}/local/lib")
+    LIST(APPEND CMAKE_LIBRARY_PATH "${ZFS_PREFIX}/local/lib64")
+    LIST(APPEND CMAKE_REQUIRED_INCLUDES "${ZFS_PREFIX}/include")
+  ELSE()
+    set(ZFS_PREFIX "/usr" CACHE PATH "Path to ZFS installation")
+  ENDIF()
+ENDIF()
+
+IF(USE_FSAL_CLOVIS)
   IF(ZFS_PREFIX)
     set(ZFS_PREFIX ${ZFS_PREFIX} CACHE PATH "Path to ZFS installation")
     LIST(APPEND CMAKE_PREFIX_PATH "${ZFS_PREFIX}")
@@ -743,6 +757,26 @@ if(USE_FSAL_ZFS)
   endif((NOT HAVE_ZFS_LIB) OR (NOT HAVE_LIBZFSWRAP_H))
 endif(USE_FSAL_ZFS)
 
+if(USE_FSAL_CLOVIS)
+  check_library_exists(
+    zfswrap
+    libzfswrap_init
+    ${ZFS_PREFIX}/lib
+    HAVE_ZFS_LIB
+    )
+  check_include_files("unistd.h;libzfswrap.h" HAVE_LIBZFSWRAP_H)
+  if((NOT HAVE_ZFS_LIB) OR (NOT HAVE_LIBZFSWRAP_H))
+   if(STRICT_PACKAGE)
+      message(FATAL_ERROR "STRICT_PACKAGE: Cannot find ZFS runtime. Disabling CLOVIS build")
+   else(STRICT_PACKAGE)
+      message(WARNING "Cannot find ZFS runtime. Disabling CLOVIS build")
+      set(USE_FSAL_CLOVIS OFF)
+    endif(STRICT_PACKAGE)
+  endif((NOT HAVE_ZFS_LIB) OR (NOT HAVE_LIBZFSWRAP_H))
+endif(USE_FSAL_CLOVIS)
+
+
+
 # sort out which allocator to use
 if(${ALLOCATOR} STREQUAL "jemalloc")
   find_package(JeMalloc)
@@ -1057,6 +1091,7 @@ message(STATUS "USE_FSAL_PANFS = ${USE_FSAL_PANFS}")
 message(STATUS "USE_FSAL_GPFS = ${USE_FSAL_GPFS}")
 message(STATUS "USE_FSAL_PT = ${USE_FSAL_PT}")
 message(STATUS "USE_FSAL_ZFS = ${USE_FSAL_ZFS}")
+message(STATUS "USE_FSAL_CLOVIS = ${USE_FSAL_CLOVIS}")
 message(STATUS "USE_FSAL_LUSTRE = ${USE_FSAL_LUSTRE}")
 message(STATUS "USE_FSAL_SHOOK = ${USE_FSAL_SHOOK}")
 message(STATUS "USE_FSAL_LUSTRE_UP = ${USE_FSAL_LUSTRE_UP}")
@@ -1163,6 +1198,11 @@ set(USE_FSAL_PT ${USE_FSAL_PT}
 set(USE_FSAL_ZFS ${USE_FSAL_ZFS}
   CACHE BOOL
    "build ZFS FSAL"
+   FORCE)
+
+set(USE_FSAL_CLOVIS ${USE_FSAL_CLOVIS}
+  CACHE BOOL
+   "build CLOVIS FSAL"
    FORCE)
 
 set(USE_FSAL_LUSTRE ${USE_FSAL_LUSTRE}
@@ -1330,6 +1370,12 @@ if(USE_FSAL_ZFS)
 else(USE_FSAL_ZFS)
     set(BCOND_ZFS "%bcond_with")
 endif(USE_FSAL_ZFS)
+
+if(USE_FSAL_CLOVIS)
+    set(BCOND_CLOVIS "%bcond_without")
+else(USE_FSAL_CLOVIS)
+    set(BCOND_CLOVIS "%bcond_with")
+endif(USE_FSAL_CLOVIS)
 
 if(USE_FSAL_XFS)
     set(BCOND_XFS "%bcond_without")
