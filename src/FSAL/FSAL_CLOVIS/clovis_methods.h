@@ -37,6 +37,11 @@ struct clovis_fsal_module {
 struct clovis_fsal_export {
 	struct fsal_export export;
 	char *zpool;
+	char *clovis_local_addr;
+	char *clovis_ha_addr;
+	char *clovis_confd_addr;
+	char *clovis_prof;
+	char *clovis_index_dir;
 	libzfswrap_vfs_t *p_vfs;
 };
 

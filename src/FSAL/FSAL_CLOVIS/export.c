@@ -272,6 +272,16 @@ static struct config_item export_params[] = {
 	CONF_ITEM_NOOP("name"),
 	CONF_MAND_STR("zpool", 1, MAXNAMLEN, "tank",
 		       clovis_fsal_export, zpool),
+	CONF_MAND_STR("clovis_local_addr", 1, MAXNAMLEN, NULL,
+		       clovis_fsal_export, clovis_local_addr),
+	CONF_MAND_STR("clovis_ha_addr", 1, MAXNAMLEN, NULL,
+		       clovis_fsal_export, clovis_ha_addr),
+	CONF_MAND_STR("clovis_confd_addr", 1, MAXNAMLEN, NULL,
+		       clovis_fsal_export, clovis_confd_addr),
+	CONF_MAND_STR("clovis_prof", 1, MAXNAMLEN, NULL,
+		       clovis_fsal_export, clovis_prof),
+	CONF_MAND_STR("clovis_index_dir", 1, MAXPATHLEN, "/tmp",
+		       clovis_fsal_export, clovis_index_dir),
 	CONFIG_EOL
 };
 
@@ -317,10 +327,26 @@ fsal_status_t clovis_create_export(struct fsal_module *fsal_hdl,
 
 	if (!myself->zpool)
 		LogFatal(COMPONENT_FSAL,
-			 "You must setup a zpool for each export using FSAL_ZFS");
+			 "You must setup a zpool for each export using FSAL_CLOVIS");
 	else
 		LogEvent(COMPONENT_FSAL,
 			 "Export is using %s as a ZFS tank", myself->zpool);
+
+	if (!myself->clovis_local_addr || !myself->clovis_ha_addr ||
+	    !myself->clovis_confd_addr || !myself->clovis_prof    ||
+	    !myself->clovis_index_dir)
+		LogFatal(COMPONENT_FSAL,
+			 "You must setup a CLOVIS for each export using FSAL_CLOVIS");
+	else {
+		LogEvent(COMPONENT_FSAL, "FSAL_CLOVIS: local_addr=%s", 
+			 myself->clovis_local_addr);
+		LogEvent(COMPONENT_FSAL, "FSAL_CLOVIS: ha_addr=%s", 
+			 myself->clovis_ha_addr);
+		LogEvent(COMPONENT_FSAL, "FSAL_CLOVIS: confd_addr=%s", 
+			 myself->clovis_confd_addr);
+		LogEvent(COMPONENT_FSAL, "FSAL_CLOVIS: prof=%s index_dir=%s", 
+			 myself->clovis_prof, myself->clovis_index_dir);
+	}
 
 	retval = fsal_attach_export(fsal_hdl, &myself->export.exports);
 	if (retval != 0)
