@@ -12,6 +12,7 @@
 
 #include  "fsal.h"
 #include <libzfswrap.h>
+#include "m0store/extstore.h"
 
 /* linkage to the exports and handle ops initializers
  */

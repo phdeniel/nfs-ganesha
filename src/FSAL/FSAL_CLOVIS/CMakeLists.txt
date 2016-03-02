@@ -1,5 +1,6 @@
 
 ########### next target ###############
+add_subdirectory(m0store)
 
 IF(ZFS_PREFIX)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${ZFS_PREFIX}/include")
@@ -20,6 +21,7 @@ add_library(fsalclovis SHARED ${fsalclovis_LIB_SRCS})
 
 target_link_libraries(fsalclovis
   zfswrap
+  m0store
   ${SYSTEM_LIBRARIES}
 )
 
