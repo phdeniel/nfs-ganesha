@@ -178,6 +178,7 @@ option(USE_FSAL_VFS "build VFS FSAL shared library" ON)
 option(USE_FSAL_CEPH "build CEPH FSAL shared library" ON)
 option(USE_FSAL_GPFS "build GPFS FSAL" ON)
 option(USE_FSAL_ZFS "build ZFS FSAL" ON)
+option(USE_FSAL_KVSNS "build KVSNS FSAL" ON)
 option(USE_FSAL_CLOVIS "build CLOVIS FSAL" ON)
 option(USE_FSAL_LUSTRE "build LUSTRE FSAL" ON)
 option(USE_FSAL_XFS "build XFS support in VFS FSAL" ON)
@@ -408,6 +409,19 @@ IF(USE_FSAL_ZFS)
     LIST(APPEND CMAKE_REQUIRED_INCLUDES "${ZFS_PREFIX}/include")
   ELSE()
     set(ZFS_PREFIX "/usr" CACHE PATH "Path to ZFS installation")
+  ENDIF()
+ENDIF()
+
+IF(USE_FSAL_KVSNS)
+  IF(KVSNS_PREFIX)
+    set(KVSNS_PREFIX ${KVSNS_PREFIX} CACHE PATH "Path to ZFS installation")
+    LIST(APPEND CMAKE_PREFIX_PATH "${KVSNS_PREFIX}")
+    LIST(APPEND CMAKE_LIBRARY_PATH "${KVSNS_PREFIX}/lib")
+    LIST(APPEND CMAKE_LIBRARY_PATH "${KVSNS_PREFIX}/local/lib")
+    LIST(APPEND CMAKE_LIBRARY_PATH "${KVSNS_PREFIX}/local/lib64")
+    LIST(APPEND CMAKE_REQUIRED_INCLUDES "${KVSNS_PREFIX}/include")
+  ELSE()
+    set(KVSNS_PREFIX "/usr" CACHE PATH "Path to KVSNS installation")
   ENDIF()
 ENDIF()
 
@@ -757,6 +771,24 @@ if(USE_FSAL_ZFS)
   endif((NOT HAVE_ZFS_LIB) OR (NOT HAVE_LIBZFSWRAP_H))
 endif(USE_FSAL_ZFS)
 
+if(USE_FSAL_KVSNS)
+  check_library_exists(
+    kvsns
+    kvsns_start
+    ${KVSNS_PREFIX}/lib64
+    HAVE_KVSNS_LIB
+    )
+  check_include_files("kvsns/kvsns.h" HAVE_LIBKVSNS_H)
+  if((NOT HAVE_KVSNS_LIB) OR (NOT HAVE_LIBKVSNS_H))
+   if(STRICT_PACKAGE)
+      message(FATAL_ERROR "STRICT_PACKAGE: Cannot find KVSNS runtime. Disabling KVSNS build")
+   else(STRICT_PACKAGE)
+      message(WARNING "Cannot find KVSNS runtime. Disabling KVSNS build")
+      set(USE_FSAL_KVSNS OFF)
+    endif(STRICT_PACKAGE)
+  endif((NOT HAVE_KVSNS_LIB) OR (NOT HAVE_LIBKVSNS_H))
+endif(USE_FSAL_KVSNS)
+
 if(USE_FSAL_CLOVIS)
   check_library_exists(
     zfswrap
@@ -1091,6 +1123,7 @@ message(STATUS "USE_FSAL_PANFS = ${USE_FSAL_PANFS}")
 message(STATUS "USE_FSAL_GPFS = ${USE_FSAL_GPFS}")
 message(STATUS "USE_FSAL_PT = ${USE_FSAL_PT}")
 message(STATUS "USE_FSAL_ZFS = ${USE_FSAL_ZFS}")
+message(STATUS "USE_FSAL_KVSNS = ${USE_FSAL_KVSNS}")
 message(STATUS "USE_FSAL_CLOVIS = ${USE_FSAL_CLOVIS}")
 message(STATUS "USE_FSAL_LUSTRE = ${USE_FSAL_LUSTRE}")
 message(STATUS "USE_FSAL_SHOOK = ${USE_FSAL_SHOOK}")
@@ -1132,6 +1165,7 @@ message(STATUS "RGW_PREFIX = ${RGW_PREFIX}")
 message(STATUS "HPSS_PREFIX = ${HPSS_PREFIX}")
 message(STATUS "GLUSTER_PREFIX = ${GLUSTER_PREFIX}")
 message(STATUS "ZFS_PREFIX = ${ZFS_PREFIX}")
+message(STATUS "KVSNS_PREFIX = ${KVSNS_PREFIX}")
 message(STATUS "LUSTRE_PREFIX = ${LUSTRE_PREFIX}")
 message(STATUS "CMAKE_PREFIX_PATH = ${CMAKE_PREFIX_PATH}")
 message(STATUS "_GIT_HEAD_COMMIT = ${_GIT_HEAD_COMMIT}")
@@ -1198,6 +1232,11 @@ set(USE_FSAL_PT ${USE_FSAL_PT}
 set(USE_FSAL_ZFS ${USE_FSAL_ZFS}
   CACHE BOOL
    "build ZFS FSAL"
+   FORCE)
+
+set(USE_FSAL_KVSNS ${USE_FSAL_KVSNS}
+  CACHE BOOL
+   "build KVSNS FSAL"
    FORCE)
 
 set(USE_FSAL_CLOVIS ${USE_FSAL_CLOVIS}
@@ -1370,6 +1409,12 @@ if(USE_FSAL_ZFS)
 else(USE_FSAL_ZFS)
     set(BCOND_ZFS "%bcond_with")
 endif(USE_FSAL_ZFS)
+
+if(USE_FSAL_KVSNS)
+    set(BCOND_KVSNS "%bcond_without")
+else(USE_FSAL_KVSNS)
+    set(BCOND_KVSNS "%bcond_with")
+endif(USE_FSAL_KVSNS)
 
 if(USE_FSAL_CLOVIS)
     set(BCOND_CLOVIS "%bcond_without")
