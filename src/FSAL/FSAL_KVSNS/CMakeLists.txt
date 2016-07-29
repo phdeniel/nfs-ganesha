@@ -19,7 +19,7 @@ SET(fsalkvsns_LIB_SRCS
 add_library(fsalkvsns SHARED ${fsalkvsns_LIB_SRCS})
 
 target_link_libraries(fsalkvsns
-  kvsns kvsal_redis hiredis
+  kvsns hiredis
   ${SYSTEM_LIBRARIES}
 )
 
