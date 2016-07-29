@@ -778,7 +778,7 @@ if(USE_FSAL_KVSNS)
     ${KVSNS_PREFIX}/lib64
     HAVE_KVSNS_LIB
     )
-  check_include_files("kvsns/kvsns.h" HAVE_LIBKVSNS_H)
+  check_include_files("kvsns.h" HAVE_LIBKVSNS_H)
   if((NOT HAVE_KVSNS_LIB) OR (NOT HAVE_LIBKVSNS_H))
    if(STRICT_PACKAGE)
       message(FATAL_ERROR "STRICT_PACKAGE: Cannot find KVSNS runtime. Disabling KVSNS build")
