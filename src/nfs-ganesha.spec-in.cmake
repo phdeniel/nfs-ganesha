@@ -37,6 +37,9 @@
 @BCOND_CLOVIS@ clovis
 %global use_fsal_clovis %{on_off_switch clovis}
 
+@BCOND_KVSNS@ kvsns
+%global use_fsal_kvsns %{on_off_switch kvsns}
+
 @BCOND_XFS@ xfs
 %global use_fsal_xfs %{on_off_switch xfs}
 
@@ -387,6 +390,7 @@ cmake .	-DCMAKE_BUILD_TYPE=Debug			\
 	-DUSE_FSAL_NULL=%{use_fsal_null}		\
 	-DUSE_FSAL_ZFS=%{use_fsal_zfs}			\
 	-DUSE_FSAL_CLOVIS=%{use_fsal_clovis}		\
+	-DUSE_FSAL_CLOVIS=%{use_fsal_kvsns}		\
 	-DUSE_FSAL_XFS=%{use_fsal_xfs}			\
 	-DUSE_FSAL_CEPH=%{use_fsal_ceph}		\
 	-DUSE_FSAL_RGW=%{use_fsal_rgw}			\
