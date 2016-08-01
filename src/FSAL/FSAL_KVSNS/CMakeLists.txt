@@ -13,7 +13,6 @@ SET(fsalkvsns_LIB_SRCS
    handle.c
    file.c
    xattrs.c
-   external_storage.c
 )
 
 add_library(fsalkvsns SHARED ${fsalkvsns_LIB_SRCS})

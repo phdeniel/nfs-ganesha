@@ -15,7 +15,7 @@
 #include "fsal_convert.h"
 #include "FSAL/fsal_config.h"
 #include "FSAL/fsal_commonlib.h"
-#include "zfs_methods.h"
+#include "kvsfs_methods.h"
 #include <stdbool.h>
 
 /* a f***ing ugly define, to be removed later as things are OK */
@@ -185,7 +185,7 @@ int external_unlink(struct fsal_obj_handle *dir_hdl,
 	cred.uid = op_ctx->creds->caller_uid;
 	cred.gid = op_ctx->creds->caller_gid;
 
-	rc = libzfswrap_lookup(tank_get_root_pvfs(op_ctx->fsal_export),
+	rc = libzfswrap_lookup(kvsfs_get_root_pvfs(op_ctx->fsal_export),
 			       &cred,
 			       myself->handle->zfs_handle,
 			       name, &object, &type);
@@ -195,7 +195,7 @@ int external_unlink(struct fsal_obj_handle *dir_hdl,
 	if (type == S_IFDIR)
 		return 0;
 
-	rc = libzfswrap_getattr(tank_get_root_pvfs(op_ctx->fsal_export),
+	rc = libzfswrap_getattr(kvsfs_get_root_pvfs(op_ctx->fsal_export),
 				&cred,
 				object,
 				&stat,

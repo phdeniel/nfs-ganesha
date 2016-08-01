@@ -37,18 +37,14 @@
 #include <sys/types.h>
 #include <sys/syscall.h>
 #include <mntent.h>
-#include <libzfswrap.h>
+#include <kvsns.h>
 #include <ctype.h>
 #include "gsh_list.h"
 #include "fsal_internal.h"
 #include "fsal_convert.h"
 #include "FSAL/fsal_config.h"
 #include "FSAL/fsal_commonlib.h"
-#include "zfs_methods.h"
 #include <stdbool.h>
-
-/* One useful declaration */
-libzfswrap_vfs_t *ZFSFSAL_GetVFS(zfs_file_handle_t *handle);
 
 typedef int (*xattr_getfunc_t) (struct fsal_obj_handle *, /* object handle */
 				caddr_t,	/* output buff */
@@ -85,6 +81,7 @@ int print_vfshandle(struct fsal_obj_handle *obj_hdl, caddr_t buffer_addr,
 
 /* DEFINE HERE YOUR ATTRIBUTES LIST */
 
+#if 0
 static fsal_xattr_def_t xattr_list[] = {
 	{"vfshandle", print_vfshandle, NULL, XATTR_FOR_ALL | XATTR_RO, NULL},
 };
@@ -254,77 +251,6 @@ static int file_attributes_to_xattr_attrs(struct attrlist *file_attrs,
 
 }
 
-static int xattr_id_to_name(libzfswrap_vfs_t *p_vfs, creden_t *pcred,
-			    inogen_t object, unsigned int xattr_id, char *name)
-{
-	unsigned int index;
-	unsigned int curr_idx;
-	char names[MAXPATHLEN], *ptr;
-	size_t namesize;
-	size_t len = 0;
-	int retval = 0;
-
-	if (xattr_id < XATTR_COUNT)
-		return ERR_FSAL_INVAL;
-
-	index = xattr_id - XATTR_COUNT;
-
-	/* get xattrs */
-
-	retval =
-	    libzfswrap_listxattr(p_vfs, pcred, object, (char **)&names,
-				 &namesize);
-	if (retval)
-		return posix2fsal_error(retval);
-
-	if (namesize == 0)
-		return ERR_FSAL_NOENT;
-
-	errno = 0;
-
-	for (ptr = names, curr_idx = 0;
-	     ptr < names + namesize;
-	     curr_idx++, ptr += len + 1) {
-		len = strlen(ptr);
-		if (curr_idx == index) {
-			strcpy(name, ptr);
-			return ERR_FSAL_NO_ERROR;
-		}
-	}
-	return ERR_FSAL_NOENT;
-}
-
-/**
- *  return index if found,
- *  negative value on error.
- */
-static int xattr_name_to_id(libzfswrap_vfs_t *p_vfs, creden_t *pcred,
-			    inogen_t object, char *name)
-{
-	unsigned int i;
-	char names[MAXPATHLEN], *ptr;
-	size_t namesize;
-	int retval = 0;
-
-	/* get xattrs */
-
-	retval =
-	    libzfswrap_listxattr(p_vfs, pcred, object, (char **)&name,
-				 &namesize);
-	if (retval)
-		return -posix2fsal_error(retval);
-
-	if (namesize == 0)
-		return -ERR_FSAL_NOENT;
-
-	for (ptr = names, i = 0; ptr < names + namesize;
-	     i++, ptr += strlen(ptr) + 1) {
-		if (!strcmp(name, ptr))
-			return i + XATTR_COUNT;
-	}
-	return -ERR_FSAL_NOENT;
-}
-
 static int xattr_format_value(caddr_t buffer, size_t *datalen, size_t maxlen)
 {
 	size_t size_in = *datalen;
@@ -400,430 +326,72 @@ static int xattr_format_value(caddr_t buffer, size_t *datalen, size_t maxlen)
 		return ERR_FSAL_NO_ERROR;
 	}
 }
+#endif
 
-fsal_status_t tank_list_ext_attrs(struct fsal_obj_handle *obj_hdl,
+fsal_status_t kvsfs_list_ext_attrs(struct fsal_obj_handle *obj_hdl,
 				  unsigned int argcookie,
 				  fsal_xattrent_t *xattrs_tab,
 				  unsigned int xattrs_tabsize,
 				  unsigned int *p_nb_returned, int *end_of_list)
 {
-	unsigned int index;
-	unsigned int out_index;
-	unsigned int cookie = argcookie;
-	struct zfs_fsal_obj_handle *obj_handle = NULL;
-
-	char names[MAXPATHLEN], *ptr;
-	size_t namesize;
-	int xattr_idx;
-	int retval;
-	creden_t cred;
-
-	/* sanity checks */
-	if (!obj_hdl || !xattrs_tab || !p_nb_returned || !end_of_list)
-		return fsalstat(ERR_FSAL_FAULT, 0);
-
-	obj_handle =
-	    container_of(obj_hdl, struct zfs_fsal_obj_handle, obj_handle);
-
-	cred.uid = op_ctx->creds->caller_uid;
-	cred.gid = op_ctx->creds->caller_gid;
-
-	/* Deal with special cookie */
-	if (cookie == XATTR_RW_COOKIE)
-		cookie = XATTR_COUNT;
-
-	for (index = cookie, out_index = 0;
-	     index < XATTR_COUNT && out_index < xattrs_tabsize; index++) {
-		if (do_match_type(xattr_list[index].flags,
-				  obj_handle->attributes.type)) {
-			/* fills an xattr entry */
-			xattrs_tab[out_index].xattr_id = index;
-			strncpy(xattr_list[index].xattr_name,
-				xattrs_tab[out_index].xattr_name, MAXNAMLEN);
-			xattr_list[index].xattr_name[MAXNAMLEN] = '\0';
-			xattrs_tab[out_index].xattr_cookie = index + 1;
-
-			/* set asked attributes (all supported) */
-			xattrs_tab[out_index].attributes.mask =
-			    obj_handle->attributes.mask;
-
-			if (file_attributes_to_xattr_attrs(obj_hdl->attrs,
-							   &xattrs_tab
-							   [out_index]
-							   .attributes,
-							   index)) {
-				/* set error flag */
-				xattrs_tab[out_index].attributes.mask =
-				    ATTR_RDATTR_ERR;
-			}
-
-			/* next output slot */
-			out_index++;
-		}
-	}
-
-	/* save a call if output array is full */
-	if (out_index == xattrs_tabsize) {
-		*end_of_list = false;
-		*p_nb_returned = out_index;
-		return fsalstat(ERR_FSAL_NO_ERROR, 0);
-	}
-
-	/* get the path of the file in Lustre */
-
-	/* get xattrs */
-
-	retval = libzfswrap_listxattr(ZFSFSAL_GetVFS(obj_handle->handle),
-				      &cred,
-				      obj_handle->handle->zfs_handle,
-				      (char **)&names, &namesize);
-	if (retval)
-		return fsalstat(posix2fsal_error(retval), retval);
-
-	if (namesize > 0) {
-		size_t len = 0;
-
-		errno = 0;
-
-		for (ptr = names, xattr_idx = 0;
-		     (ptr < names + namesize) && (out_index < xattrs_tabsize);
-		     xattr_idx++, ptr += len + 1) {
-			len = strlen(ptr);
-			index = XATTR_COUNT + xattr_idx;
-
-			/* skip if index is before cookie */
-			if (index < cookie)
-				continue;
-
-			/* fills an xattr entry */
-			xattrs_tab[out_index].xattr_id = index;
-			strncpy(xattrs_tab[out_index].xattr_name, ptr, len + 1);
-			xattrs_tab[out_index].xattr_cookie = index + 1;
-
-			/* set asked attributes (all supported) */
-			xattrs_tab[out_index].attributes.mask =
-			    obj_handle->attributes.mask;
-
-			if (file_attributes_to_xattr_attrs
-			    (&obj_handle->attributes,
-			     &xattrs_tab[out_index].attributes, index)) {
-				/* set error flag */
-				xattrs_tab[out_index].attributes.mask =
-				    ATTR_RDATTR_ERR;
-			}
-
-			/* next output slot */
-			out_index++;
-		}
-		/* all xattrs are in the output array */
-		if (ptr >= names + namesize)
-			*end_of_list = true;
-		else
-			*end_of_list = false;
-	} else			/* no xattrs */
-		*end_of_list = true;
-
-	*p_nb_returned = out_index;
-
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
 
-fsal_status_t tank_getextattr_id_by_name(struct fsal_obj_handle *obj_hdl,
+fsal_status_t kvsfs_getextattr_id_by_name(struct fsal_obj_handle *obj_hdl,
 					 const char *xattr_name,
 					 unsigned int *pxattr_id)
 {
-	unsigned int index;
-	int rc;
-	bool found = false;
-	struct zfs_fsal_obj_handle *obj_handle = NULL;
-	creden_t cred;
-
-	/* sanity checks */
-	if (!obj_hdl || !xattr_name)
-		return fsalstat(ERR_FSAL_FAULT, 0);
-
-	obj_handle =
-	    container_of(obj_hdl, struct zfs_fsal_obj_handle, obj_handle);
-
-	cred.uid = op_ctx->creds->caller_uid;
-	cred.gid = op_ctx->creds->caller_gid;
-
-	for (index = 0; index < XATTR_COUNT; index++) {
-		if (!strcmp(xattr_list[index].xattr_name, xattr_name)) {
-			found = true;
-			break;
-		}
-	}
-
-	/* search in xattrs */
-	if (!found) {
-		rc = xattr_name_to_id(ZFSFSAL_GetVFS(obj_handle->handle), &cred,
-				      obj_handle->handle->zfs_handle,
-				      (char *)xattr_name);
-		if (rc)
-			return fsalstat(posix2fsal_error(rc), rc);
-		else {
-			index = rc;
-			found = true;
-		}
-	}
-	*pxattr_id = index;
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
 
-fsal_status_t tank_getextattr_value_by_id(struct fsal_obj_handle *obj_hdl,
+fsal_status_t kvsfs_getextattr_value_by_id(struct fsal_obj_handle *obj_hdl,
 					  unsigned int xattr_id,
 					  caddr_t buffer_addr,
 					  size_t buffer_size,
 					  size_t *p_output_size)
 {
-	struct zfs_fsal_obj_handle *obj_handle = NULL;
-	int retval = -1;
-	creden_t cred;
-
-	obj_handle =
-	    container_of(obj_hdl, struct zfs_fsal_obj_handle, obj_handle);
-
-	/* sanity checks */
-	if (!obj_hdl || !p_output_size || !buffer_addr)
-		return fsalstat(ERR_FSAL_FAULT, 0);
-
-	cred.uid = op_ctx->creds->caller_uid;
-	cred.gid = op_ctx->creds->caller_gid;
-
-	/* check that this index match the type of entry */
-	if ((xattr_id < XATTR_COUNT)
-	    && !do_match_type(xattr_list[xattr_id].flags,
-			      obj_handle->attributes.type)) {
-		return fsalstat(ERR_FSAL_INVAL, 0);
-	} else if (xattr_id >= XATTR_COUNT) {
-		char attr_name[MAXPATHLEN];
-
-		/* get the name for this attr */
-		retval = xattr_id_to_name(ZFSFSAL_GetVFS(obj_handle->handle),
-					  &cred,
-					  obj_handle->handle->zfs_handle,
-					  xattr_id,
-					  attr_name);
-		if (retval)
-			return fsalstat(retval, 0);
-		retval = libzfswrap_getxattr(ZFSFSAL_GetVFS(obj_handle->handle),
-					     &cred,
-					     obj_handle->handle->zfs_handle,
-					     attr_name, &buffer_addr);
-		if (retval)
-			return fsalstat(posix2fsal_error(retval), retval);
-
-		/* the xattr value can be a binary, or a string.
-		 * trying to determine its type...
-		 */
-		*p_output_size = strnlen(buffer_addr, buffer_size);
-		xattr_format_value(buffer_addr, p_output_size, buffer_size);
-
-		return fsalstat(ERR_FSAL_NO_ERROR, 0);
-	} else {		/* built-in attr */
-
-		/* get the value */
-		retval = xattr_list[xattr_id].get_func(obj_hdl, buffer_addr,
-						       buffer_size,
-						       p_output_size,
-						       xattr_list[xattr_id]
-						       .arg);
-		return fsalstat(retval, 0);
-	}
+	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
 
-fsal_status_t tank_getextattr_value_by_name(struct fsal_obj_handle *obj_hdl,
+fsal_status_t kvsfs_getextattr_value_by_name(struct fsal_obj_handle *obj_hdl,
 					    const char *xattr_name,
 					    caddr_t buffer_addr,
 					    size_t buffer_size,
 					    size_t *p_output_size)
 {
-	struct zfs_fsal_obj_handle *obj_handle = NULL;
-	unsigned int index;
-	creden_t cred;
-	int retval = 0;
-
-	obj_handle =
-	    container_of(obj_hdl, struct zfs_fsal_obj_handle, obj_handle);
-
-	/* sanity checks */
-	if (!obj_hdl || !p_output_size || !buffer_addr || !xattr_name)
-		return fsalstat(ERR_FSAL_FAULT, 0);
-
-	cred.uid = op_ctx->creds->caller_uid;
-	cred.gid = op_ctx->creds->caller_gid;
-
-	/* look for this name */
-	for (index = 0; index < XATTR_COUNT; index++) {
-		if (do_match_type(xattr_list[index].flags,
-				  obj_handle->attributes.type)
-		    && !strcmp(xattr_list[index].xattr_name,
-			       xattr_name)) {
-			return tank_getextattr_value_by_id(obj_hdl,
-							   index, buffer_addr,
-							   buffer_size,
-							   p_output_size);
-		}
-	}
-
-	/* is it an xattr? */
-	retval = libzfswrap_getxattr(ZFSFSAL_GetVFS(obj_handle->handle),
-				     &cred,
-				     obj_handle->handle->zfs_handle,
-				     xattr_name,
-				     &buffer_addr);
-	if (retval)
-		return fsalstat(posix2fsal_error(retval), retval);
-	/* the xattr value can be a binary, or a string.
-	 * trying to determine its type...
-	 */
-	*p_output_size = strnlen(buffer_addr, buffer_size);
-	xattr_format_value(buffer_addr, p_output_size, buffer_size);
-
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
 
-fsal_status_t tank_setextattr_value(struct fsal_obj_handle *obj_hdl,
+fsal_status_t kvsfs_setextattr_value(struct fsal_obj_handle *obj_hdl,
 				    const char *xattr_name, caddr_t buffer_addr,
 				    size_t buffer_size, int create)
 {
-	struct zfs_fsal_obj_handle *obj_handle = NULL;
-	int rc = 0;
-	creden_t cred;
-
-	obj_handle =
-	    container_of(obj_hdl, struct zfs_fsal_obj_handle, obj_handle);
-
-	/* remove final '\n', if any */
-	chomp_attr_value((char *)buffer_addr, buffer_size);
-
-	cred.uid = op_ctx->creds->caller_uid;
-	cred.gid = op_ctx->creds->caller_gid;
-
-	rc = libzfswrap_setxattr(ZFSFSAL_GetVFS(obj_handle->handle), &cred,
-				 obj_handle->handle->zfs_handle, xattr_name,
-				 buffer_addr);
-
-	if (rc != 0)
-		return fsalstat(posix2fsal_error(rc), rc);
-	else
-		return fsalstat(ERR_FSAL_NO_ERROR, 0);
-
+	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
 
-fsal_status_t tank_setextattr_value_by_id(struct fsal_obj_handle *obj_hdl,
+fsal_status_t kvsfs_setextattr_value_by_id(struct fsal_obj_handle *obj_hdl,
 					  unsigned int xattr_id,
 					  caddr_t buffer_addr,
 					  size_t buffer_size)
 {
-	char name[MAXNAMLEN];
-	struct zfs_fsal_obj_handle *obj_handle = NULL;
-	int retval = -1;
-	creden_t cred;
-
-	obj_handle =
-	    container_of(obj_hdl, struct zfs_fsal_obj_handle, obj_handle);
-
-	if (attr_is_read_only(xattr_id))
-		return fsalstat(ERR_FSAL_PERM, 0);
-	else if (xattr_id < XATTR_COUNT)
-		return fsalstat(ERR_FSAL_PERM, 0);
-
-	cred.uid = op_ctx->creds->caller_uid;
-	cred.gid = op_ctx->creds->caller_gid;
-
-	retval =
-	    xattr_id_to_name(ZFSFSAL_GetVFS(obj_handle->handle), &cred,
-			     obj_handle->handle->zfs_handle, xattr_id, name);
-	if (retval)
-		return fsalstat(retval, 0);
-
-	return tank_setextattr_value(obj_hdl, name, buffer_addr,
-				     buffer_size, false);
+	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
 
-fsal_status_t tank_getextattr_attrs(struct fsal_obj_handle *obj_hdl,
+fsal_status_t kvsfs_getextattr_attrs(struct fsal_obj_handle *obj_hdl,
 				    unsigned int xattr_id,
 				    struct attrlist *p_attrs)
 {
-	struct zfs_fsal_obj_handle *obj_handle = NULL;
-	int rc;
-
-	/* sanity checks */
-	if (!obj_hdl || !p_attrs)
-		return fsalstat(ERR_FSAL_FAULT, 0);
-
-	obj_handle =
-	    container_of(obj_hdl, struct zfs_fsal_obj_handle, obj_handle);
-
-	/* check that this index match the type of entry */
-	if (xattr_id < XATTR_COUNT
-	    && !do_match_type(xattr_list[xattr_id].flags,
-			      obj_handle->attributes.type)) {
-		return fsalstat(ERR_FSAL_INVAL, 0);
-	} else if (xattr_id >= XATTR_COUNT) {
-		/* This is user defined xattr */
-		LogFullDebug(COMPONENT_FSAL, "Getting attributes for xattr #%u",
-			     xattr_id - XATTR_COUNT);
-	}
-
-	rc = file_attributes_to_xattr_attrs(&obj_handle->attributes, p_attrs,
-					    xattr_id);
-	if (rc)
-		return fsalstat(ERR_FSAL_INVAL, rc);
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
 
-fsal_status_t tank_remove_extattr_by_id(struct fsal_obj_handle *obj_hdl,
+fsal_status_t kvsfs_remove_extattr_by_id(struct fsal_obj_handle *obj_hdl,
 					unsigned int xattr_id)
 {
-	char name[MAXNAMLEN];
-	struct zfs_fsal_obj_handle *obj_handle = NULL;
-	int retval = 0;
-	creden_t cred;
-
-	obj_handle =
-	    container_of(obj_hdl, struct zfs_fsal_obj_handle, obj_handle);
-
-	cred.uid = op_ctx->creds->caller_uid;
-	cred.gid = op_ctx->creds->caller_gid;
-
-	retval = xattr_id_to_name(ZFSFSAL_GetVFS(obj_handle->handle),
-				  &cred,
-				  obj_handle->handle->zfs_handle,
-				  xattr_id, name);
-	if (retval)
-		return fsalstat(retval, 0);
-	retval = libzfswrap_removexattr(ZFSFSAL_GetVFS(obj_handle->handle),
-					&cred,
-					obj_handle->handle->zfs_handle,
-					name);
-	if (retval != 0)
-		return fsalstat(posix2fsal_error(retval), retval);
-
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
 
-fsal_status_t tank_remove_extattr_by_name(struct fsal_obj_handle *obj_hdl,
+fsal_status_t kvsfs_remove_extattr_by_name(struct fsal_obj_handle *obj_hdl,
 					  const char *xattr_name)
 {
-	struct zfs_fsal_obj_handle *obj_handle = NULL;
-	int retval = 0;
-	creden_t cred;
-
-	obj_handle =
-	    container_of(obj_hdl, struct zfs_fsal_obj_handle, obj_handle);
-
-	cred.uid = op_ctx->creds->caller_uid;
-	cred.gid = op_ctx->creds->caller_gid;
-
-	retval = libzfswrap_removexattr(ZFSFSAL_GetVFS(obj_handle->handle),
-					&cred,
-					obj_handle->handle->zfs_handle,
-					xattr_name);
-	if (retval != 0)
-		return fsalstat(posix2fsal_error(retval), retval);
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
-
 }

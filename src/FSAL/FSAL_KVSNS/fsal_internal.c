@@ -26,4 +26,3 @@
  */
 struct fsal_staticfsinfo_t global_fs_info;
 
-libzfswrap_handle_t *p_zhd;

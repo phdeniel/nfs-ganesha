@@ -38,13 +38,13 @@
 #include "gsh_list.h"
 #include "fsal.h"
 #include "fsal_internal.h"
-#include "zfs_methods.h"
+#include "kvsfs_methods.h"
 #include "FSAL/fsal_init.h"
 
-const char myname[] = "ZFS";
+const char myname[] = "KVSFS";
 
 /* filesystem info for your filesystem */
-static struct fsal_staticfsinfo_t default_zfs_info = {
+static struct fsal_staticfsinfo_t default_kvsfs_info = {
 	.maxfilesize = UINT64_MAX,		/* Max fiule size */
 	.maxlink = 1024,	/* max links for an object of your filesystem */
 	.maxnamelen = MAXNAMLEN,		/* max filename */
@@ -62,89 +62,89 @@ static struct fsal_staticfsinfo_t default_zfs_info = {
 	.acl_support = FSAL_ACLSUPPORT_ALLOW,	/* ACL support */
 	.cansettime = true,
 	.homogenous = true,			/* homogenous */
-	.supported_attrs = ZFS_SUPPORTED_ATTRIBUTES, /* supported attributes */
+	.supported_attrs = KVSFS_SUPPORTED_ATTRIBUTES, /* supp attributes */
 	.link_supports_permission_checks = true,
 };
 
-static struct config_item zfs_params[] = {
+static struct config_item kvsfs_params[] = {
 	CONF_ITEM_BOOL("link_support", true,
-		       zfs_fsal_module, fs_info.link_support),
+		       kvsfs_fsal_module, fs_info.link_support),
 	CONF_ITEM_BOOL("symlink_support", true,
-		       zfs_fsal_module, fs_info.symlink_support),
+		       kvsfs_fsal_module, fs_info.symlink_support),
 	CONF_ITEM_BOOL("cansettime", true,
-		       zfs_fsal_module, fs_info.cansettime),
+		       kvsfs_fsal_module, fs_info.cansettime),
 	CONF_ITEM_UI32("maxread", 512, FSAL_MAXIOSIZE, FSAL_MAXIOSIZE,
-		       zfs_fsal_module, fs_info.maxread),
+		       kvsfs_fsal_module, fs_info.maxread),
 	CONF_ITEM_UI32("maxwrite", 512, FSAL_MAXIOSIZE, FSAL_MAXIOSIZE,
-		       zfs_fsal_module, fs_info.maxwrite),
+		       kvsfs_fsal_module, fs_info.maxwrite),
 	CONF_ITEM_MODE("umask", 0,
-		       zfs_fsal_module, fs_info.umask),
+		       kvsfs_fsal_module, fs_info.umask),
 	CONF_ITEM_BOOL("auth_xdev_export", false,
-		       zfs_fsal_module, fs_info.auth_exportpath_xdev),
+		       kvsfs_fsal_module, fs_info.auth_exportpath_xdev),
 	CONF_ITEM_MODE("xattr_access_rights", 0400,
-		       zfs_fsal_module, fs_info.xattr_access_rights),
+		       kvsfs_fsal_module, fs_info.xattr_access_rights),
 	CONFIG_EOL
 };
 
-struct config_block zfs_param = {
+struct config_block kvsfs_param = {
 	.dbus_interface_name = "org.ganesha.nfsd.config.fsal.zfs",
-	.blk_desc.name = "ZFS",
+	.blk_desc.name = "KVSFS",
 	.blk_desc.type = CONFIG_BLOCK,
 	.blk_desc.u.blk.init = noop_conf_init,
-	.blk_desc.u.blk.params = zfs_params,
+	.blk_desc.u.blk.params = kvsfs_params,
 	.blk_desc.u.blk.commit = noop_conf_commit
 };
 
 /* private helper for export object
  */
 
-struct fsal_staticfsinfo_t *zfs_staticinfo(struct fsal_module *hdl)
+struct fsal_staticfsinfo_t *kvsfs_staticinfo(struct fsal_module *hdl)
 {
-	struct zfs_fsal_module *myself;
+	struct kvsfs_fsal_module *myself;
 
-	myself = container_of(hdl, struct zfs_fsal_module, fsal);
+	myself = container_of(hdl, struct kvsfs_fsal_module, fsal);
 	return &myself->fs_info;
 }
 
 /* Module methods
  */
 
-/* zfs_init_config
+/* kvsfs_init_config
  * must be called with a reference taken (via lookup_fsal)
  */
 
-static fsal_status_t zfs_init_config(struct fsal_module *fsal_hdl,
+static fsal_status_t kvsfs_init_config(struct fsal_module *fsal_hdl,
 				     config_file_t config_struct,
 				     struct config_error_type *err_type)
 {
-	struct zfs_fsal_module *zfs_me =
-	    container_of(fsal_hdl, struct zfs_fsal_module, fsal);
+	struct kvsfs_fsal_module *kvsfs_me =
+	    container_of(fsal_hdl, struct kvsfs_fsal_module, fsal);
 
-	zfs_me->fs_info = default_zfs_info;	/* copy the consts */
+	kvsfs_me->fs_info = default_kvsfs_info;	/* copy the consts */
 	(void) load_config_from_parse(config_struct,
-				      &zfs_param,
-				      &zfs_me,
+				      &kvsfs_param,
+				      &kvsfs_me,
 				      true,
 				      err_type);
 	if (!config_error_is_harmless(err_type))
 		return fsalstat(ERR_FSAL_INVAL, 0);
-	display_fsinfo(&zfs_me->fs_info);
+	display_fsinfo(&kvsfs_me->fs_info);
 	LogFullDebug(COMPONENT_FSAL,
 		     "Supported attributes constant = 0x%" PRIx64,
-		     (uint64_t) ZFS_SUPPORTED_ATTRIBUTES);
+		     (uint64_t) KVSFS_SUPPORTED_ATTRIBUTES);
 	LogFullDebug(COMPONENT_FSAL,
 		     "Supported attributes default = 0x%" PRIx64,
-		     default_zfs_info.supported_attrs);
+		     default_kvsfs_info.supported_attrs);
 	LogDebug(COMPONENT_FSAL,
 		 "FSAL INIT: Supported attributes mask = 0x%" PRIx64,
-		 zfs_me->fs_info.supported_attrs);
+		 kvsfs_me->fs_info.supported_attrs);
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
 
-/* Internal ZFS method linkage to export object
+/* Internal KVSFS method linkage to export object
  */
 
-fsal_status_t zfs_create_export(struct fsal_module *fsal_hdl,
+fsal_status_t kvsfs_create_export(struct fsal_module *fsal_hdl,
 				void *parse_node,
 				struct config_error_type *err_type,
 				const struct fsal_up_vector *up_ops);
@@ -157,33 +157,33 @@ fsal_status_t zfs_create_export(struct fsal_module *fsal_hdl,
 /* my module private storage
  */
 
-static struct zfs_fsal_module ZFS;
+static struct kvsfs_fsal_module KVSFS;
 
-MODULE_INIT void zfs_load(void)
+MODULE_INIT void kvsfs_load(void)
 {
 	int retval;
-	struct fsal_module *myself = &ZFS.fsal;
+	struct fsal_module *myself = &KVSFS.fsal;
 
 	retval = register_fsal(myself, myname,
 			       FSAL_MAJOR_VERSION,
 			       FSAL_MINOR_VERSION,
 			       FSAL_ID_NO_PNFS);
 	if (retval != 0) {
-		fprintf(stderr, "ZFS module failed to register");
+		fprintf(stderr, "KVSFS module failed to register");
 		return;
 	}
 
-	myself->m_ops.create_export = zfs_create_export;
-	myself->m_ops.init_config = zfs_init_config;
+	myself->m_ops.create_export = kvsfs_create_export;
+	myself->m_ops.init_config = kvsfs_init_config;
 }
 
-MODULE_FINI void zfs_unload(void)
+MODULE_FINI void kvsfs_unload(void)
 {
 	int retval;
 
-	retval = unregister_fsal(&ZFS.fsal);
+	retval = unregister_fsal(&KVSFS.fsal);
 	if (retval != 0) {
-		fprintf(stderr, "ZFS module failed to unregister");
+		fprintf(stderr, "KVSFS module failed to unregister");
 		return;
 	}
 }
