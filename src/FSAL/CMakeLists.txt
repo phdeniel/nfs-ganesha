@@ -39,9 +39,9 @@ if(USE_FSAL_ZFS)
   add_subdirectory(FSAL_ZFS)
 endif(USE_FSAL_ZFS)
 
-if(USE_FSAL_KVSNS)
-  add_subdirectory(FSAL_KVSNS)
-endif(USE_FSAL_KVSNS)
+if(USE_FSAL_KVSFS)
+  add_subdirectory(FSAL_KVSFS)
+endif(USE_FSAL_KVSFS)
 
 if(USE_FSAL_CLOVIS)
   add_subdirectory(FSAL_CLOVIS)

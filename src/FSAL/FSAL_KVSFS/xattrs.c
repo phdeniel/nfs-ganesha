@@ -50,13 +50,13 @@ typedef int (*xattr_getfunc_t) (struct fsal_obj_handle *, /* object handle */
 				caddr_t,	/* output buff */
 				size_t,	/* output buff size */
 				size_t *,	/* output size */
-				void *arg);	/* optionnal argument */
+				void *arg);	/* optional argument */
 
 typedef int (*xattr_setfunc_t) (struct fsal_obj_handle *, /* object handle */
 				caddr_t,	/* input buff */
 				size_t,	/* input size */
 				int,	/* creation flag */
-				void *arg);	/* optionnal argument */
+				void *arg);	/* optional argument */
 
 typedef struct fsal_xattr_def__ {
 	char xattr_name[MAXNAMLEN + 1];

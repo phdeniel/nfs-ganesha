@@ -163,7 +163,7 @@ int external_consolidate_attrs(struct fsal_obj_handle *obj_hdl,
 	zfsstat->st_blocks = extstat.st_blocks;
 
 	printf("=======> external_stat: %s size=%lld\n",
-		storepath, 
+		storepath,
 		(long long int)zfsstat->st_size);
 
 	return 0;

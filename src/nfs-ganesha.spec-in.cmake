@@ -37,8 +37,8 @@
 @BCOND_CLOVIS@ clovis
 %global use_fsal_clovis %{on_off_switch clovis}
 
-@BCOND_KVSNS@ kvsns
-%global use_fsal_kvsns %{on_off_switch kvsns}
+@BCOND_KVSFS@ kvsfs
+%global use_fsal_kvsfs %{on_off_switch kvsfs}
 
 @BCOND_XFS@ xfs
 %global use_fsal_xfs %{on_off_switch xfs}
@@ -246,16 +246,30 @@ This package contains a FSAL shared object to
 be used with NFS-Ganesha to support ZFS
 %endif
 
+# KVSFS
+%if %{with kvsfs}
+%package kvsfs
+Summary: The NFS-GANESHA's KVSFS FSAL
+Group: Applications/System
+Requires:	nfs-ganesha = %{version}-%{release}
+Requires: 	libkvsns
+BuildRequires:	libkvsns-devel
+
+%description kvsfs
+This package contains a FSAL shared object to
+be used with NFS-Ganesha to support KVSNS
+%endif
+
 # CLOVIS
 %if %{with clovis}
-%package zfs
+%package clovis
 Summary: The NFS-GANESHA's CLOVIS FSAL
 Group: Applications/System
 Requires:       nfs-ganesha = %{version}-%{release}
 Requires: 	libzfswrap mero
 BuildRequires:  libzfswrap-devel mero-devel
 
-%description zfs
+%description clovis
 This package contains a FSAL shared object to
 be used with NFS-Ganesha to support CLOVIS
 %endif
@@ -390,7 +404,7 @@ cmake .	-DCMAKE_BUILD_TYPE=Debug			\
 	-DUSE_FSAL_NULL=%{use_fsal_null}		\
 	-DUSE_FSAL_ZFS=%{use_fsal_zfs}			\
 	-DUSE_FSAL_CLOVIS=%{use_fsal_clovis}		\
-	-DUSE_FSAL_CLOVIS=%{use_fsal_kvsns}		\
+	-DUSE_FSAL_KVSFS=%{use_fsal_kvsfs}		\
 	-DUSE_FSAL_XFS=%{use_fsal_xfs}			\
 	-DUSE_FSAL_CEPH=%{use_fsal_ceph}		\
 	-DUSE_FSAL_RGW=%{use_fsal_rgw}			\
@@ -463,6 +477,10 @@ install -m 644 config_samples/xfs.conf %{buildroot}%{_sysconfdir}/ganesha
 
 %if %{with zfs}
 install -m 644 config_samples/zfs.conf %{buildroot}%{_sysconfdir}/ganesha
+%endif
+
+%if %{with kvsfs}
+install -m 644 config_samples/kvsfs.conf %{buildroot}%{_sysconfdir}/ganesha
 %endif
 
 %if %{with ceph}
@@ -577,6 +595,13 @@ killall -SIGHUP dbus-daemon 2>&1 > /dev/null
 %defattr(-,root,root,-)
 %{_libdir}/ganesha/libfsalzfs*
 %config(noreplace) %{_sysconfdir}/ganesha/zfs.conf
+%endif
+
+%if %{with kvsfs}
+%files kvsfs
+%defattr(-,root,root,-)
+%{_libdir}/ganesha/libfsalkvsfs*
+%config(noreplace) %{_sysconfdir}/ganesha/kvsfs.conf
 %endif
 
 %if %{with xfs}

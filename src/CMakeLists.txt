@@ -178,7 +178,7 @@ option(USE_FSAL_VFS "build VFS FSAL shared library" ON)
 option(USE_FSAL_CEPH "build CEPH FSAL shared library" ON)
 option(USE_FSAL_GPFS "build GPFS FSAL" ON)
 option(USE_FSAL_ZFS "build ZFS FSAL" ON)
-option(USE_FSAL_KVSNS "build KVSNS FSAL" ON)
+option(USE_FSAL_KVSFS "build KVSFS FSAL" ON)
 option(USE_FSAL_CLOVIS "build CLOVIS FSAL" ON)
 option(USE_FSAL_LUSTRE "build LUSTRE FSAL" ON)
 option(USE_FSAL_XFS "build XFS support in VFS FSAL" ON)
@@ -410,9 +410,9 @@ IF(USE_FSAL_ZFS)
   ELSE()
     set(ZFS_PREFIX "/usr" CACHE PATH "Path to ZFS installation")
   ENDIF()
-ENDIF()
+ENDIF(USE_FSAL_ZFS)
 
-IF(USE_FSAL_KVSNS)
+IF(USE_FSAL_KVSFS)
   IF(KVSNS_PREFIX)
     set(KVSNS_PREFIX ${KVSNS_PREFIX} CACHE PATH "Path to ZFS installation")
     LIST(APPEND CMAKE_PREFIX_PATH "${KVSNS_PREFIX}")
@@ -424,7 +424,7 @@ IF(USE_FSAL_KVSNS)
   ELSE()
     set(KVSNS_PREFIX "/usr" CACHE PATH "Path to KVSNS installation")
   ENDIF()
-ENDIF()
+ENDIF(USE_FSAL_KVSFS)
 
 IF(USE_FSAL_CLOVIS)
   IF(ZFS_PREFIX)
@@ -437,7 +437,7 @@ IF(USE_FSAL_CLOVIS)
   ELSE()
     set(ZFS_PREFIX "/usr" CACHE PATH "Path to ZFS installation")
   ENDIF()
-ENDIF()
+ENDIF(USE_FSAL_CLOVIS)
 
 IF(KRB5_PREFIX)
   set(KRB5_PREFIX ${KRB5_PREFIX} CACHE PATH "Path to Krb5 installation")
@@ -772,7 +772,7 @@ if(USE_FSAL_ZFS)
   endif((NOT HAVE_ZFS_LIB) OR (NOT HAVE_LIBZFSWRAP_H))
 endif(USE_FSAL_ZFS)
 
-if(USE_FSAL_KVSNS)
+if(USE_FSAL_KVSFS)
   check_library_exists(
     kvsns
     kvsns_mkdir
@@ -785,13 +785,13 @@ if(USE_FSAL_KVSNS)
 
   if((NOT HAVE_KVSNS_LIB) OR (NOT HAVE_LIBKVSNS_H))
    if(STRICT_PACKAGE)
-      message(FATAL_ERROR "STRICT_PACKAGE: Cannot find KVSNS runtime. Disabling KVSNS build")
+      message(FATAL_ERROR "STRICT_PACKAGE: Cannot find KVSNS runtime. Disabling KVSFS build")
    else(STRICT_PACKAGE)
-      message(WARNING "Cannot find KVSNS runtime. Disabling KVSNS build")
-      set(USE_FSAL_KVSNS OFF)
+      message(WARNING "Cannot find KVSNS runtime. Disabling KVSFS build")
+      set(USE_FSAL_KVSFS OFF)
     endif(STRICT_PACKAGE)
   endif((NOT HAVE_KVSNS_LIB) OR (NOT HAVE_LIBKVSNS_H))
-endif(USE_FSAL_KVSNS)
+endif(USE_FSAL_KVSFS)
 
 if(USE_FSAL_CLOVIS)
   check_library_exists(
@@ -1127,7 +1127,7 @@ message(STATUS "USE_FSAL_PANFS = ${USE_FSAL_PANFS}")
 message(STATUS "USE_FSAL_GPFS = ${USE_FSAL_GPFS}")
 message(STATUS "USE_FSAL_PT = ${USE_FSAL_PT}")
 message(STATUS "USE_FSAL_ZFS = ${USE_FSAL_ZFS}")
-message(STATUS "USE_FSAL_KVSNS = ${USE_FSAL_KVSNS}")
+message(STATUS "USE_FSAL_KVSFS = ${USE_FSAL_KVSFS}")
 message(STATUS "USE_FSAL_CLOVIS = ${USE_FSAL_CLOVIS}")
 message(STATUS "USE_FSAL_LUSTRE = ${USE_FSAL_LUSTRE}")
 message(STATUS "USE_FSAL_SHOOK = ${USE_FSAL_SHOOK}")
@@ -1238,9 +1238,9 @@ set(USE_FSAL_ZFS ${USE_FSAL_ZFS}
    "build ZFS FSAL"
    FORCE)
 
-set(USE_FSAL_KVSNS ${USE_FSAL_KVSNS}
+set(USE_FSAL_KVSFS ${USE_FSAL_KVSFS}
   CACHE BOOL
-   "build KVSNS FSAL"
+   "build KVSFS FSAL"
    FORCE)
 
 set(USE_FSAL_CLOVIS ${USE_FSAL_CLOVIS}
@@ -1414,11 +1414,11 @@ else(USE_FSAL_ZFS)
     set(BCOND_ZFS "%bcond_with")
 endif(USE_FSAL_ZFS)
 
-if(USE_FSAL_KVSNS)
-    set(BCOND_KVSNS "%bcond_without")
-else(USE_FSAL_KVSNS)
-    set(BCOND_KVSNS "%bcond_with")
-endif(USE_FSAL_KVSNS)
+if(USE_FSAL_KVSFS)
+    set(BCOND_KVSFS "%bcond_without")
+else(USE_FSAL_KVSFS)
+    set(BCOND_KVSFS "%bcond_with")
+endif(USE_FSAL_KVSFS)
 
 if(USE_FSAL_CLOVIS)
     set(BCOND_CLOVIS "%bcond_without")

@@ -1,12 +1,12 @@
 
 ########### next target ###############
 
-IF(KVSNS_PREFIX)
+IF(KVSFS_PREFIX)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${KVSNS_PREFIX}/include")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -L${KVSNS_PREFIX}/lib")
 ENDIF()
 
-SET(fsalkvsns_LIB_SRCS
+SET(fsalkvsfs_LIB_SRCS
    fsal_internal.c
    main.c
    export.c
@@ -15,15 +15,15 @@ SET(fsalkvsns_LIB_SRCS
    xattrs.c
 )
 
-add_library(fsalkvsns SHARED ${fsalkvsns_LIB_SRCS})
+add_library(fsalkvsfs SHARED ${fsalkvsfs_LIB_SRCS})
 
-target_link_libraries(fsalkvsns
+target_link_libraries(fsalkvsfs
   kvsns hiredis
   ${SYSTEM_LIBRARIES}
 )
 
-set_target_properties(fsalkvsns PROPERTIES VERSION 4.2.0 SOVERSION 4)
+set_target_properties(fsalkvsfs PROPERTIES VERSION 4.2.0 SOVERSION 4)
 
 ########### install files ###############
 
-install(TARGETS fsalkvsns COMPONENT fsal DESTINATION  ${FSAL_DESTINATION} )
+install(TARGETS fsalkvsfs COMPONENT fsal DESTINATION  ${FSAL_DESTINATION} )
