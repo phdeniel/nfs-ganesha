@@ -179,7 +179,25 @@ static fsal_status_t kvsfs_extract_handle(struct fsal_export *exp_hdl,
 					 struct gsh_buffdesc *fh_desc,
 					 int flags)
 {
+	struct kvsfs_file_handle *hdl;
+	size_t fh_size;
+
+	/* sanity checks */
+	if (!fh_desc || !fh_desc->addr)
+		return fsalstat(ERR_FSAL_FAULT, 0);
+
+	hdl = (struct kvsfs_file_handle *)fh_desc->addr;
+	fh_size = kvsfs_sizeof_handle(hdl);
+	if (fh_desc->len != fh_size) {
+		LogMajor(COMPONENT_FSAL,
+			 "Size mismatch for handle.  should be %lu, got %u",
+			 (unsigned long int)fh_size,
+			 (unsigned int)fh_desc->len);
+		return fsalstat(ERR_FSAL_SERVERFAULT, 0);
+	}
+	fh_desc->len = fh_size;	/* pass back the actual size */
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
+
 }
 
 /* kvsfs_export_ops_init
@@ -207,7 +225,6 @@ void kvsfs_export_ops_init(struct export_ops *ops)
 	ops->fs_xattr_access_rights = fs_xattr_access_rights;
 }
 
-#if 0
 static struct config_item export_params[] = {
 	CONF_ITEM_NOOP("name"),
 	CONFIG_EOL
@@ -221,7 +238,6 @@ static struct config_block export_param = {
 	.blk_desc.u.blk.params = export_params,
 	.blk_desc.u.blk.commit = noop_conf_commit
 };
-#endif
 
 /* create_export
  * Create an export point and return a handle to it to be kept
@@ -235,5 +251,40 @@ fsal_status_t kvsfs_create_export(struct fsal_module *fsal_hdl,
 				struct config_error_type *err_type,
 				const struct fsal_up_vector *up_ops)
 {
+	struct kvsfs_fsal_export *myself = NULL;
+	int retval = 0;
+	fsal_errors_t fsal_error = ERR_FSAL_INVAL;
+
+	myself = gsh_calloc(1, sizeof(struct kvsfs_fsal_export));
+
+	fsal_export_init(&myself->export);
+	kvsfs_export_ops_init(&myself->export.exp_ops);
+	myself->export.up_ops = up_ops;
+
+	retval = load_config_from_node(parse_node,
+				       &export_param,
+				       myself,
+				       true,
+				       err_type);
+	if (retval != 0)
+		goto errout;
+
+	retval = fsal_attach_export(fsal_hdl, &myself->export.exports);
+	if (retval != 0)
+		goto err_locked;	/* seriously bad */
+	myself->export.fsal = fsal_hdl;
+
+	op_ctx->fsal_export = &myself->export;
+
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
+
+err_locked:
+	if (myself->export.fsal != NULL)
+		fsal_detach_export(fsal_hdl, &myself->export.exports);
+errout:
+	/* elvis has left the building */
+	gsh_free(myself);
+
+	return fsalstat(fsal_error, retval);
+
 }

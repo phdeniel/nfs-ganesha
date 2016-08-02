@@ -776,7 +776,7 @@ if(USE_FSAL_KVSFS)
   check_library_exists(
     kvsns
     kvsns_mkdir
-    ${KVSNS_PREFIX}/lib64
+    ""
     HAVE_KVSNS_LIB
     )
   check_include_files("kvsns.h" HAVE_LIBKVSNS_H)
