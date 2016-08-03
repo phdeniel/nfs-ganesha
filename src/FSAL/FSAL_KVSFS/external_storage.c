@@ -21,17 +21,16 @@
 /* a f***ing ugly define, to be removed later as things are OK */
 #define EXTERNAL_STORE "/btrfs/store"
 
-static int build_external_path(inogen_t object,
+static int build_external_path(kvsns_ino_t object,
 			       char *external_path,
 			       size_t pathlen)
 {
 	if (!external_path)
 		return -1;
 
-	return snprintf(external_path, pathlen, "%s/inum=%llu_gen=%llu",
+	return snprintf(external_path, pathlen, "%s/inum=%llu",
 			EXTERNAL_STORE,
-			(unsigned long long)object.inode,
-			(unsigned long long)object.generation);
+			(unsigned long long)object.inode);
 }
 
 int external_read(struct fsal_obj_handle *obj_hdl,
@@ -45,11 +44,12 @@ int external_read(struct fsal_obj_handle *obj_hdl,
 	int rc;
 	int fd;
 	ssize_t read_bytes;
-	struct zfs_fsal_obj_handle *myself;
+	struct kvsfs_fsal_obj_handle *myself;
 
-	myself = container_of(obj_hdl, struct zfs_fsal_obj_handle, obj_handle);
+	myself = container_of(obj_hdl, struct kvsfs_fsal_obj_handle,
+			      obj_handle);
 
-	rc = build_external_path(myself->handle->zfs_handle,
+	rc = build_external_path(myself->handle->kvsfs_handle,
 				 storepath, MAXPATHLEN);
 	if (rc < 0)
 		return rc;
@@ -85,12 +85,13 @@ int external_write(struct fsal_obj_handle *obj_hdl,
 	int rc;
 	int fd;
 	ssize_t written_bytes;
-	struct zfs_fsal_obj_handle *myself;
+	struct kvsfs_fsal_obj_handle *myself;
 	struct stat storestat;
 
-	myself = container_of(obj_hdl, struct zfs_fsal_obj_handle, obj_handle);
+	myself = container_of(obj_hdl, struct kvsfs_fsal_obj_handle,
+			      obj_handle);
 
-	rc = build_external_path(myself->handle->zfs_handle,
+	rc = build_external_path(myself->handle->kvsfs_handle,
 				 storepath, MAXPATHLEN);
 	if (rc < 0)
 		return rc;
@@ -127,22 +128,23 @@ int external_write(struct fsal_obj_handle *obj_hdl,
 }
 
 int external_consolidate_attrs(struct fsal_obj_handle *obj_hdl,
-			       struct stat *zfsstat)
+			       struct stat *stat)
 {
-	struct zfs_fsal_obj_handle *myself;
+	struct kvsfs_fsal_obj_handle *myself;
 	struct stat extstat;
 	char storepath[MAXPATHLEN];
 	int rc;
 
-	if (!obj_hdl || !zfsstat)
+	if (!obj_hdl || !stat)
 		return -1;
 
-	myself = container_of(obj_hdl, struct zfs_fsal_obj_handle, obj_handle);
+	myself = container_of(obj_hdl, struct kvsfs_fsal_obj_handle,
+			      obj_handle);
 
 	if (myself->attributes.type != REGULAR_FILE)
 		return 0;
 
-	rc = build_external_path(myself->handle->zfs_handle,
+	rc = build_external_path(myself->handle->kvsfs_handle,
 				 storepath, MAXPATHLEN);
 	if (rc < 0)
 		return rc;
@@ -156,15 +158,15 @@ int external_consolidate_attrs(struct fsal_obj_handle *obj_hdl,
 			return rc;
 	}
 
-	zfsstat->st_mtime = extstat.st_mtime;
-	zfsstat->st_atime = extstat.st_atime;
-	zfsstat->st_size = extstat.st_size;
-	zfsstat->st_blksize = extstat.st_blksize;
-	zfsstat->st_blocks = extstat.st_blocks;
+	stat->st_mtime = extstat.st_mtime;
+	stat->st_atime = extstat.st_atime;
+	stat->st_size = extstat.st_size;
+	stat->st_blksize = extstat.st_blksize;
+	stat->st_blocks = extstat.st_blocks;
 
 	printf("=======> external_stat: %s size=%lld\n",
 		storepath,
-		(long long int)zfsstat->st_size);
+		(long long int)stat->st_size);
 
 	return 0;
 }
@@ -174,34 +176,29 @@ int external_unlink(struct fsal_obj_handle *dir_hdl,
 {
 	int rc;
 	char storepath[MAXPATHLEN];
-	creden_t cred;
-	inogen_t object;
-	int type = 0;
+	kvsns_cred_t cred;
+	kvsns_ino_t object;
 	struct stat stat;
-	struct zfs_fsal_obj_handle *myself;
+	struct kvsfs_fsal_obj_handle *myself;
 
-	myself = container_of(dir_hdl, struct zfs_fsal_obj_handle, obj_handle);
+	myself = container_of(dir_hdl, struct kvsfs_fsal_obj_handle,
+			      obj_handle);
 
 	cred.uid = op_ctx->creds->caller_uid;
 	cred.gid = op_ctx->creds->caller_gid;
 
-	rc = libzfswrap_lookup(kvsfs_get_root_pvfs(op_ctx->fsal_export),
-			       &cred,
-			       myself->handle->zfs_handle,
-			       name, &object, &type);
+	rc = kvsns_lookup(&cred, &myself->handle->kvsfs_handle,
+			  (char *)name, &object);
 	if (rc)
-		return errno;
+		return -rc;
 
 	if (type == S_IFDIR)
 		return 0;
 
-	rc = libzfswrap_getattr(kvsfs_get_root_pvfs(op_ctx->fsal_export),
-				&cred,
-				object,
-				&stat,
-				&type);
+
+	rc = kvsns_getattr(&cred, &object, &stat);
 	if (rc)
-		return errno;
+		return -rc;
 
 	if (stat.st_nlink > 1)
 		return 0;
@@ -229,11 +226,12 @@ int external_truncate(struct fsal_obj_handle *obj_hdl,
 {
 	int rc;
 	char storepath[MAXPATHLEN];
-	struct zfs_fsal_obj_handle *myself;
+	struct kvsfs_fsal_obj_handle *myself;
 
-	myself = container_of(obj_hdl, struct zfs_fsal_obj_handle, obj_handle);
+	myself = container_of(obj_hdl, struct kvsfs_fsal_obj_handle,
+			      obj_handle);
 
-	rc = build_external_path(myself->handle->zfs_handle,
+	rc = build_external_path(myself->handle->kvsfs_handle,
 				 storepath, MAXPATHLEN);
 	if (rc < 0)
 		return rc;
