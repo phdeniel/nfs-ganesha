@@ -26,7 +26,7 @@
  */
 
 /* file.c
- * File I/O methods for ZFS module
+ * File I/O methods for KVSFS module
  */
 
 #include "config.h"

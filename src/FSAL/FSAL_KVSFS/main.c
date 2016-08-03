@@ -87,7 +87,7 @@ static struct config_item kvsfs_params[] = {
 };
 
 struct config_block kvsfs_param = {
-	.dbus_interface_name = "org.ganesha.nfsd.config.fsal.zfs",
+	.dbus_interface_name = "org.ganesha.nfsd.config.fsal.kvsfs",
 	.blk_desc.name = "KVSFS",
 	.blk_desc.type = CONFIG_BLOCK,
 	.blk_desc.u.blk.init = noop_conf_init,

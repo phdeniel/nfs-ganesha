@@ -1,4 +1,4 @@
-/* ZFS methods for handles
+/* KVSFS methods for handles
  */
 
 void kvsfs_handle_ops_init(struct fsal_obj_ops *ops);
@@ -14,7 +14,7 @@ fsal_status_t kvsfs_create_handle(struct fsal_export *exp_hdl,
 				 struct gsh_buffdesc *hdl_desc,
 				 struct fsal_obj_handle **handle);
 
-/* ZFS FSAL module private storage
+/* KVSFS FSAL module private storage
  */
 
 struct kvsfs_fsal_module {
@@ -23,7 +23,7 @@ struct kvsfs_fsal_module {
 };
 
 /*
- * ZFS internal export
+ * KVSFS internal export
  */
 
 struct kvsfs_fsal_export {
@@ -32,7 +32,7 @@ struct kvsfs_fsal_export {
 };
 
 /*
- * ZFS internal object handle
+ * KVSFS internal object handle
  * handle is a pointer because
  *  a) the last element of file_handle is a char[] meaning variable len...
  *  b) we cannot depend on it *always* being last or being the only
@@ -135,7 +135,7 @@ int external_read(struct fsal_obj_handle *obj_hdl,
 		  bool *end_of_file);
 
 int external_consolidate_attrs(struct fsal_obj_handle *obj_hdl,
-			       struct stat *zfsstat);
+			       struct stat *kvsstat);
 
 int external_unlink(struct fsal_obj_handle *dir_hdl,
 		    const char *name);

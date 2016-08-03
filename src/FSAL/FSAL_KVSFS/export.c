@@ -26,7 +26,7 @@
  */
 
 /* export.c
- * ZFS FSAL export object
+ * KVSFS FSAL export object
  */
 
 #include "config.h"
@@ -43,8 +43,6 @@
 #include "nfs_exports.h"
 #include "export_mgr.h"
 
-/* helpers to/from other ZFS objects
- */
 
 struct fsal_staticfsinfo_t *kvsfs_staticinfo(struct fsal_module *hdl);
 

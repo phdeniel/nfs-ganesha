@@ -27,7 +27,7 @@
  */
 
 /* handle.c
- * ZFS object (file|dir) handle object
+ * KVSFS (via KVSNS) object (file|dir) handle object
  */
 
 #include "config.h"
@@ -546,7 +546,7 @@ static fsal_status_t kvsfs_getattrs(struct fsal_obj_handle *obj_hdl)
 	 * when a file is opened, then deleted without being closed,
 	 * FSAL_VFS can still getattr on it, because it uses fstat
 	 * on a cached FD. This is not possible
-	 * to do this with ZFS, because you can't fstat on a vnode.
+	 * to do this with KVSFS, because you can't fstat on a vnode.
 	 * To handle this, stat are
 	 * cached as the file is opened and used here,
 	 * to emulate a successful fstat */

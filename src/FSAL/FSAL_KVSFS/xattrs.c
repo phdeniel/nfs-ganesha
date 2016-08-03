@@ -25,7 +25,7 @@
  */
 
 /* xattrs.c
- * ZFS object (file|dir) handle object extended attributes
+ * KVSFS object (file|dir) handle object extended attributes
  */
 
 #include "config.h"
