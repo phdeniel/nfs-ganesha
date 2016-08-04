@@ -40,6 +40,7 @@
 #include "FSAL/fsal_commonlib.h"
 #include "FSAL/fsal_config.h"
 #include "kvsfs_methods.h"
+#include "kvsns.h"
 #include "nfs_exports.h"
 #include "export_mgr.h"
 
@@ -266,6 +267,13 @@ fsal_status_t kvsfs_create_export(struct fsal_module *fsal_hdl,
 				       err_type);
 	if (retval != 0)
 		goto errout;
+
+	retval = kvsns_start();
+	if (retval != 0) {
+		LogMajor(COMPONENT_FSAL, "Can't start KVSNS API");
+		goto errout;
+	} else
+		LogEvent(COMPONENT_FSAL, "KVSNS API is running");
 
 	retval = fsal_attach_export(fsal_hdl, &myself->export.exports);
 	if (retval != 0)

@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <fcntl.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
@@ -30,7 +31,7 @@ static int build_external_path(kvsns_ino_t object,
 
 	return snprintf(external_path, pathlen, "%s/inum=%llu",
 			EXTERNAL_STORE,
-			(unsigned long long)object.inode);
+			(unsigned long long)object);
 }
 
 int external_read(struct fsal_obj_handle *obj_hdl,

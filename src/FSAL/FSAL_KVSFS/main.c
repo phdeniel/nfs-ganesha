@@ -169,7 +169,7 @@ MODULE_INIT void kvsfs_load(void)
 			       FSAL_MINOR_VERSION,
 			       FSAL_ID_NO_PNFS);
 	if (retval != 0) {
-		fprintf(stderr, "KVSFS module failed to register");
+		fprintf(stderr, "KVSFS module failed to register\n");
 		return;
 	}
 

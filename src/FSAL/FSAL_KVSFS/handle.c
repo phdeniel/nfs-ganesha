@@ -162,10 +162,10 @@ fsal_status_t kvsfs_lookup_path(struct fsal_export *exp_hdl,
 {
 	kvsns_ino_t object;
 	int rc = 0;
-	struct kvsfs_fsal_obj_handle *hdl;
 	struct kvsfs_file_handle fh;
 	struct stat stat;
 	kvsns_cred_t cred;
+	struct kvsfs_fsal_obj_handle *hdl;
 
 	if (strcmp(path, "/"))
 		return fsalstat(ERR_FSAL_NOTSUPP, 0);
@@ -177,9 +177,12 @@ fsal_status_t kvsfs_lookup_path(struct fsal_export *exp_hdl,
 	cred.uid = op_ctx->creds->caller_uid;
 	cred.gid = op_ctx->creds->caller_gid;
 
+
 	rc = kvsns_getattr(&cred, &object, &stat);
 	if (rc != 0)
 		return fsalstat(posix2fsal_error(-rc), -rc);
+
+	fh.kvsfs_handle = object;
 
 	hdl = alloc_handle(&fh, &stat, NULL, exp_hdl);
 
@@ -539,8 +542,6 @@ static fsal_status_t kvsfs_getattrs(struct fsal_obj_handle *obj_hdl)
 
 	retval = kvsns_getattr(&cred, &myself->handle->kvsfs_handle, &stat);
 
-	external_consolidate_attrs(obj_hdl, &stat);
-
 	/* An explanation is required here.
 	 * This is an exception management.
 	 * when a file is opened, then deleted without being closed,
@@ -607,12 +608,6 @@ static fsal_status_t kvsfs_setattrs(struct fsal_obj_handle *obj_hdl,
 		}
 		flags |= STAT_SIZE_SET;
 		stats.st_mode = fsal2unix_mode(attrs->filesize);
-
-		retval = external_truncate(obj_hdl,
-						   attrs->filesize);
-
-		if (retval != 0)
-			goto out;
 	}
 	if (FSAL_TEST_MASK(attrs->mask, ATTR_MODE)) {
 		flags |= STAT_MODE_SET;
@@ -700,14 +695,11 @@ static fsal_status_t kvsfs_unlink(struct fsal_obj_handle *dir_hdl,
 			retval = kvsns_rmdir(&cred,
 					     &myself->handle->kvsfs_handle,
 					     (char *)name);
-		else {
-			retval = external_unlink(dir_hdl, name);
-			if (!retval)
-				retval = kvsns_unlink(
-						&cred,
-						&myself->handle->kvsfs_handle,
-						(char *)name);
-		}
+		else
+			retval = kvsns_unlink(
+					&cred,
+					&myself->handle->kvsfs_handle,
+					(char *)name);
 	}
 
 	if (retval)
