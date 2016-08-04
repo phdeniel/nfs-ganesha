@@ -788,48 +788,26 @@ static void release(struct fsal_obj_handle *obj_hdl)
 	gsh_free(myself);
 }
 
-
-void kvsfs_handle_ops_init(struct fsal_obj_ops *ops)
-{
-	ops->release = release;
-	ops->lookup = kvsfs_lookup;
-	ops->readdir = kvsfs_readdir;
-	ops->create = kvsfs_create;
-	ops->mkdir = kvsfs_mkdir;
-	ops->mknode = kvsfs_makenode;
-	ops->symlink = kvsfs_makesymlink;
-	ops->readlink = kvsfs_readsymlink;
-	ops->test_access = fsal_test_access;
-	ops->getattrs = kvsfs_getattrs;
-	ops->setattrs = kvsfs_setattrs;
-	ops->link = kvsfs_linkfile;
-	ops->rename = kvsfs_rename;
-	ops->unlink = kvsfs_unlink;
-	ops->open = kvsfs_open;
-	ops->status = kvsfs_status;
-	ops->read = kvsfs_read;
-	ops->write = kvsfs_write;
-	ops->commit = kvsfs_commit;
-	ops->lock_op = kvsfs_lock_op;
-	ops->close = kvsfs_close;
-	ops->lru_cleanup = kvsfs_lru_cleanup;
-	ops->handle_digest = kvsfs_handle_digest;
-	/** ops->handle_to_key = kvsfs_handle_to_key; @todo */
-
-	/* xattr related functions */
-	ops->list_ext_attrs = kvsfs_list_ext_attrs;
-	ops->getextattr_id_by_name = kvsfs_getextattr_id_by_name;
-	ops->getextattr_value_by_name = kvsfs_getextattr_value_by_name;
-	ops->getextattr_value_by_id = kvsfs_getextattr_value_by_id;
-	ops->setextattr_value = kvsfs_setextattr_value;
-	ops->setextattr_value_by_id = kvsfs_setextattr_value_by_id;
-	ops->getextattr_attrs = kvsfs_getextattr_attrs;
-	ops->remove_extattr_by_id = kvsfs_remove_extattr_by_id;
-	ops->remove_extattr_by_name = kvsfs_remove_extattr_by_name;
-}
-
 /* export methods that create object handles
  */
+
+/**
+ * handle_to_key
+ * return a handle descriptor into the handle in this object handle
+ * @TODO reminder.  make sure things like hash keys don't point here
+ * after the handle is released.
+ */
+
+static void kvsfs_handle_to_key(struct fsal_obj_handle *obj_hdl,
+				struct gsh_buffdesc *fh_desc)
+{
+	struct kvsfs_fsal_obj_handle *myself;
+
+	myself = container_of(obj_hdl, struct kvsfs_fsal_obj_handle,
+			      obj_handle);
+	fh_desc->addr = myself->handle;
+	fh_desc->len = kvsfs_sizeof_handle(myself->handle);
+}
 
 /* create_handle
  * Does what original FSAL_ExpandHandle did (sort of)
@@ -883,4 +861,43 @@ fsal_status_t kvsfs_create_handle(struct fsal_export *exp_hdl,
 	*handle = &hdl->obj_handle;
 
 	return fsalstat(fsal_error, 0);
+}
+
+void kvsfs_handle_ops_init(struct fsal_obj_ops *ops)
+{
+	ops->release = release;
+	ops->lookup = kvsfs_lookup;
+	ops->readdir = kvsfs_readdir;
+	ops->create = kvsfs_create;
+	ops->mkdir = kvsfs_mkdir;
+	ops->mknode = kvsfs_makenode;
+	ops->symlink = kvsfs_makesymlink;
+	ops->readlink = kvsfs_readsymlink;
+	ops->test_access = fsal_test_access;
+	ops->getattrs = kvsfs_getattrs;
+	ops->setattrs = kvsfs_setattrs;
+	ops->link = kvsfs_linkfile;
+	ops->rename = kvsfs_rename;
+	ops->unlink = kvsfs_unlink;
+	ops->open = kvsfs_open;
+	ops->status = kvsfs_status;
+	ops->read = kvsfs_read;
+	ops->write = kvsfs_write;
+	ops->commit = kvsfs_commit;
+	ops->lock_op = kvsfs_lock_op;
+	ops->close = kvsfs_close;
+	ops->lru_cleanup = kvsfs_lru_cleanup;
+	ops->handle_digest = kvsfs_handle_digest;
+	ops->handle_to_key = kvsfs_handle_to_key;
+
+	/* xattr related functions */
+	ops->list_ext_attrs = kvsfs_list_ext_attrs;
+	ops->getextattr_id_by_name = kvsfs_getextattr_id_by_name;
+	ops->getextattr_value_by_name = kvsfs_getextattr_value_by_name;
+	ops->getextattr_value_by_id = kvsfs_getextattr_value_by_id;
+	ops->setextattr_value = kvsfs_setextattr_value;
+	ops->setextattr_value_by_id = kvsfs_setextattr_value_by_id;
+	ops->getextattr_attrs = kvsfs_getextattr_attrs;
+	ops->remove_extattr_by_id = kvsfs_remove_extattr_by_id;
+	ops->remove_extattr_by_name = kvsfs_remove_extattr_by_name;
 }
