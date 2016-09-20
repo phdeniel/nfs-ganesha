@@ -470,7 +470,7 @@ static fsal_status_t kvsfs_readdir(struct fsal_obj_handle *dir_hdl,
 			 * that's the end of the list */
 			if (dirents[index].name[0] == '\0') {
 				*eof = true;
-				break;
+				goto done;
 			}
 
 			/* callback to cache inode */
