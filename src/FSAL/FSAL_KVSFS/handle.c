@@ -591,7 +591,6 @@ static fsal_status_t kvsfs_setattrs(struct fsal_obj_handle *obj_hdl,
 	int retval = 0;
 	int flags = 0;
 	kvsns_cred_t cred;
-	struct stat new_stat = { 0 };
 
 	/* apply umask, if mode attribute is to be changed */
 	if (FSAL_TEST_MASK(attrs->mask, ATTR_MODE))
@@ -656,8 +655,6 @@ static fsal_status_t kvsfs_setattrs(struct fsal_obj_handle *obj_hdl,
 	if (retval)
 		goto out;
 
-	retval = kvsns_getattr(&cred, &myself->handle->kvsfs_handle,
-			       &new_stat);
  out:
 	if (retval == 0)
 		return fsalstat(ERR_FSAL_NO_ERROR, 0);
