@@ -606,7 +606,7 @@ static fsal_status_t kvsfs_setattrs(struct fsal_obj_handle *obj_hdl,
 			return fsalstat(fsal_error, retval);
 		}
 		flags |= STAT_SIZE_SET;
-		stats.st_mode = fsal2unix_mode(attrs->filesize);
+		stats.st_size = attrs->filesize;
 	}
 	if (FSAL_TEST_MASK(attrs->mask, ATTR_MODE)) {
 		flags |= STAT_MODE_SET;
