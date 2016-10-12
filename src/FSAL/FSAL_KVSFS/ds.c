@@ -37,19 +37,25 @@
 #include "config.h"
 
 #include <assert.h>
-#include "fsal_api.h"
-#include "fsal_handle.h"
+#include <libgen.h>		/* used for 'dirname' */
+#include <pthread.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/syscall.h>
+#include <sys/time.h>
+#include <mntent.h>
+#include "gsh_list.h"
+#include "fsal.h"
 #include "fsal_internal.h"
-#include "FSAL/access_check.h"
 #include "fsal_convert.h"
-#include <unistd.h>
-#include <fcntl.h>
-#include "FSAL/fsal_commonlib.h"
 #include "../fsal_private.h"
+#include "FSAL/fsal_config.h"
+#include "FSAL/fsal_commonlib.h"
 #include "kvsfs_methods.h"
-#include "pnfs_utils.h"
 #include "nfs_exports.h"
 #include "nfs_creds.h"
+#include "pnfs_utils.h"
+#include <stdbool.h>
 
 /**
  * @brief Release a DS handle
@@ -100,31 +106,33 @@ kvsfs_ds_read(struct fsal_ds_handle *const ds_pub,
 {
 	/* The private 'full' DS handle */
 	struct kvsfs_ds *ds = container_of(ds_pub, struct kvsfs_ds, ds);
-	struct kvsfs_file_handle *kvsfs_handle = &ds->wire;
+	struct kvsfs_file_handle *kvsfs_fh = &ds->wire;
 	/* The amount actually read */
 	int amount_read = 0;
-	char mypath[MAXPATHLEN];
-	int fd = 0;
+	kvsns_cred_t cred;
+	kvsns_file_open_t fd;
+	int rc;
 
-	/* get the path of the file in Lustre */
-	kvsfs_handle_to_path(ds->kvsfs_fs->fs->path,
-			      kvsfs_handle, mypath);
+	cred.uid = req_ctx->creds->caller_uid;
+	cred.gid = req_ctx->creds->caller_gid;
 
-	/* @todo: we could take care of parameter stability_wanted here */
-	fd = open(mypath, O_RDONLY|O_NOFOLLOW|O_SYNC);
-	if (fd < 0)
-		return posix2nfs4_error(errno);
+	rc = kvsns_open(&cred, &kvsfs_fh->kvsfs_handle, O_RDONLY,
+			0777, &fd);
+	if (rc < 0)
+		return posix2nfs4_error(-rc);
 
 	/* write the data */
-	amount_read = pread(fd, buffer, requested_length, offset);
+	amount_read = kvsns_read(&cred, &fd, (char *)buffer,
+				 requested_length, offset);
 	if (amount_read < 0) {
 		/* ignore any potential error on close if read failed? */
-		close(fd);
+		kvsns_close(&fd);
 		return posix2nfs4_error(-amount_read);
 	}
 
-	if (close(fd) < 0)
-		return posix2nfs4_error(errno);
+	rc = kvsns_close(&fd);
+	if (rc < 0)
+		return posix2nfs4_error(-rc);
 
 
 	*supplied_length = amount_read;
@@ -170,34 +178,37 @@ kvsfs_ds_write(struct fsal_ds_handle *const ds_pub,
 {
 	/* The private 'full' DS handle */
 	struct kvsfs_ds *ds = container_of(ds_pub, struct kvsfs_ds, ds);
-	struct kvsfs_file_handle *kvsfs_handle = &ds->wire;
+	struct kvsfs_file_handle *kvsfs_fh = &ds->wire;
 	/* The amount actually read */
 	int32_t amount_written = 0;
-	char mypath[MAXPATHLEN];
-	int fd = 0;
+	kvsns_cred_t cred;
+	kvsns_file_open_t fd;
+	int rc;
 
 	memset(writeverf, 0, NFS4_VERIFIER_SIZE);
 
+	cred.uid = req_ctx->creds->caller_uid;
+	cred.gid = req_ctx->creds->caller_gid;
+
 	/** @todo Add some debug code here about the fh to be used */
 
-	/* get the path of the file in Lustre */
-	kvsfs_handle_to_path(ds->kvsfs_fs->fs->path,
-			      kvsfs_handle, mypath);
-
 	/* @todo: we could take care of parameter stability_wanted here */
-	fd = open(mypath, O_WRONLY|O_NOFOLLOW|O_SYNC);
-	if (fd < 0)
-		return posix2nfs4_error(errno);
+	rc = kvsns_open(&cred, &kvsfs_fh->kvsfs_handle, O_WRONLY,
+			0777, &fd);
+	if (rc < 0)
+		return posix2nfs4_error(-rc);
 
 	/* write the data */
-	amount_written = pwrite(fd, buffer, write_length, offset);
+	amount_written = kvsns_write(&cred, &fd, (char *)buffer,
+				     write_length, offset);
 	if (amount_written < 0) {
-		close(fd);
+		kvsns_close(&fd);
 		return posix2nfs4_error(-amount_written);
 	}
 
-	if (close(fd) < 0)
-		return posix2nfs4_error(errno);
+	rc = kvsns_close(&fd);
+	if (rc < 0)
+		return posix2nfs4_error(-rc);
 
 	*written_length = amount_written;
 	*stability_got = stability_wanted;
@@ -260,36 +271,12 @@ static nfsstat4 make_ds_handle(struct fsal_pnfs_ds *const pds,
 			       struct fsal_ds_handle **const handle,
 			       int flags)
 {
-	struct kvsfs_file_handle *kvsfs_fh =
-					(struct kvsfs_file_handle *)desc->addr;
 	struct kvsfs_ds *ds;		/* Handle to be created */
-	struct fsal_filesystem *fs;
-	struct fsal_fsid__ fsid;
-	enum fsid_type fsid_type;
 
 	*handle = NULL;
 
 	if (desc->len != sizeof(struct kvsfs_file_handle))
 		return NFS4ERR_BADHANDLE;
-
-	kvsfs_extract_fsid(kvsfs_fh, &fsid_type, &fsid);
-
-	fs = lookup_fsid(&fsid, fsid_type);
-	if (fs == NULL) {
-		LogInfo(COMPONENT_FSAL,
-			"Could not find filesystem for fsid=0x%016"PRIx64
-			".0x%016"PRIx64" from handle",
-			fsid.major, fsid.minor);
-		return NFS4ERR_STALE;
-	}
-
-	if (fs->fsal != pds->fsal) {
-		LogInfo(COMPONENT_FSAL,
-			"Non LUSTRE filesystem fsid=0x%016"PRIx64
-			".0x%016"PRIx64" from handle",
-			fsid.major, fsid.minor);
-		return NFS4ERR_STALE;
-	}
 
 	ds = gsh_calloc(1, sizeof(struct kvsfs_ds));
 
@@ -300,8 +287,6 @@ static nfsstat4 make_ds_handle(struct fsal_pnfs_ds *const pds,
 	   here. */
 
 	ds->connected = false;
-
-	ds->kvsfs_fs = fs->private;
 
 	memcpy(&ds->wire, desc->addr, desc->len);
 	return NFS4_OK;

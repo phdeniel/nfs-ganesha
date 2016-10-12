@@ -13,6 +13,7 @@ SET(fsalkvsfs_LIB_SRCS
    handle.c
    file.c
    xattrs.c
+   ds.c
 )
 
 add_library(fsalkvsfs SHARED ${fsalkvsfs_LIB_SRCS})
