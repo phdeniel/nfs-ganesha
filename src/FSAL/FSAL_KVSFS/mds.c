@@ -26,24 +26,25 @@
 #include "config.h"
 
 #include <assert.h>
-#include "gsh_rpc.h"
+#include <libgen.h>		/* used for 'dirname' */
+#include <pthread.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/syscall.h>
+#include <sys/time.h>
+#include <mntent.h>
+#include "gsh_list.h"
 #include "fsal.h"
-#include "fsal_types.h"
-#include "fsal_api.h"
-#include "fsal_handle.h"
 #include "fsal_internal.h"
-#include "FSAL/access_check.h"
 #include "fsal_convert.h"
-#include <unistd.h>
-#include <fcntl.h>
+#include "../fsal_private.h"
+#include "FSAL/fsal_config.h"
 #include "FSAL/fsal_commonlib.h"
 #include "kvsfs_methods.h"
-#include "fsal_handle.h"
-
-#include "pnfs_utils.h"
 #include "nfs_exports.h"
-#include "export_mgr.h"
-
+#include "nfs_creds.h"
+#include "pnfs_utils.h"
+#include <stdbool.h>
 
 /**
  * @brief Get layout types supported by export

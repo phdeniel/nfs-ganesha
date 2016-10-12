@@ -13,6 +13,7 @@ SET(fsalkvsfs_LIB_SRCS
    handle.c
    file.c
    xattrs.c
+   mds.c
    ds.c
 )
 
