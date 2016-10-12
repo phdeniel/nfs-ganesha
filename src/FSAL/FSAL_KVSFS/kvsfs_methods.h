@@ -14,21 +14,42 @@ fsal_status_t kvsfs_create_handle(struct fsal_export *exp_hdl,
 				 struct gsh_buffdesc *hdl_desc,
 				 struct fsal_obj_handle **handle);
 
+/* this needs to be refactored to put ipport inside sockaddr_in */
+struct kvsfs_pnfs_ds_parameter {
+	struct glist_head ds_list;
+	struct sockaddr_in ipaddr;
+	unsigned short ipport;
+	unsigned int id;
+};
+
+struct kvsfs_pnfs_parameter {
+	struct glist_head ds_list;
+};
+
 /* KVSFS FSAL module private storage
  */
 
 struct kvsfs_fsal_module {
 	struct fsal_module fsal;
 	struct fsal_staticfsinfo_t fs_info;
+	struct kvsfs_pnfs_parameter pnfs_param;
 };
 
 /*
  * KVSFS internal export
  */
 
+struct kvsfs_exp_pnfs_parameter {
+	unsigned int stripe_unit;
+	bool pnfs_enabled;
+};
+
 struct kvsfs_fsal_export {
 	struct fsal_export export;
 	kvsns_ino_t root_inode;
+	bool pnfs_ds_enabled;
+	bool pnfs_mds_enabled;
+	struct kvsfs_exp_pnfs_parameter pnfs_param;
 };
 
 /*

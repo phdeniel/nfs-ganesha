@@ -224,10 +224,22 @@ void kvsfs_export_ops_init(struct export_ops *ops)
 	ops->fs_xattr_access_rights = fs_xattr_access_rights;
 }
 
-static struct config_item export_params[] = {
-	CONF_ITEM_NOOP("name"),
+static struct config_item pnfs_params[] = {
+	CONF_MAND_UI32("Stripe_Unit", 8192, 1024*1024, 1024,
+		       kvsfs_exp_pnfs_parameter, stripe_unit),
+	CONF_ITEM_BOOL("pnfs_enabled", false,
+		       kvsfs_exp_pnfs_parameter, pnfs_enabled),
 	CONFIG_EOL
 };
+
+static struct config_item export_params[] = {
+	CONF_ITEM_NOOP("name"),
+	CONF_ITEM_BLOCK("PNFS", pnfs_params,
+			noop_conf_init, noop_conf_commit,
+			kvsfs_fsal_export, pnfs_param),
+	CONFIG_EOL
+};
+
 
 static struct config_block export_param = {
 	.dbus_interface_name = "org.ganesha.nfsd.config.fsal.kvsfs-export",
