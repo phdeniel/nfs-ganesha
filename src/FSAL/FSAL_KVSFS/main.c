@@ -251,6 +251,10 @@ MODULE_INIT void kvsfs_load(void)
 
 	myself->m_ops.create_export = kvsfs_create_export;
 	myself->m_ops.init_config = kvsfs_init_config;
+
+	myself->m_ops.fsal_pnfs_ds_ops = kvsfs_pnfs_ds_ops_init;
+	myself->m_ops.getdeviceinfo = kvsfs_getdeviceinfo;
+	myself->m_ops.fs_da_addr_size = kvsfs_fs_da_addr_size;
 }
 
 MODULE_FINI void kvsfs_unload(void)
