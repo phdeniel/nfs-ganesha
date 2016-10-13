@@ -60,6 +60,8 @@ static struct kvsfs_fsal_obj_handle *alloc_handle(struct kvsfs_file_handle *fh,
 						const char *link_content,
 						struct fsal_export *exp_hdl)
 {
+	struct kvsfs_fsal_export *myself =
+		container_of(exp_hdl, struct kvsfs_fsal_export, export);
 	struct kvsfs_fsal_obj_handle *hdl;
 
 	hdl = gsh_malloc(sizeof(struct kvsfs_fsal_obj_handle) +
@@ -91,6 +93,8 @@ static struct kvsfs_fsal_obj_handle *alloc_handle(struct kvsfs_file_handle *fh,
 			     exp_hdl,
 			     posix2fsal_type(stat->st_mode));
 	kvsfs_handle_ops_init(&hdl->obj_handle.obj_ops);
+	if (myself->pnfs_mds_enabled)
+		handle_ops_pnfs(&hdl->obj_handle.obj_ops);
 	return hdl;
 }
 
