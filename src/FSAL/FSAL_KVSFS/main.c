@@ -64,8 +64,8 @@ static struct fsal_staticfsinfo_t default_kvsfs_info = {
 	.homogenous = true,			/* homogenous */
 	.supported_attrs = KVSFS_SUPPORTED_ATTRIBUTES, /* supp attributes */
 	.link_supports_permission_checks = true,
-	.pnfs_mds = false,
-	.pnfs_ds = false,
+	.pnfs_mds = true,
+	.pnfs_ds = true,
 };
 
 static void *dataserver_init(void *link_mem, void *self_struct)
