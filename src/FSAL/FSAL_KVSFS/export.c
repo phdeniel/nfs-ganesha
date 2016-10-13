@@ -43,6 +43,7 @@
 #include "kvsns.h"
 #include "nfs_exports.h"
 #include "export_mgr.h"
+#include "pnfs_utils.h"
 
 
 struct fsal_staticfsinfo_t *kvsfs_staticinfo(struct fsal_module *hdl);
@@ -263,6 +264,7 @@ fsal_status_t kvsfs_create_export(struct fsal_module *fsal_hdl,
 				const struct fsal_up_vector *up_ops)
 {
 	struct kvsfs_fsal_export *myself = NULL;
+	fsal_status_t status = { ERR_FSAL_NO_ERROR, 0 };
 	int retval = 0;
 	fsal_errors_t fsal_error = ERR_FSAL_INVAL;
 
@@ -295,6 +297,49 @@ fsal_status_t kvsfs_create_export(struct fsal_module *fsal_hdl,
 	myself->export.fsal = fsal_hdl;
 
 	op_ctx->fsal_export = &myself->export;
+
+	myself->pnfs_ds_enabled =
+	    myself->export.exp_ops.fs_supports(&myself->export,
+					    fso_pnfs_ds_supported) &&
+					    myself->pnfs_param.pnfs_enabled;
+	myself->pnfs_mds_enabled =
+	    myself->export.exp_ops.fs_supports(&myself->export,
+					    fso_pnfs_mds_supported) &&
+					    myself->pnfs_param.pnfs_enabled;
+
+	if (myself->pnfs_ds_enabled) {
+		struct fsal_pnfs_ds *pds = NULL;
+
+		status = fsal_hdl->m_ops.
+			fsal_pnfs_ds(fsal_hdl, parse_node, &pds);
+		if (status.major != ERR_FSAL_NO_ERROR)
+			goto err_locked;
+
+		/* special case: server_id matches export_id */
+		pds->id_servers = op_ctx->export->export_id;
+		pds->mds_export = op_ctx->export;
+
+		if (!pnfs_ds_insert(pds)) {
+			LogCrit(COMPONENT_CONFIG,
+				"Server id %d already in use.",
+				pds->id_servers);
+			status.major = ERR_FSAL_EXIST;
+			fsal_pnfs_ds_fini(pds);
+			gsh_free(pds);
+			goto err_locked;
+		}
+
+		LogInfo(COMPONENT_FSAL,
+			"kvsfs_fsal_create: pnfs DS was enabled for [%s]",
+			op_ctx->export->fullpath);
+	}
+
+	if (myself->pnfs_mds_enabled) {
+		LogInfo(COMPONENT_FSAL,
+			"kvsfs_fsal_create: pnfs MDS was enabled for [%s]",
+			op_ctx->export->fullpath);
+		export_ops_pnfs(&myself->export.exp_ops);
+	}
 
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 
