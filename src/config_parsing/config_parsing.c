@@ -583,7 +583,7 @@ static void convert_inet_addr(struct config_node *node,
 	}
 	hints.ai_flags = AI_ADDRCONFIG;
 	hints.ai_socktype = 0;
-	hints.ai_protocol = 0;
+	hints.ai_protocol = IPPROTO_TCP;
 	rc = getaddrinfo(node->u.term.varvalue, NULL,
 			 &hints, &res);
 	if (rc == 0) {
