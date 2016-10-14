@@ -22,26 +22,24 @@ struct kvsfs_pnfs_ds_parameter {
 	unsigned int id;
 };
 
-struct kvsfs_pnfs_parameter {
-	struct glist_head ds_list;
-};
-
 /* KVSFS FSAL module private storage
  */
 
 struct kvsfs_fsal_module {
 	struct fsal_module fsal;
 	struct fsal_staticfsinfo_t fs_info;
-	struct kvsfs_pnfs_parameter pnfs_param;
 };
 
 /*
  * KVSFS internal export
  */
 
+#define KVSFS_NB_DS 4
 struct kvsfs_exp_pnfs_parameter {
 	unsigned int stripe_unit;
 	bool pnfs_enabled;
+	unsigned int nb_ds;
+	struct kvsfs_pnfs_ds_parameter ds_array[KVSFS_NB_DS];
 };
 
 struct kvsfs_fsal_export {

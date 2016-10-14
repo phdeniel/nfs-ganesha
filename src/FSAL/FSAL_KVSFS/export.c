@@ -225,18 +225,59 @@ void kvsfs_export_ops_init(struct export_ops *ops)
 	ops->fs_xattr_access_rights = fs_xattr_access_rights;
 }
 
+static int kvsfs_conf_pnfs_commit(void *node,
+				  void *link_mem,
+				  void *self_struct,
+				  struct config_error_type *err_type)
+{
+	/* struct lustre_pnfs_param *lpp = self_struct; */
+
+	/* Verifications/parameter checking to be added here */
+
+	return 0;
+}
+
+
+static struct config_item ds_array_params[] = {
+	CONF_MAND_IP_ADDR("DS_Addr", "127.0.0.1",
+			  kvsfs_pnfs_ds_parameter, ipaddr),
+	CONF_ITEM_INET_PORT("DS_Port", 1024, UINT16_MAX, 2049,
+		       kvsfs_pnfs_ds_parameter, ipport), /* default is nfs */
+	CONFIG_EOL
+};
+
 static struct config_item pnfs_params[] = {
 	CONF_MAND_UI32("Stripe_Unit", 8192, 1024*1024, 1024,
 		       kvsfs_exp_pnfs_parameter, stripe_unit),
 	CONF_ITEM_BOOL("pnfs_enabled", false,
 		       kvsfs_exp_pnfs_parameter, pnfs_enabled),
+
+	CONF_MAND_UI32("Nb_Dataserver", 1, 4, 1,
+		       kvsfs_exp_pnfs_parameter, nb_ds),
+
+	CONF_ITEM_BLOCK("DS1", ds_array_params,
+			noop_conf_init, noop_conf_commit,
+			kvsfs_exp_pnfs_parameter, ds_array[0]),
+			
+	CONF_ITEM_BLOCK("DS2", ds_array_params,
+			noop_conf_init, noop_conf_commit,
+			kvsfs_exp_pnfs_parameter, ds_array[1]),
+			
+	CONF_ITEM_BLOCK("DS3", ds_array_params,
+			noop_conf_init, noop_conf_commit,
+			kvsfs_exp_pnfs_parameter, ds_array[2]),
+			
+	CONF_ITEM_BLOCK("DS4", ds_array_params,
+			noop_conf_init, noop_conf_commit,
+			kvsfs_exp_pnfs_parameter, ds_array[3]),
+			
 	CONFIG_EOL
 };
 
 static struct config_item export_params[] = {
 	CONF_ITEM_NOOP("name"),
 	CONF_ITEM_BLOCK("PNFS", pnfs_params,
-			noop_conf_init, noop_conf_commit,
+			noop_conf_init, kvsfs_conf_pnfs_commit,
 			kvsfs_fsal_export, pnfs_param),
 	CONFIG_EOL
 };

@@ -26,7 +26,7 @@ typedef struct kvsfs_file_handle {
 struct kvsfs_ds {
 	struct fsal_ds_handle ds; /*< Public DS handle */
 	struct kvsfs_file_handle wire; /*< Wire data */
-	struct kvsfs_filesystem *kvsfs_fs; /*< Related Lustre filesystem */
+	struct kvsfs_filesystem *kvsfs_fs; /*< Related kvsfs filesystem */
 	bool connected; /*< True if the handle has been connected */
 };
 

@@ -68,77 +68,6 @@ static struct fsal_staticfsinfo_t default_kvsfs_info = {
 	.pnfs_ds = true,
 };
 
-static void *dataserver_init(void *link_mem, void *self_struct)
-{
-	struct kvsfs_pnfs_ds_parameter *child_param
-		= (struct kvsfs_pnfs_ds_parameter *)self_struct;
-
-	assert(link_mem != NULL || self_struct != NULL);
-
-	if (link_mem == NULL) {
-		struct glist_head *dslist = (struct glist_head *)self_struct;
-		struct kvsfs_pnfs_parameter *pnfs_param;
-
-		pnfs_param = container_of(dslist,
-					  struct kvsfs_pnfs_parameter,
-					  ds_list);
-		glist_init(&pnfs_param->ds_list);
-		return self_struct;
-	} else if (self_struct == NULL) {
-		child_param = gsh_calloc(1,
-				 sizeof(struct kvsfs_pnfs_ds_parameter));
-
-		glist_init(&child_param->ds_list);
-		return (void *)child_param;
-	} else {
-		assert(glist_empty(&child_param->ds_list));
-
-		gsh_free(child_param);
-		return NULL;
-	}
-}
-
-static int dataserver_commit(void *node, void *link_mem, void *self_struct,
-			     struct config_error_type *err_type)
-{
-	struct glist_head *ds_head
-		= (struct glist_head *)link_mem;
-	struct kvsfs_pnfs_ds_parameter *child_param
-		= (struct kvsfs_pnfs_ds_parameter *)self_struct;
-
-	glist_add_tail(ds_head, &child_param->ds_list);
-	return 0;
-}
-
-static struct config_item ds_params[] = {
-	CONF_MAND_IP_ADDR("DS_Addr", "127.0.0.1",
-			  kvsfs_pnfs_ds_parameter, ipaddr),
-	CONF_MAND_INET_PORT("DS_Port", 1024, UINT16_MAX, 3260,
-		       kvsfs_pnfs_ds_parameter, ipport), /* use iscsi port */
-	CONF_MAND_UI32("DS_Id", 1, UINT32_MAX, 1,
-		       kvsfs_pnfs_ds_parameter, id),
-	CONFIG_EOL
-};
-
-static int kvsfs_conf_pnfs_commit(void *node,
-				   void *link_mem,
-				   void *self_struct,
-				   struct config_error_type *err_type)
-{
-	/* struct kvsfs_pnfs_param *lpp = self_struct; */
-
-	/* Verifications/parameter checking to be added here */
-
-	return 0;
-}
-
-static struct config_item pnfs_params[] = {
-	CONF_ITEM_BLOCK("DataServer", ds_params,
-			dataserver_init, dataserver_commit,
-			kvsfs_pnfs_parameter, ds_list),
-	CONFIG_EOL
-};
-
 static struct config_item kvsfs_params[] = {
 	CONF_ITEM_BOOL("link_support", true,
 		       kvsfs_fsal_module, fs_info.link_support),
@@ -156,9 +85,6 @@ static struct config_item kvsfs_params[] = {
 		       kvsfs_fsal_module, fs_info.auth_exportpath_xdev),
 	CONF_ITEM_MODE("xattr_access_rights", 0400,
 		       kvsfs_fsal_module, fs_info.xattr_access_rights),
-	CONF_ITEM_BLOCK("PNFS", pnfs_params,
-			noop_conf_init, kvsfs_conf_pnfs_commit,
-			kvsfs_fsal_module, pnfs_param),
 	CONFIG_EOL
 };
 
@@ -214,6 +140,7 @@ static fsal_status_t kvsfs_init_config(struct fsal_module *fsal_hdl,
 	LogDebug(COMPONENT_FSAL,
 		 "FSAL INIT: Supported attributes mask = 0x%" PRIx64,
 		 kvsfs_me->fs_info.supported_attrs);
+	
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
 
@@ -243,7 +170,7 @@ MODULE_INIT void kvsfs_load(void)
 	retval = register_fsal(myself, myname,
 			       FSAL_MAJOR_VERSION,
 			       FSAL_MINOR_VERSION,
-			       FSAL_ID_NO_PNFS);
+			       FSAL_ID_KVSFS);
 	if (retval != 0) {
 		fprintf(stderr, "KVSFS module failed to register\n");
 		return;

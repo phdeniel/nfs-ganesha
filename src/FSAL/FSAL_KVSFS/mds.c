@@ -45,6 +45,7 @@
 #include "nfs_creds.h"
 #include "pnfs_utils.h"
 #include <stdbool.h>
+#include <arpa/inet.h>
 
 /**
  * @brief Get layout types supported by export
@@ -65,7 +66,7 @@ kvsfs_fs_layouttypes(struct fsal_export *export_hdl,
 {
 	static const layouttype4 supported_layout_type = LAYOUT4_NFSV4_1_FILES;
 
-	/* FSAL_LUSTRE currently supports only LAYOUT4_NFSV4_1_FILES */
+	/* FSAL_KVSFS currently supports only LAYOUT4_NFSV4_1_FILES */
 	/** @todo: do a switch that cheks which layout is OK */
 	*types = &supported_layout_type;
 	*count = 1;
@@ -74,7 +75,7 @@ kvsfs_fs_layouttypes(struct fsal_export *export_hdl,
 /**
  * @brief Get layout block size for export
  *
- * This function just returns the LUSTRE default.
+ * This function just returns the KVSFS default.
  *
  * @param[in] export_pub Public export handle
  *
@@ -154,11 +155,20 @@ nfsstat4 kvsfs_getdeviceinfo(struct fsal_module *fsal_hdl,
 	/* NFSv4 status code */
 	nfsstat4 nfs_status = 0;
 	/* ds list iterator */
-	struct glist_head *entry;
 	struct kvsfs_pnfs_ds_parameter *ds;
-	struct kvsfs_pnfs_parameter *pnfs_param;
-	struct kvsfs_fsal_module *kvsfs_me =
-		container_of(fsal_hdl, struct kvsfs_fsal_module, fsal);
+	struct fsal_export *exp_hdl;
+	struct kvsfs_fsal_export *export = NULL;
+	struct kvsfs_exp_pnfs_parameter *pnfs_exp_param;
+	unsigned int i;
+	
+
+	exp_hdl  = glist_first_entry(&fsal_hdl->exports,
+				     struct fsal_export, 
+				     exports);
+	export=	container_of(exp_hdl, struct kvsfs_fsal_export, export);
+	pnfs_exp_param = &export->pnfs_param;
+
+	printf("---> pnsf_exp_param = %p\n", pnfs_exp_param);	
 
 	/* Sanity check on type */
 	if (type != LAYOUT4_NFSV4_1_FILES) {
@@ -167,10 +177,9 @@ nfsstat4 kvsfs_getdeviceinfo(struct fsal_module *fsal_hdl,
 			type);
 		return NFS4ERR_UNKNOWN_LAYOUTTYPE;
 	}
-	pnfs_param = &kvsfs_me->pnfs_param;
 
 	/* Retrieve and calculate storage parameters of layout */
-	stripe_count = glist_length(&pnfs_param->ds_list);
+	stripe_count = pnfs_exp_param->nb_ds; 
 
 	LogDebug(COMPONENT_PNFS, "device_id %u/%u/%u %lu",
 		 deviceid->device_id1, deviceid->device_id2,
@@ -201,20 +210,17 @@ nfsstat4 kvsfs_getdeviceinfo(struct fsal_module *fsal_hdl,
 	}
 
 	/* lookup for the right DS in the ds_list */
-	glist_for_each(entry, &pnfs_param->ds_list) {
+	for (i = 0; i < pnfs_exp_param->nb_ds ; i++) {
 		fsal_multipath_member_t host;
 
-		ds = glist_entry(entry,
-				 struct kvsfs_pnfs_ds_parameter,
-				 ds_list);
-
+		ds = &pnfs_exp_param->ds_array[i];
 		LogDebug(COMPONENT_PNFS,
-			"advertises DS addr=%u.%u.%u.%u port=%u id=%u",
+			"advertises DS addr=%u.%u.%u.%u port=%u",
 			(ntohl(ds->ipaddr.sin_addr.s_addr) & 0xFF000000) >> 24,
 			(ntohl(ds->ipaddr.sin_addr.s_addr) & 0x00FF0000) >> 16,
 			(ntohl(ds->ipaddr.sin_addr.s_addr) & 0x0000FF00) >> 8,
-			ntohl(ds->ipaddr.sin_addr.s_addr) & 0x000000FF,
-			ntohs(ds->ipport), ds->id);
+			(unsigned int)ntohl(ds->ipaddr.sin_addr.s_addr) & 0x000000FF,
+			(unsigned short)ntohs(ds->ipport));
 
 		host.proto = IPPROTO_TCP;
 		host.addr = ntohl(ds->ipaddr.sin_addr.s_addr);
@@ -225,6 +231,8 @@ nfsstat4 kvsfs_getdeviceinfo(struct fsal_module *fsal_hdl,
 				&host);
 		if (nfs_status != NFS4_OK)
 			return nfs_status;
+
+		/** @todo TO BE REMOVED ONCE CONFIG IS CLEAN */
 	}
 
 	return NFS4_OK;
@@ -294,22 +302,13 @@ kvsfs_layoutget(struct fsal_obj_handle *obj_hdl,
 {
 	struct kvsfs_fsal_obj_handle *myself;
 	struct kvsfs_exp_pnfs_parameter *pnfs_exp_param;
-	struct kvsfs_pnfs_parameter *pnfs_param;
-	struct kvsfs_pnfs_ds_parameter *ds;
 	struct kvsfs_fsal_export *myexport;
 	struct kvsfs_file_handle kvsfs_ds_handle;
 	uint32_t stripe_unit = 0;
 	nfl_util4 util = 0;
-	struct pnfs_deviceid deviceid = DEVICE_ID_INIT_ZERO(FSAL_ID_LUSTRE);
+	struct pnfs_deviceid deviceid = DEVICE_ID_INIT_ZERO(FSAL_ID_KVSFS);
 	nfsstat4 nfs_status = 0;
 	struct gsh_buffdesc ds_desc;
-	struct kvsfs_fsal_module *kvsfs_me;
-
-	/* Get pnfs parameters */
-	kvsfs_me = container_of(obj_hdl->fsal,
-				 struct kvsfs_fsal_module,
-				 fsal);
-	pnfs_param = &kvsfs_me->pnfs_param;
 
 	myexport = container_of(req_ctx->fsal_export,
 				struct kvsfs_fsal_export,
@@ -356,11 +355,7 @@ kvsfs_layoutget(struct fsal_obj_handle *obj_hdl,
 			 stripe_unit, util);
 
 	/** @todo: several DSs not handled yet */
-	/* deviceid.devid =  pnfs_param.ds_param[0].id; */
-	ds = glist_first_entry(&pnfs_param->ds_list,
-			       struct kvsfs_pnfs_ds_parameter,
-			       ds_list);
-	deviceid.devid = ds->id;
+	deviceid.devid =  1; 
 
 	/* last_possible_byte = NFS4_UINT64_MAX; strict. set but unused */
 

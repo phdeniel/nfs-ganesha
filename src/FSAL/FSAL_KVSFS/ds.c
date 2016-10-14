@@ -26,10 +26,10 @@
 /**
  * @file   ds.c
  *
- * @brief pNFS DS operations for LUSTRE
+ * @brief pNFS DS operations for KVSFS
  *
  * This file implements the read, write, commit, and dispose
- * operations for LUSTRE data-server handles.
+ * operations for KVSFS data-server handles.
  *
  * Also, creating a data server handle -- now called via the DS itself.
  */
