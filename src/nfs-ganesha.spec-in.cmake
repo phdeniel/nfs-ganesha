@@ -34,9 +34,6 @@
 @BCOND_ZFS@ zfs
 %global use_fsal_zfs %{on_off_switch zfs}
 
-@BCOND_CLOVIS@ clovis
-%global use_fsal_clovis %{on_off_switch clovis}
-
 @BCOND_KVSFS@ kvsfs
 %global use_fsal_kvsfs %{on_off_switch kvsfs}
 
@@ -260,20 +257,6 @@ This package contains a FSAL shared object to
 be used with NFS-Ganesha to support KVSNS
 %endif
 
-# CLOVIS
-%if %{with clovis}
-%package clovis
-Summary: The NFS-GANESHA's CLOVIS FSAL
-Group: Applications/System
-Requires:       nfs-ganesha = %{version}-%{release}
-Requires: 	libzfswrap mero
-BuildRequires:  libzfswrap-devel mero-devel
-
-%description clovis
-This package contains a FSAL shared object to
-be used with NFS-Ganesha to support CLOVIS
-%endif
-
 # CEPH
 %if %{with ceph}
 %package ceph
@@ -403,7 +386,6 @@ cmake .	-DCMAKE_BUILD_TYPE=Debug			\
 	-DBUILD_CONFIG=rpmbuild				\
 	-DUSE_FSAL_NULL=%{use_fsal_null}		\
 	-DUSE_FSAL_ZFS=%{use_fsal_zfs}			\
-	-DUSE_FSAL_CLOVIS=%{use_fsal_clovis}		\
 	-DUSE_FSAL_KVSFS=%{use_fsal_kvsfs}		\
 	-DUSE_FSAL_XFS=%{use_fsal_xfs}			\
 	-DUSE_FSAL_CEPH=%{use_fsal_ceph}		\

@@ -43,10 +43,6 @@ if(USE_FSAL_KVSFS)
   add_subdirectory(FSAL_KVSFS)
 endif(USE_FSAL_KVSFS)
 
-if(USE_FSAL_CLOVIS)
-  add_subdirectory(FSAL_CLOVIS)
-endif(USE_FSAL_CLOVIS)
-
 if(USE_FSAL_VFS)
   add_subdirectory(FSAL_VFS)
 endif(USE_FSAL_VFS)
