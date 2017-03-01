@@ -453,6 +453,7 @@ static fsal_status_t kvsfs_readdir(struct fsal_obj_handle *dir_hdl,
 	kvsns_dentry_t dirents[MAX_ENTRIES];
 	unsigned int index = 0;
 	int size = 0;
+	kvsns_dir_t ddir;
 
 	if (whence != NULL)
 		seekloc = (off_t) *whence;
@@ -462,11 +463,16 @@ static fsal_status_t kvsfs_readdir(struct fsal_obj_handle *dir_hdl,
 	cred.uid = op_ctx->creds->caller_uid;
 	cred.gid = op_ctx->creds->caller_gid;
 
+	retval = kvsns_opendir(&cred, &myself->handle->kvsfs_handle,
+			       &ddir);
+	if (retval < 0)
+		goto out;
+
 	/* Open the directory */
 	do {
 		size = MAX_ENTRIES;
-		retval = kvsns_readdir(&cred, &myself->handle->kvsfs_handle,
-				       seekloc, dirents, &size);
+		retval = kvsns_readdir(&cred, &ddir, seekloc,
+				       dirents, &size);
 		if (retval)
 			goto out;
 		for (index = 0; index < MAX_ENTRIES; index++) {
@@ -488,7 +494,9 @@ static fsal_status_t kvsfs_readdir(struct fsal_obj_handle *dir_hdl,
 	} while (size != 0);
 
  done:
-	/* read the directory */
+	retval = kvsns_closedir(&ddir);
+	if (retval < 0)
+		goto out;
 
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
  out:

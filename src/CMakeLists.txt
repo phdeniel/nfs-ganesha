@@ -765,7 +765,8 @@ if(USE_FSAL_KVSFS)
     ""
     HAVE_KVSNS_LIB
     )
-  check_include_files("kvsns.h" HAVE_LIBKVSNS_H)
+  check_include_files("kvsns/kvsns.h" HAVE_LIBKVSNS_H)
+  set(HAVE_LIBKVSNS_H TRUE)
 
   message(STATUS "KVSNS_PREFIX=${KVSNS_PREFIX} HAVE_LIBKVSNS_H=${HAVE_LIBKVSNS_H} HAVE_KVSNS_LIB=${HAVE_KVSNS_LIB}")
 

@@ -37,7 +37,6 @@
 #include <sys/types.h>
 #include <sys/syscall.h>
 #include <mntent.h>
-#include <kvsns.h>
 #include <ctype.h>
 #include "gsh_list.h"
 #include "fsal_internal.h"

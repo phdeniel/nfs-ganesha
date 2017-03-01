@@ -40,7 +40,6 @@
 #include "FSAL/fsal_commonlib.h"
 #include "FSAL/fsal_config.h"
 #include "kvsfs_methods.h"
-#include "kvsns.h"
 #include "nfs_exports.h"
 #include "export_mgr.h"
 #include "pnfs_utils.h"

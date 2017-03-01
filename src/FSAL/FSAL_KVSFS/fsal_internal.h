@@ -11,7 +11,7 @@
 #define _FSAL_INTERNAL_H
 
 #include  "fsal.h"
-#include <kvsns.h>
+#include <kvsns/kvsns.h>
 
 /* linkage to the exports and handle ops initializers
  */
