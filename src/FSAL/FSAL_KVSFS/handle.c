@@ -687,7 +687,7 @@ static fsal_status_t kvsfs_unlink(struct fsal_obj_handle *dir_hdl,
 	int retval = 0;
 	kvsns_cred_t cred;
 	kvsns_ino_t object;
-	int type = 0;
+	struct stat stat;
 
 	cred.uid = op_ctx->creds->caller_uid;
 	cred.gid = op_ctx->creds->caller_gid;
@@ -700,7 +700,14 @@ static fsal_status_t kvsfs_unlink(struct fsal_obj_handle *dir_hdl,
 			      (char *)name, &object);
 
 	if (retval == 0) {
-		if (type == S_IFDIR)
+
+		retval = kvsns_getattr(&cred, &object, &stat);
+		if (retval) {
+			fsal_error = posix2fsal_error(-retval);
+			return fsalstat(fsal_error, -retval);
+		}
+
+		if ((stat.st_mode & S_IFDIR) == S_IFDIR)
 			retval = kvsns_rmdir(&cred,
 					     &myself->handle->kvsfs_handle,
 					     (char *)name);
