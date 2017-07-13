@@ -257,24 +257,26 @@ static struct config_item pnfs_params[] = {
 	CONF_ITEM_BLOCK("DS1", ds_array_params,
 			noop_conf_init, noop_conf_commit,
 			kvsfs_exp_pnfs_parameter, ds_array[0]),
-			
+
 	CONF_ITEM_BLOCK("DS2", ds_array_params,
 			noop_conf_init, noop_conf_commit,
 			kvsfs_exp_pnfs_parameter, ds_array[1]),
-			
+
 	CONF_ITEM_BLOCK("DS3", ds_array_params,
 			noop_conf_init, noop_conf_commit,
 			kvsfs_exp_pnfs_parameter, ds_array[2]),
-			
+
 	CONF_ITEM_BLOCK("DS4", ds_array_params,
 			noop_conf_init, noop_conf_commit,
 			kvsfs_exp_pnfs_parameter, ds_array[3]),
-			
 	CONFIG_EOL
+
 };
 
 static struct config_item export_params[] = {
 	CONF_ITEM_NOOP("name"),
+	CONF_ITEM_STR("kvsns_config", 0, MAXPATHLEN, NULL,
+		      kvsfs_fsal_export, kvsns_config),
 	CONF_ITEM_BLOCK("PNFS", pnfs_params,
 			noop_conf_init, kvsfs_conf_pnfs_commit,
 			kvsfs_fsal_export, pnfs_param),
@@ -322,7 +324,7 @@ fsal_status_t kvsfs_create_export(struct fsal_module *fsal_hdl,
 	if (retval != 0)
 		goto errout;
 
-	retval = kvsns_start();
+	retval = kvsns_start(myself->kvsns_config);
 	if (retval != 0) {
 		LogMajor(COMPONENT_FSAL, "Can't start KVSNS API");
 		goto errout;

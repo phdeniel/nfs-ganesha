@@ -45,6 +45,7 @@ struct kvsfs_exp_pnfs_parameter {
 struct kvsfs_fsal_export {
 	struct fsal_export export;
 	kvsns_ino_t root_inode;
+	char *kvsns_config;
 	bool pnfs_ds_enabled;
 	bool pnfs_mds_enabled;
 	struct kvsfs_exp_pnfs_parameter pnfs_param;
