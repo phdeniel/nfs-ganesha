@@ -331,8 +331,6 @@ fsal_status_t kvsfs_create_export(struct fsal_module *fsal_hdl,
 	} else
 		LogEvent(COMPONENT_FSAL, "KVSNS API is running");
 
-	kvsns_set_debug(false);
-
 	retval = fsal_attach_export(fsal_hdl, &myself->export.exports);
 	if (retval != 0)
 		goto err_locked;	/* seriously bad */
