@@ -599,6 +599,7 @@ static fsal_status_t kvsfs_readdir(struct fsal_obj_handle *dir_hdl,
 
 	/* Open the directory */
 	nb_rddir_done = 0;
+	*eof = false;
 	do {
 		size = MAX_ENTRIES;
 		
@@ -636,10 +637,10 @@ static fsal_status_t kvsfs_readdir(struct fsal_obj_handle *dir_hdl,
 				   cookie);
 
 			LogFullDebug(COMPONENT_FSAL, 
-				 "kvsfs_readdir: %s cookie=%llu seekloc=%lld",
+				 "kvsfs_readdir: %s cookie=%llu cb_rc=%d",
 				 dirents[index].name, 
 				 (unsigned long long)cookie,
-				 (long long)seekloc);
+				 cb_rc);
 				
 			fsal_release_attrs(&attrs);
 
