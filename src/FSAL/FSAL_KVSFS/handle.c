@@ -651,7 +651,6 @@ static fsal_status_t kvsfs_readdir(struct fsal_obj_handle *dir_hdl,
 		nb_rddir_done += 1;
 	} while (size != 0 && *eof == false);
 
-	*eof = true;
  done:
 	retval = kvsns_closedir(&ddir);
 	if (retval < 0)
