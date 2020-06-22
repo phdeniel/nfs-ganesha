@@ -630,6 +630,7 @@ static fsal_status_t kvsfs_readdir(struct fsal_obj_handle *dir_hdl,
 			/* callback to cache inode */
 			cookie = seekloc + index + 
 				 (nb_rddir_done * MAX_ENTRIES) + DOTS_OFFSET+ 1;
+
 			cb_rc = cb(dirents[index].name,
 				   hdl,
 				   &attrs,
@@ -644,8 +645,13 @@ static fsal_status_t kvsfs_readdir(struct fsal_obj_handle *dir_hdl,
 				
 			fsal_release_attrs(&attrs);
 
-			if (cb_rc >= DIR_READAHEAD)
+			if (cb_rc >= DIR_READAHEAD) {
+				/* if we did not reach the last entry in
+				 * dirents array, then EOF is not reached */
+				if (*eof == true && index < size)
+					*eof = false;	
 				goto done;
+			}
 		}
 
 		seekloc += MAX_ENTRIES;
