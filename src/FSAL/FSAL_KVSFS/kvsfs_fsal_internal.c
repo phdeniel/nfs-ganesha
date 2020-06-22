@@ -15,7 +15,7 @@
 
 #include "fsal.h"
 
-#include "fsal_internal.h"
+#include "kvsfs_fsal_internal.h"
 #include "abstract_mem.h"
 
 #include <pthread.h>

@@ -33,7 +33,7 @@
 
 #include <assert.h>
 #include "fsal.h"
-#include "fsal_internal.h"
+#include "kvsfs_fsal_internal.h"
 #include "FSAL/access_check.h"
 #include "fsal_convert.h"
 #include <unistd.h>

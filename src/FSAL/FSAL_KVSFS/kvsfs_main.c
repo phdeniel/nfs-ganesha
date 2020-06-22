@@ -43,7 +43,7 @@
 #include "FSAL/fsal_init.h"
 #include "pnfs_utils.h"
 
-#include "fsal_internal.h"
+#include "kvsfs_fsal_internal.h"
 #include "kvsfs_methods.h"
 
 const char myname[] = "KVSFS";

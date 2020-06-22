@@ -46,7 +46,7 @@
 #include <mntent.h>
 #include "gsh_list.h"
 #include "fsal.h"
-#include "fsal_internal.h"
+#include "kvsfs_fsal_internal.h"
 #include "fsal_convert.h"
 #include "../fsal_private.h"
 #include "FSAL/fsal_config.h"

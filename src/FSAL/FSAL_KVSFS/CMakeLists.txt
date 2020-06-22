@@ -7,14 +7,14 @@ IF(KVSFS_PREFIX)
 ENDIF()
 
 SET(fsalkvsfs_LIB_SRCS
-   fsal_internal.c
-   main.c
-   export.c
-   handle.c
-   file.c
-   xattrs.c
-   mds.c
-   ds.c
+   kvsfs_fsal_internal.c
+   kvsfs_main.c
+   kvsfs_export.c
+   kvsfs_handle.c
+   kvsfs_file.c
+   kvsfs_xattrs.c
+   kvsfs_mds.c
+   kvsfs_ds.c
 )
 
 add_library(fsalkvsfs SHARED ${fsalkvsfs_LIB_SRCS})
