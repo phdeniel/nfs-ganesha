@@ -56,8 +56,6 @@ static void kvsfs_export_release(struct fsal_export *exp_hdl)
 
 	myself = container_of(exp_hdl, struct kvsfs_fsal_export, export);
 
-	LogDebug(COMPONENT_FSAL, "kvsfs_export_release: exp=%p", exp_hdl);
-
 	fsal_detach_export(exp_hdl->fsal, &exp_hdl->exports);
 	free_export_ops(exp_hdl);
 
@@ -89,8 +87,6 @@ static fsal_status_t kvsfs_wire_to_host(struct fsal_export *exp_hdl,
 	/* sanity checks */
 	if (!fh_desc || !fh_desc->addr)
 		return fsalstat(ERR_FSAL_FAULT, 0);
-
-	LogDebug(COMPONENT_FSAL, "kvsfs_wire_to_host: exp=%p", exp_hdl);
 
 	hdl = (struct kvsfs_file_handle *)fh_desc->addr;
 	fh_size = kvsfs_sizeof_handle(hdl);
