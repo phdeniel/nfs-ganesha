@@ -21,7 +21,7 @@ add_library(fsalkvsfs MODULE ${fsalkvsfs_LIB_SRCS})
 add_sanitizers(fsalceph)
 
 target_link_libraries(fsalkvsfs
-  kvsns hiredis
+  kvsns 
   ${SYSTEM_LIBRARIES}
 )
 
