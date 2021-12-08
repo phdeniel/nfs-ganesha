@@ -37,7 +37,7 @@
 #define _FSAL_INTERNAL_H
 
 #include  "fsal.h"
-#include <kvsns/kvsns.h>
+#include <iosea/kvsns.h>
 
 /* linkage to the exports and handle ops initializers
  */
@@ -55,8 +55,6 @@ struct kvsfs_ds {
 	struct kvsfs_filesystem *kvsfs_fs; /*< Related kvsfs filesystem */
 	bool connected; /*< True if the handle has been connected */
 };
-
-#define KVSNS_DEFAULT_CONFIG "/etc/kvsns.d/kvsns.ini"
 
 /* defined the set of attributes supported with POSIX */
 #define KVSFS_SUPPORTED_ATTRIBUTES (					\
